@@ -3,6 +3,7 @@ import { describe, test, after, afterEach, before, beforeEach } from 'node:test'
 import assert from 'node:assert';
 import { connectDB, flushDB, closeDB } from '../src/config/database.config';
 import { getStringEnvVariable } from '../src/config/env.config';
+import { registerModels } from './fixtures/model.register';
 
 const TEST_DB_URI = getStringEnvVariable('TEST_DB_URI', 'mongodb://localhost:27017/testdb');
 
@@ -18,6 +19,11 @@ console.log = () => {};
 
 before(async () => {
   await connectDB(TEST_DB_URI);
+  await registerModels();
+});
+
+beforeEach(async () => {
+  await flushDB();
 });
 
 afterEach(async () => {
