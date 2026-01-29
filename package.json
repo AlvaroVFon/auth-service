@@ -28,6 +28,7 @@
   "packageManager": "pnpm@10.28.2",
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
     "@types/node": "^25.1.0",
     "@types/supertest": "^6.0.3",
@@ -42,6 +43,7 @@
     "typescript-eslint": "^8.54.0"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "commitizen": "^4.3.1",
     "express": "^5.2.1",
     "mongoose": "^9.1.5"

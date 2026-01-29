@@ -4,11 +4,15 @@ import {
   EntityAlreadyExistsError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
+import { CryptoService } from '../libs/crypto.service';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export class UsersService {
-  constructor(private readonly usersModel: Model<UserInterface>) {}
+  constructor(
+    private readonly usersModel: Model<UserInterface>,
+    private readonly cryptoService: CryptoService,
+  ) {}
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
     if (!data.email) {
@@ -17,6 +21,11 @@ export class UsersService {
     if (!EMAIL_REGEX.test(data.email)) {
       throw new InvalidArgumentError('Invalid email format');
     }
+    if (!data.password) {
+      throw new InvalidArgumentError('Password is required to create a user');
+    }
+
+    data.password = await this.cryptoService.hashString(data.password);
 
     const existingUser = await this.usersModel.findOne({ email: data.email });
     if (existingUser) {
@@ -58,6 +67,10 @@ export class UsersService {
     }
     if (!Types.ObjectId.isValid(id)) {
       throw new InvalidArgumentError('Invalid ID format');
+    }
+
+    if (updateData.password) {
+      updateData.password = await this.cryptoService.hashString(updateData.password);
     }
 
     return this.usersModel.findByIdAndUpdate(id, updateData, { new: true });

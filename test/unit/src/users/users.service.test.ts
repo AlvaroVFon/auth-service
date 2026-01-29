@@ -8,11 +8,13 @@ import {
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
 import { DEFAULT_USER } from '../../../fixtures/defaults/index';
+import { CryptoService } from '../../../../src/libs/crypto.service';
 
 describe('UsersService', () => {
   let usersService: UsersService;
+
   before(() => {
-    usersService = new UsersService(User);
+    usersService = new UsersService(User, new CryptoService());
   });
 
   describe('UsersService Initialization', () => {
@@ -25,24 +27,32 @@ describe('UsersService', () => {
   describe('UsersService Methods', () => {
     describe('Create()', () => {
       test('should create a new user', async () => {
+        const plainPassword = 'securepassword123';
+
         const userData: Partial<UserInterface> = {
           email: generateRandomEmail('testuser+'),
           username: 'testuser',
+          password: plainPassword,
         };
+
         const newUser = await usersService.create(userData);
         assert.ok(newUser);
         assert.strictEqual(newUser.email, userData.email);
         assert.strictEqual(newUser.username, userData.username);
+
         // @ts-expect-error newUser._id exists
         const foundUser = await fixture.findById<UserInterface>('User', newUser._id);
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, userData.email);
         assert.strictEqual(foundUser!.username, userData.username);
+        assert.notStrictEqual(foundUser!.password, plainPassword);
+        assert.strictEqual(foundUser?.password, newUser.password);
       });
 
       test('should throw an error when creating a user with missing required fields', async () => {
         const userData: Partial<UserInterface> = {
           username: 'incompleteuser',
+          password: 'hashedpassword123',
         };
 
         try {
@@ -60,9 +70,11 @@ describe('UsersService', () => {
       });
 
       test('should throw an error when creating a user with invalid email format', async () => {
+        const plainPassword = 'securepassword123';
         const userData: Partial<UserInterface> = {
           email: 'invalid-email-format',
           username: 'invalidemailuser',
+          password: plainPassword,
         };
 
         try {
@@ -82,10 +94,12 @@ describe('UsersService', () => {
         const userData1: Partial<UserInterface> = {
           email: email,
           username: 'firstuser',
+          password: 'hashedpassword123',
         };
         const userData2: Partial<UserInterface> = {
           email: email,
           username: 'seconduser',
+          password: 'hashedpassword123',
         };
 
         const firstUser = await usersService.create(userData1);
@@ -106,10 +120,13 @@ describe('UsersService', () => {
       test('should create a user with only required fields', async () => {
         const userData: Partial<UserInterface> = {
           email: generateRandomEmail('requiredonly+'),
+          password: 'hashedpassword123',
         };
+
         const newUser = await usersService.create(userData);
         assert.ok(newUser);
         assert.strictEqual(newUser.email, userData.email);
+
         //@ts-expect-error newUser._id exists
         const foundUser = await fixture.findById<UserInterface>('User', newUser._id);
         assert.ok(foundUser);
@@ -120,9 +137,12 @@ describe('UsersService', () => {
         const userData: Partial<UserInterface> = {
           email: generateRandomEmail('allfields+'),
           username: 'allfieldsuser',
+          password: 'hashedpassword123',
         };
+
         const newUser = await usersService.create(userData);
         assert.ok(newUser);
+
         //@ts-expect-error newUser._id exists
         const foundUser = await fixture.findById<UserInterface>('User', newUser._id);
         assert.ok(foundUser);
@@ -203,7 +223,9 @@ describe('UsersService', () => {
         const newUser = await usersService.create({
           email: generateRandomEmail('findbyid+'),
           username: 'findbyiduser',
+          password: 'hashedpassword123',
         });
+
         //@ts-expect-error newUser._id exists
         const foundUser = await usersService.findById(newUser._id.toString());
         assert.ok(foundUser);
@@ -244,10 +266,13 @@ describe('UsersService', () => {
         const newUser = await usersService.create({
           email: generateRandomEmail('updateone+'),
           username: 'updateoneuser',
+          password: 'hashedpassword123',
         });
+
         const updatedData: Partial<UserInterface> = {
           username: 'updatedusername',
         };
+
         //@ts-expect-error newUser._id exists
         const updatedUser = await usersService.updateOneById(newUser._id.toString(), updatedData);
         assert.ok(updatedUser);
@@ -255,6 +280,61 @@ describe('UsersService', () => {
         assert.strictEqual(updatedUser!._id.toString(), newUser._id.toString());
         assert.strictEqual(updatedUser!.username, updatedData.username);
         assert.strictEqual(updatedUser!.email, newUser.email);
+      });
+
+      test('should return null when updating a non-existent user', async () => {
+        const nonExistentId = '60d21b4667d0d8992e610c85'; // Example of a valid but non-existent ObjectId
+        const updatedUser = await usersService.updateOneById(nonExistentId, {
+          username: 'newusername',
+        });
+        assert.strictEqual(updatedUser, null);
+      });
+
+      test('should update only provided fields', async () => {
+        const newUser = await usersService.create({
+          email: generateRandomEmail('partialupdate+'),
+          username: 'partialupdateuser',
+          password: 'hashedpassword123',
+        });
+        const updatedData: Partial<UserInterface> = {
+          username: 'partiallyupdatedusername',
+        };
+
+        //@ts-expect-error newUser._id exists
+        const updatedUser = await usersService.updateOneById(newUser._id.toString(), updatedData);
+        assert.ok(updatedUser);
+        //@ts-expect-error newUser._id exists
+        assert.strictEqual(updatedUser!._id.toString(), newUser._id.toString());
+        assert.strictEqual(updatedUser!.username, updatedData.username);
+        assert.strictEqual(updatedUser!.email, newUser.email);
+      });
+
+      test('should hash password when updating it', async () => {
+        const plainPassword = 'securepassword123';
+        const newUser = await usersService.create({
+          email: generateRandomEmail('updatepassword+'),
+          username: 'updatepassworduser',
+          password: plainPassword,
+        });
+
+        const updatedPlainPassword = 'newplainpassword456';
+        const updatedData: Partial<UserInterface> = {
+          password: updatedPlainPassword,
+        };
+
+        //@ts-expect-error newUser._id exists
+        const updatedUser = await usersService.updateOneById(newUser._id.toString(), updatedData);
+        assert.ok(updatedUser);
+
+        //@ts-expect-error newUser._id exists
+        assert.strictEqual(updatedUser!._id.toString(), newUser._id.toString());
+        assert.notStrictEqual(updatedUser!.password, plainPassword);
+
+        const isPasswordMatch = await new CryptoService().compareString(
+          updatedPlainPassword,
+          updatedUser!.password,
+        );
+        assert.ok(isPasswordMatch);
       });
     });
 
@@ -288,6 +368,7 @@ describe('UsersService', () => {
         const newUser = await usersService.create({
           email: generateRandomEmail('deleteone+'),
           username: 'deleteoneuser',
+          password: 'hashedpassword123',
         });
 
         //@ts-expect-error newUser._id exists
@@ -295,6 +376,7 @@ describe('UsersService', () => {
         assert.ok(deletedUser);
         //@ts-expect-error newUser._id exists
         assert.strictEqual(deletedUser!._id.toString(), newUser._id.toString());
+
         //@ts-expect-error newUser._id exists
         const foundUser = await usersService.findById(newUser._id.toString());
         assert.strictEqual(foundUser, null);
