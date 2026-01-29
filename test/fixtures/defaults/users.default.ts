@@ -6,3 +6,8 @@ export const DEFAULT_USER = {
   _id: DEFAULT_USER_ID,
   email: 'defaultuser@example.com',
 };
+
+export const generateRandomEmail = (prefix: string) => {
+  const randomSuffix = Math.random().toString(36).substring(2, 8);
+  return `${prefix}${randomSuffix}@example.com`;
+};
