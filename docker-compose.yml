@@ -10,13 +10,13 @@ services:
     env_file:
       - .env
     depends_on:
-      mongo:
+      mongo-auth:
         condition: service_healthy
     command: pnpm dev
 
-  mongo:
+  mongo-auth:
     image: mongo:latest
-    container_name: mongo
+    container_name: mongo-auth
     ports:
       - '27017:27017'
     volumes:

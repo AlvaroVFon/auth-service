@@ -22,11 +22,10 @@
 ## ⏳ Pendiente
 
 - **Git Hooks & Workflow**:
-  - [ ] Configurar **Commitizen** para mensajes de commit estandarizados.
-  - [ ] Configurar **Husky** para ejecutar Lint y Prettier antes de cada commit.
+  - [x] Configurar **Commitizen** para mensajes de commit estandarizados.
+  - [x] Configurar **Husky** para ejecutar Lint y Prettier antes de cada commit.
 - **Testing (Avanzado)**:
-  - [ ] Configurar y desarrollar tests **e2e** (API completa).
-  - [ ] Añadir reportes de cobertura (coverage).
+  - [x] Configurar y desarrollar tests **e2e** (API completa).
 - **Core Business**:
   - [ ] Implementar registro de usuarios.
   - [ ] Implementar login y generación de JWT.
