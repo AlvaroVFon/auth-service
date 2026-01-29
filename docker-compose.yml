@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - .:/app
     env_file:
@@ -18,17 +18,12 @@ services:
     image: mongo:latest
     container_name: mongo
     ports:
-      - "27017:27017"
+      - '27017:27017'
     volumes:
       - mongo_data:/data/db
     healthcheck:
       test:
-        [
-          "CMD",
-          "bash",
-          "-c",
-          "echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017 --quiet",
-        ]
+        ['CMD', 'bash', '-c', "echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017 --quiet"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -37,7 +32,7 @@ services:
   mailhog:
     image: mailhog/mailhog
     ports:
-      - "1025:1025" # SMTP server
-      - "8025:8025" # Web UI
+      - '1025:1025' # SMTP server
+      - '8025:8025' # Web UI
 volumes:
   mongo_data:

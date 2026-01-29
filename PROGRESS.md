@@ -1,6 +1,7 @@
 # Progreso del Proyecto - Auth Service
 
 ## ✅ Hecho
+
 - **Configuración Base**:
   - Estructura de carpetas (`src/config`, `src/users`, `src/health`).
   - Configuración de variables de entorno con `process.loadEnvFile`.
@@ -19,6 +20,7 @@
   - `.gitignore` y `.prettierignore` configurados.
 
 ## ⏳ Pendiente
+
 - **Git Hooks & Workflow**:
   - [ ] Configurar **Commitizen** para mensajes de commit estandarizados.
   - [ ] Configurar **Husky** para ejecutar Lint y Prettier antes de cada commit.

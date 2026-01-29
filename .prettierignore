@@ -6,4 +6,5 @@ dist/
 coverage/
 build/
 logs/
+pnpm-lock.yaml
 
