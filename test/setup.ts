@@ -2,6 +2,7 @@ process.loadEnvFile('.env.test');
 import {
   describe,
   test,
+  mock,
   after,
   afterEach,
   before,
@@ -21,6 +22,7 @@ const TEST_DB_URI = `${baseUri}_${process.pid}`;
 global.describe = describe;
 global.test = test;
 global.assert = assert;
+global.mock = mock;
 global.before = before;
 global.beforeEach = beforeEach;
 global.after = after;

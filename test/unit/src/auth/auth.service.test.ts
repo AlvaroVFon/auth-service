@@ -1,16 +1,20 @@
-import { mock } from 'node:test';
-import { InvalidCredentialsError } from '../../../../src/auth/auth.errors';
+import { InvalidCredentialsError } from '../../../../src/common/exceptions/auth.exceptions';
 import { AuthService } from '../../../../src/auth/auth.servive';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import { JwtService } from '../../../../src/libs/jwt/jwt.service';
-import { User } from '../../../../src/users/users.interface';
 import { UsersService } from '../../../../src/users/users.service';
-import { DEFAULT_USER } from '../../../fixtures/defaults';
+import { DEFAULT_USER, generateRandomEmail } from '../../../fixtures/defaults';
 import fixture from '../../../fixtures/fixture';
+import { User } from '../../../../src/users/users.schema';
+import { Types } from 'mongoose';
 
 describe('Auth Service', () => {
   let authService: AuthService;
-  const mockCryptoService = { compareString: mock.fn(() => true) };
+  let userService: UsersService;
+  const mockCryptoService = {
+    compareString: mock.fn(() => true),
+    hashString: mock.fn((str: string) => Promise.resolve(`hashed_${str}`)),
+  };
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
@@ -18,16 +22,15 @@ describe('Auth Service', () => {
   beforeEach(async () => {
     await fixture.create('User');
 
-    const mockUserService = {
-      async findByEmail(email: string): Promise<User | null> {
-        return email === DEFAULT_USER.email ? (DEFAULT_USER as User) : null;
-      },
-    };
+    userService = new UsersService(
+      User,
+      mockCryptoService as unknown as CryptoService,
+    );
 
     const jwtService = new JwtService(jwtSecret!, jwtExpiresIn);
 
     authService = new AuthService(
-      mockUserService as UsersService,
+      userService,
       mockCryptoService as unknown as CryptoService,
       jwtService as JwtService,
     );
@@ -52,55 +55,174 @@ describe('Auth Service', () => {
     });
 
     test('should throw an error for invalid email', async () => {
-      try {
-        await authService.login({
-          email: 'invalid@example.com',
-          password: 'wrongpassword',
-        });
-        throw new Error('Test failed: Expected error was not thrown');
-      } catch (error) {
-        assert.ok(error);
-        assert.ok(error instanceof InvalidCredentialsError);
-        assert.strictEqual(
-          (error as InvalidCredentialsError).message,
-          'Invalid email or password',
-        );
-      }
+      await assert.rejects(
+        async () =>
+          await authService.login({
+            email: 'invalid@example.com',
+            password: 'wrongpassword',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+
+    test('should throw an error for empty credentials', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.login({
+            email: '',
+            password: '',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Email and password are required',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
     });
 
     test('should throw an error for invalid password', async () => {
       mockCryptoService.compareString = mock.fn(() => false);
-      try {
-        await authService.login({
-          email: DEFAULT_USER.email,
-          password: 'wrongpassword',
-        });
-        throw new Error('Test failed: Expected error was not thrown');
-      } catch (error) {
-        assert.ok(error);
-        assert.ok(error instanceof InvalidCredentialsError);
-        assert.strictEqual(
-          (error as InvalidCredentialsError).message,
-          'Invalid email or password',
-        );
-      }
+      await assert.rejects(
+        async () =>
+          await authService.login({
+            email: DEFAULT_USER.email,
+            password: 'wrongpassword',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
     });
 
     test('should throw an error for empty credentials', async () => {
-      try {
-        await authService.login({
-          email: '',
-          password: '',
-        });
-        throw new Error('Test failed: Expected error was not thrown');
-      } catch (error) {
-        assert.ok(error);
-        assert.ok(error instanceof InvalidCredentialsError);
-        assert.strictEqual(
-          (error as InvalidCredentialsError).message,
-          'Invalid email or password',
-        );
-      }
+      await assert.rejects(
+        async () =>
+          await authService.login({
+            email: '',
+            password: '',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Email and password are required',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+  });
+
+  describe('signup()', () => {
+    test('should throw an error if invalid email is provided', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.signup({
+            email: 'invalid-email',
+            password: 'ValidPass123!',
+            passwordConfirmation: 'ValidPass123!',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email format',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+
+    test('should throw an error if email is not provided', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.signup({
+            email: '',
+            password: 'ValidPass123!',
+            passwordConfirmation: 'ValidPass123!',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Email is required',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+
+    test('should throw an error if password is not provided', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.signup({
+            email: generateRandomEmail('auth+'),
+            password: '',
+            passwordConfirmation: '',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Password is required',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+
+    test('should throw an error if password confirmation does not match', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.signup({
+            email: generateRandomEmail('auth+'),
+            password: 'ValidPass123!',
+            passwordConfirmation: 'DifferentPass123!',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Password and password confirmation do not match',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+
+    test('should throw an error if password is too weak', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.signup({
+            email: generateRandomEmail('auth+'),
+            password: 'alllowercase',
+            passwordConfirmation: 'alllowercase',
+          }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Password does not meet complexity requirements',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+
+    test('should throw an error if email is already in use', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.signup({
+            email: DEFAULT_USER.email,
+            password: 'ValidPass123!',
+            passwordConfirmation: 'ValidPass123!',
+          }),
+        {
+          name: 'EntityAlreadyExistsError',
+          message: 'Email is already in use',
+          code: 'ENTITY_ALREADY_EXISTS',
+        },
+      );
+    });
+
+    test('should succeed with valid credentials', async () => {
+      const email = generateRandomEmail('auth+');
+      const user = await authService.signup({
+        email,
+        password: 'ValidPass123!',
+        passwordConfirmation: 'ValidPass123!',
+      });
+
+      assert.strictEqual(user.email, email);
+      assert.ok(Types.ObjectId.isValid(user._id?.toString()));
     });
   });
 });

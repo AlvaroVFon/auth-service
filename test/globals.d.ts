@@ -2,6 +2,7 @@
 import {
   describe,
   test,
+  mock,
   after,
   afterEach,
   before,
@@ -12,6 +13,7 @@ import assert from 'node:assert';
 declare global {
   var describe: typeof describe;
   var test: typeof test;
+  var mock: typeof mock;
   var assert: typeof assert;
   var before: typeof before;
   var beforeEach: typeof beforeEach;
