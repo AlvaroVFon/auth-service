@@ -23,7 +23,12 @@ services:
       - mongo_data:/data/db
     healthcheck:
       test:
-        ['CMD', 'bash', '-c', "echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017 --quiet"]
+        [
+          'CMD',
+          'bash',
+          '-c',
+          "echo 'db.runCommand({ ping: 1 })' | mongosh localhost:27017 --quiet",
+        ]
       interval: 10s
       timeout: 10s
       retries: 5

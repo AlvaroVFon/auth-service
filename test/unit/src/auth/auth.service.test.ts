@@ -1,3 +1,4 @@
+import { mock } from 'node:test';
 import { InvalidCredentialsError } from '../../../../src/auth/auth.errors';
 import { AuthService } from '../../../../src/auth/auth.servive';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
@@ -9,31 +10,27 @@ import fixture from '../../../fixtures/fixture';
 
 describe('Auth Service', () => {
   let authService: AuthService;
+  const mockCryptoService = { compareString: mock.fn(() => true) };
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
 
-  before(async () => {
+  beforeEach(async () => {
     await fixture.create('User');
-    const mockCryptoService = {
-      async compareString(plainText: string, hashedString: string): Promise<boolean> {
-        // In tests, we assume the password is always 'password123' for DEFAULT_USER
-        if (plainText === 'password123' && hashedString === DEFAULT_USER.password) {
-          return true;
-        }
-        return false;
-      },
-    } as unknown as CryptoService;
+
     const mockUserService = {
       async findByEmail(email: string): Promise<User | null> {
-        if (email === DEFAULT_USER.email) {
-          return DEFAULT_USER as User;
-        }
-        return null;
+        return email === DEFAULT_USER.email ? (DEFAULT_USER as User) : null;
       },
-    } as unknown as UsersService;
+    };
+
     const jwtService = new JwtService(jwtSecret!, jwtExpiresIn);
-    authService = new AuthService(mockUserService, mockCryptoService, jwtService);
+
+    authService = new AuthService(
+      mockUserService as UsersService,
+      mockCryptoService as unknown as CryptoService,
+      jwtService as JwtService,
+    );
   });
 
   test('should be defined', () => {
@@ -42,7 +39,8 @@ describe('Auth Service', () => {
 
   describe('login()', () => {
     test('should authenticate user and return a token', async () => {
-      const jwtRegex = /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/;
+      const jwtRegex =
+        /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/;
       const result = await authService.login({
         email: DEFAULT_USER.email,
         password: 'password123',
@@ -63,11 +61,15 @@ describe('Auth Service', () => {
       } catch (error) {
         assert.ok(error);
         assert.ok(error instanceof InvalidCredentialsError);
-        assert.strictEqual((error as InvalidCredentialsError).message, 'Invalid email or password');
+        assert.strictEqual(
+          (error as InvalidCredentialsError).message,
+          'Invalid email or password',
+        );
       }
     });
 
     test('should throw an error for invalid password', async () => {
+      mockCryptoService.compareString = mock.fn(() => false);
       try {
         await authService.login({
           email: DEFAULT_USER.email,
@@ -77,7 +79,10 @@ describe('Auth Service', () => {
       } catch (error) {
         assert.ok(error);
         assert.ok(error instanceof InvalidCredentialsError);
-        assert.strictEqual((error as InvalidCredentialsError).message, 'Invalid email or password');
+        assert.strictEqual(
+          (error as InvalidCredentialsError).message,
+          'Invalid email or password',
+        );
       }
     });
 
@@ -91,7 +96,10 @@ describe('Auth Service', () => {
       } catch (error) {
         assert.ok(error);
         assert.ok(error instanceof InvalidCredentialsError);
-        assert.strictEqual((error as InvalidCredentialsError).message, 'Invalid email or password');
+        assert.strictEqual(
+          (error as InvalidCredentialsError).message,
+          'Invalid email or password',
+        );
       }
     });
   });

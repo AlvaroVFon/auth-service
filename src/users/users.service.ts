@@ -70,7 +70,9 @@ export class UsersService {
     }
 
     if (updateData.password) {
-      updateData.password = await this.cryptoService.hashString(updateData.password);
+      updateData.password = await this.cryptoService.hashString(
+        updateData.password,
+      );
     }
 
     return this.usersModel.findByIdAndUpdate(id, updateData, { new: true });

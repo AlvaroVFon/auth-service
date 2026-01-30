@@ -13,7 +13,10 @@ describe('JwtService', () => {
 
   describe('generateToken', () => {
     test('should throw an error when payload id is not a valid ObjectId', () => {
-      const invalidPayload: Payload = { userId: 'invalid-object-id', type: 'access' };
+      const invalidPayload: Payload = {
+        userId: 'invalid-object-id',
+        type: 'access',
+      };
       try {
         jwtService.generateToken(invalidPayload);
         throw new Error('Test failed: Expected error was not thrown');
@@ -86,7 +89,10 @@ describe('JwtService', () => {
       assert.ok(token);
       assert.strictEqual(typeof token, 'string');
 
-      const decoded = jwtService.verifyToken(token) as Payload & { iat: number; exp: number };
+      const decoded = jwtService.verifyToken(token) as Payload & {
+        iat: number;
+        exp: number;
+      };
       assert.strictEqual(decoded.userId, userId);
       assert.strictEqual(decoded.type, 'access');
     });

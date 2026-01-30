@@ -9,7 +9,10 @@ describe('User Fixture', () => {
   });
 
   test('should override default properties when provided', async () => {
-    const customData = { username: 'customuser', email: 'customuser@example.com' };
+    const customData = {
+      username: 'customuser',
+      email: 'customuser@example.com',
+    };
     const user = await fixture.create<UserInterface>('User', customData);
     assert.strictEqual(user.username, customData.username);
     assert.strictEqual(user.email, customData.email);

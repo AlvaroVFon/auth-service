@@ -17,7 +17,9 @@ export class JwtService {
       );
     }
     if (payload.type !== 'access' && payload.type !== 'refresh') {
-      throw new InvalidArgumentError('InvalidArgumentError: Payload type is not valid');
+      throw new InvalidArgumentError(
+        'InvalidArgumentError: Payload type is not valid',
+      );
     }
 
     return jwt.sign(payload, this.secret, { expiresIn: this.expiresIn });
@@ -27,7 +29,9 @@ export class JwtService {
     try {
       return jwt.verify(token, this.secret);
     } catch {
-      throw new InvalidTokenError('InvalidTokenError: Token is invalid or has expired');
+      throw new InvalidTokenError(
+        'InvalidTokenError: Token is invalid or has expired',
+      );
     }
   }
 

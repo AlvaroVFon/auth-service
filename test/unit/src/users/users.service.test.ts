@@ -41,7 +41,10 @@ describe('UsersService', () => {
         assert.strictEqual(newUser.username, userData.username);
 
         // @ts-expect-error newUser._id exists
-        const foundUser = await fixture.findById<UserInterface>('User', newUser._id);
+        const foundUser = await fixture.findById<UserInterface>(
+          'User',
+          newUser._id,
+        );
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, userData.email);
         assert.strictEqual(foundUser!.username, userData.username);
@@ -57,11 +60,15 @@ describe('UsersService', () => {
 
         try {
           await usersService.create(userData);
-          throw new Error('Expected create to throw an error due to missing required fields');
+          throw new Error(
+            'Expected create to throw an error due to missing required fields',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
           assert.strictEqual(
             (error as InvalidArgumentError).message,
             'Email is required to create a user',
@@ -79,12 +86,19 @@ describe('UsersService', () => {
 
         try {
           await usersService.create(userData);
-          throw new Error('Expected create to throw an error due to invalid email format');
+          throw new Error(
+            'Expected create to throw an error due to invalid email format',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'Invalid email format');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'Invalid email format',
+          );
         }
       });
 
@@ -108,12 +122,20 @@ describe('UsersService', () => {
 
         try {
           await usersService.create(userData2);
-          throw new Error('Expected create to throw an error due to duplicate email');
+          throw new Error(
+            'Expected create to throw an error due to duplicate email',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof EntityAlreadyExistsError);
-          assert.ok((error as EntityAlreadyExistsError).name === 'EntityAlreadyExistsError');
-          assert.strictEqual((error as EntityAlreadyExistsError).message, 'Email already exists');
+          assert.ok(
+            (error as EntityAlreadyExistsError).name ===
+              'EntityAlreadyExistsError',
+          );
+          assert.strictEqual(
+            (error as EntityAlreadyExistsError).message,
+            'Email already exists',
+          );
         }
       });
 
@@ -128,7 +150,10 @@ describe('UsersService', () => {
         assert.strictEqual(newUser.email, userData.email);
 
         //@ts-expect-error newUser._id exists
-        const foundUser = await fixture.findById<UserInterface>('User', newUser._id);
+        const foundUser = await fixture.findById<UserInterface>(
+          'User',
+          newUser._id,
+        );
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, userData.email);
       });
@@ -144,7 +169,10 @@ describe('UsersService', () => {
         assert.ok(newUser);
 
         //@ts-expect-error newUser._id exists
-        const foundUser = await fixture.findById<UserInterface>('User', newUser._id);
+        const foundUser = await fixture.findById<UserInterface>(
+          'User',
+          newUser._id,
+        );
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, userData.email);
         assert.strictEqual(foundUser!.username, userData.username);
@@ -161,35 +189,54 @@ describe('UsersService', () => {
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, DEFAULT_USER.email);
         //@ts-expect-error DEFAULT_USER._id exists
-        assert.strictEqual(foundUser!._id.toString(), DEFAULT_USER._id.toString());
+        assert.strictEqual(
+          foundUser!._id.toString(),
+          DEFAULT_USER._id.toString(),
+        );
       });
 
       test('should return null if user with email does not exist', async () => {
-        const foundUser = await usersService.findByEmail('nonexistent@example.com');
+        const foundUser = await usersService.findByEmail(
+          'nonexistent@example.com',
+        );
         assert.strictEqual(foundUser, null);
       });
 
       test('should throw an error when email is invalid', async () => {
         try {
           await usersService.findByEmail('invalid-email-format');
-          throw new Error('Expected findByEmail to throw an error due to invalid email format');
+          throw new Error(
+            'Expected findByEmail to throw an error due to invalid email format',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'Invalid email format');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'Invalid email format',
+          );
         }
       });
 
       test('should throw an error when email is not provided', async () => {
         try {
           await usersService.findByEmail('');
-          throw new Error('Expected findByEmail to throw an error due to missing email');
+          throw new Error(
+            'Expected findByEmail to throw an error due to missing email',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'Email is required');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'Email is required',
+          );
         }
       });
     });
@@ -198,24 +245,38 @@ describe('UsersService', () => {
       test('should throw an error on missing id', async () => {
         try {
           await usersService.findById('');
-          throw new Error('Expected findById to throw an error due to missing id');
+          throw new Error(
+            'Expected findById to throw an error due to missing id',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'ID is required');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'ID is required',
+          );
         }
       });
 
       test('should throw an error if id is not a valid ObjectId', async () => {
         try {
           await usersService.findById('invalid-object-id');
-          throw new Error('Expected findById to throw an error due to invalid ObjectId');
+          throw new Error(
+            'Expected findById to throw an error due to invalid ObjectId',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'Invalid ID format');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'Invalid ID format',
+          );
         }
       });
 
@@ -241,24 +302,40 @@ describe('UsersService', () => {
         try {
           // @ts-expect-error null id
           await usersService.updateOneById(null, { username: 'newusername' });
-          throw new Error('Expected updateOneById to throw an error due to missing id');
+          throw new Error(
+            'Expected updateOneById to throw an error due to missing id',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'ID is required');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'ID is required',
+          );
         }
       });
 
       test('should throw an error if id is not a valid ObjectId', async () => {
         try {
-          await usersService.updateOneById('invalid-object-id', { username: 'newusername' });
-          throw new Error('Expected updateOneById to throw an error due to invalid ObjectId');
+          await usersService.updateOneById('invalid-object-id', {
+            username: 'newusername',
+          });
+          throw new Error(
+            'Expected updateOneById to throw an error due to invalid ObjectId',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'Invalid ID format');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'Invalid ID format',
+          );
         }
       });
 
@@ -274,7 +351,10 @@ describe('UsersService', () => {
         };
 
         //@ts-expect-error newUser._id exists
-        const updatedUser = await usersService.updateOneById(newUser._id.toString(), updatedData);
+        const updatedUser = await usersService.updateOneById(
+          newUser._id.toString(),
+          updatedData,
+        );
         assert.ok(updatedUser);
         //@ts-expect-error newUser._id exists
         assert.strictEqual(updatedUser!._id.toString(), newUser._id.toString());
@@ -301,7 +381,10 @@ describe('UsersService', () => {
         };
 
         //@ts-expect-error newUser._id exists
-        const updatedUser = await usersService.updateOneById(newUser._id.toString(), updatedData);
+        const updatedUser = await usersService.updateOneById(
+          newUser._id.toString(),
+          updatedData,
+        );
         assert.ok(updatedUser);
         //@ts-expect-error newUser._id exists
         assert.strictEqual(updatedUser!._id.toString(), newUser._id.toString());
@@ -323,7 +406,10 @@ describe('UsersService', () => {
         };
 
         //@ts-expect-error newUser._id exists
-        const updatedUser = await usersService.updateOneById(newUser._id.toString(), updatedData);
+        const updatedUser = await usersService.updateOneById(
+          newUser._id.toString(),
+          updatedData,
+        );
         assert.ok(updatedUser);
 
         //@ts-expect-error newUser._id exists
@@ -343,24 +429,38 @@ describe('UsersService', () => {
         try {
           // @ts-expect-error null id
           await usersService.deleteOneById(null);
-          throw new Error('Expected deleteOneById to throw an error due to missing id');
+          throw new Error(
+            'Expected deleteOneById to throw an error due to missing id',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'ID is required');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'ID is required',
+          );
         }
       });
 
       test('should throw an error if id is not a valid ObjectId', async () => {
         try {
           await usersService.deleteOneById('invalid-object-id');
-          throw new Error('Expected deleteOneById to throw an error due to invalid ObjectId');
+          throw new Error(
+            'Expected deleteOneById to throw an error due to invalid ObjectId',
+          );
         } catch (error) {
           assert.ok(error);
           assert.ok(error instanceof InvalidArgumentError);
-          assert.ok((error as InvalidArgumentError).name === 'InvalidArgumentError');
-          assert.strictEqual((error as InvalidArgumentError).message, 'Invalid ID format');
+          assert.ok(
+            (error as InvalidArgumentError).name === 'InvalidArgumentError',
+          );
+          assert.strictEqual(
+            (error as InvalidArgumentError).message,
+            'Invalid ID format',
+          );
         }
       });
 
@@ -372,7 +472,9 @@ describe('UsersService', () => {
         });
 
         //@ts-expect-error newUser._id exists
-        const deletedUser = await usersService.deleteOneById(newUser._id.toString());
+        const deletedUser = await usersService.deleteOneById(
+          newUser._id.toString(),
+        );
         assert.ok(deletedUser);
         //@ts-expect-error newUser._id exists
         assert.strictEqual(deletedUser!._id.toString(), newUser._id.toString());

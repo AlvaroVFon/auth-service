@@ -1,5 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { describe, test, after, afterEach, before, beforeEach } from 'node:test';
+import {
+  describe,
+  test,
+  after,
+  afterEach,
+  before,
+  beforeEach,
+} from 'node:test';
 import assert from 'node:assert';
 
 declare global {

@@ -34,7 +34,10 @@ describe('Crypto Service', () => {
     test('should return true for matching password and hash', async () => {
       const password = 'mySecurePassword';
       const hashedPassword = await cryptoService.hashString(password);
-      const isMatch = await cryptoService.compareString(password, hashedPassword);
+      const isMatch = await cryptoService.compareString(
+        password,
+        hashedPassword,
+      );
       assert.ok(isMatch);
     });
 
@@ -42,7 +45,10 @@ describe('Crypto Service', () => {
       const password = 'mySecurePassword';
       const wrongPassword = 'wrongPassword';
       const hashedPassword = await cryptoService.hashString(password);
-      const isMatch = await cryptoService.compareString(wrongPassword, hashedPassword);
+      const isMatch = await cryptoService.compareString(
+        wrongPassword,
+        hashedPassword,
+      );
       assert.ok(!isMatch);
     });
   });

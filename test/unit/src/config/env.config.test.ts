@@ -1,4 +1,7 @@
-import { getStringEnvVariable, getNumberEnvVariable } from '../../../../src/config/env.config';
+import {
+  getStringEnvVariable,
+  getNumberEnvVariable,
+} from '../../../../src/config/env.config';
 
 describe('Environment Configuration Tests', () => {
   describe('getStringEnvVar()', () => {
