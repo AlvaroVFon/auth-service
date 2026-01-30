@@ -1,6 +1,6 @@
-import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
-import { Payload } from '../../../../src/libs/jwt/jwt.interfaces';
-import { JwtService } from '../../../../src/libs/jwt/jwt.service';
+import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
+import { Payload } from '../../../../../src/libs/jwt/jwt.interfaces';
+import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 
 describe('JwtService', () => {
   let jwtService: JwtService;

@@ -1,4 +1,4 @@
-import { CryptoService } from '../../../src/libs/crypto.service';
+import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 
 describe('Crypto Service', () => {
   let cryptoService: CryptoService;

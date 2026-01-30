@@ -4,7 +4,7 @@ import {
   EntityAlreadyExistsError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
-import { CryptoService } from '../libs/crypto.service';
+import { CryptoService } from '../libs/crypto/crypto.service';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

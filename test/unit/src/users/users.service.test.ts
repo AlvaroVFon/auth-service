@@ -8,7 +8,7 @@ import {
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
 import { DEFAULT_USER } from '../../../fixtures/defaults/index';
-import { CryptoService } from '../../../../src/libs/crypto.service';
+import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 
 describe('UsersService', () => {
   let usersService: UsersService;
