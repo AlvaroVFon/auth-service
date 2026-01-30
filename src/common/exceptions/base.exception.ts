@@ -1,4 +1,4 @@
-export class BaseException extends Error {
+export class BaseError extends Error {
   constructor(message: string) {
     super(message);
     this.name = this.constructor.name;
@@ -6,13 +6,13 @@ export class BaseException extends Error {
   }
 }
 
-export class InvalidArgumentError extends BaseException {
+export class InvalidArgumentError extends BaseError {
   constructor(message: string) {
     super(message);
   }
 }
 
-export class EntityAlreadyExistsError extends BaseException {
+export class EntityAlreadyExistsError extends BaseError {
   constructor(message: string) {
     super(message);
   }
