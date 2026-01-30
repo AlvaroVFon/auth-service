@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
-    "test": "NODE_ENV=test node --test --test-concurrency=1 --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
-    "tdd": "NODE_ENV=test node --test --watch --test-concurrency=1 --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
+    "test": "NODE_ENV=test node --test --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
+    "tdd": "NODE_ENV=test node --test --watch --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
     "format": "prettier --write .",
     "commit": "cz",
     "prepare": "husky"
