@@ -1,5 +1,3 @@
-process.loadEnvFile('.env');
-
 export const getStringEnvVariable = (key: string, defaultValue: string = ''): string => {
   return process.env[key] || defaultValue;
 };

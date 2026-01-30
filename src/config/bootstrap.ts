@@ -5,10 +5,10 @@ import { setupGlobalMiddlewares } from './middlewares.config';
 import { setupRoutes } from './routes.config';
 import express, { Application } from 'express';
 
-const DB_CONNECTION_STRING = getStringEnvVariable('MONGO_URI');
 const app: Application = express();
 
 export const bootstrap = async () => {
+  const DB_CONNECTION_STRING = getStringEnvVariable('MONGO_URI');
   await connectDB(DB_CONNECTION_STRING);
   startServer(app);
   setupGlobalMiddlewares(app);

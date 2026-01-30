@@ -5,7 +5,7 @@ import { connectDB, flushDB, closeDB } from '../src/config/database.config';
 import { getStringEnvVariable } from '../src/config/env.config';
 import { registerModels } from './fixtures/model.register';
 
-const TEST_DB_URI = getStringEnvVariable('TEST_DB_URI', 'mongodb://localhost:27017/testdb');
+const TEST_DB_URI = getStringEnvVariable('MONGO_URI', 'mongodb://localhost:27017/testdb');
 
 global.describe = describe;
 global.test = test;
@@ -14,8 +14,6 @@ global.before = before;
 global.beforeEach = beforeEach;
 global.after = after;
 global.afterEach = afterEach;
-
-console.log = () => {};
 
 before(async () => {
   await connectDB(TEST_DB_URI);
