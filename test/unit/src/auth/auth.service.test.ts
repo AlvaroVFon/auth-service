@@ -223,6 +223,8 @@ describe('Auth Service', () => {
 
       assert.strictEqual(user.email, email);
       assert.ok(Types.ObjectId.isValid(user._id?.toString()));
+      assert.ok(user.password);
+      assert.notStrictEqual(user.password, 'ValidPass123!');
     });
   });
 });

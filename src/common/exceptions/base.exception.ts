@@ -26,3 +26,11 @@ export class EntityAlreadyExistsError extends BaseError {
     this.statusCode = 409;
   }
 }
+
+export class EntityNotFoundError extends BaseError {
+  constructor(message: string) {
+    super(message);
+    this.code = 'NOT_FOUND';
+    this.statusCode = 404;
+  }
+}

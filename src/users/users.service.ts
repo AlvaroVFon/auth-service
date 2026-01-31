@@ -2,6 +2,7 @@ import { Model, Types } from 'mongoose';
 import { User as UserInterface } from '../users/users.interface';
 import {
   EntityAlreadyExistsError,
+  EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto/crypto.service';
@@ -55,7 +56,12 @@ export class UsersService {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    return this.usersModel.findById(id);
+    const user = await this.usersModel.findById(id);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return user;
   }
 
   async updateOneById(
@@ -75,7 +81,14 @@ export class UsersService {
       );
     }
 
-    return this.usersModel.findByIdAndUpdate(id, updateData, { new: true });
+    const user = this.usersModel.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return user;
   }
 
   async deleteOneById(id: string): Promise<UserInterface | null> {
@@ -86,6 +99,11 @@ export class UsersService {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    return this.usersModel.findByIdAndDelete(id);
+    const user = await this.usersModel.findByIdAndDelete(id);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return user;
   }
 }
