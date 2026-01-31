@@ -1,6 +1,6 @@
 import { Application, NextFunction, Request, Response } from 'express';
 
-export interface Logger {
+export interface LoggerInterface {
   log(message: string): void;
   error(message: string): void;
   warn(message: string): void;
@@ -8,7 +8,7 @@ export interface Logger {
 }
 
 export class HttpLoggerInterceptor {
-  constructor(private readonly loggerService: Logger) {}
+  constructor(private readonly loggerService: LoggerInterface) {}
 
   intercept(request: Request, response: Response, next: NextFunction) {
     const start = process.hrtime.bigint();
@@ -31,7 +31,7 @@ export class HttpLoggerInterceptor {
     next();
   }
 
-  static initialize(app: Application, loggerService: Logger) {
+  static initialize(app: Application, loggerService: LoggerInterface) {
     const interceptor = new HttpLoggerInterceptor(loggerService);
     app.use((req: Request, res: Response, next: NextFunction) => {
       interceptor.intercept(req, res, next);

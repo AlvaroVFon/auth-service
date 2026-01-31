@@ -6,14 +6,14 @@ import express, { Application } from 'express';
 import { initializeUsersModule } from '../users/users.di';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
-import { ConsoleLogger } from '../libs/logger/console.logger';
+import { WinstonLogger } from '../libs/logger/winston.logger';
 
 const app: Application = express();
 
 export const bootstrap = async () => {
   const DB_CONNECTION_STRING = getStringEnvVariable('MONGO_URI');
   await connectDB(DB_CONNECTION_STRING);
-  HttpLoggerInterceptor.initialize(app, new ConsoleLogger());
+  HttpLoggerInterceptor.initialize(app, new WinstonLogger());
   setupGlobalMiddlewares(app);
   initializeUsersModule(app);
   HttpInterceptor.initialize(app);
