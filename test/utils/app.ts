@@ -1,6 +1,6 @@
 import express, { Application } from 'express';
 import { GlobalMiddlewares } from '../../src/config/middlewares.config';
-import { UsersModule } from '../../src/users/users.di';
+import { UsersModule } from '../../src/users/users.module';
 import { HttpInterceptor } from '../../src/common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../../src/common/interceptors/httplogger.interceptor';
 import { WinstonLogger } from '../../src/libs/logger/winston.logger';

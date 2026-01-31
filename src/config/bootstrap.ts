@@ -4,7 +4,7 @@ import { Database } from './database.config';
 import { startServer } from './app.config';
 import { GlobalMiddlewares } from './middlewares.config';
 import express, { Application } from 'express';
-import { UsersModule } from '../users/users.di';
+import { UsersModule } from '../users/users.module';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
 import { WinstonLogger } from '../libs/logger/winston.logger';
