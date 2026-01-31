@@ -1,4 +1,4 @@
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { User as UserInterface } from '../users/users.interface';
 import {
   EntityAlreadyExistsError,
@@ -6,8 +6,7 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto/crypto.service';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
 
 export class UsersService {
   constructor(
@@ -52,7 +51,7 @@ export class UsersService {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
-    if (!Types.ObjectId.isValid(id)) {
+    if (!OBJECTID_REGEX.test(id)) {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
@@ -71,7 +70,7 @@ export class UsersService {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
-    if (!Types.ObjectId.isValid(id)) {
+    if (!OBJECTID_REGEX.test(id)) {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
@@ -95,7 +94,7 @@ export class UsersService {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
-    if (!Types.ObjectId.isValid(id)) {
+    if (!OBJECTID_REGEX.test(id)) {
       throw new InvalidArgumentError('Invalid ID format');
     }
 

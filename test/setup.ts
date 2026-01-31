@@ -9,7 +9,12 @@ import {
   beforeEach,
 } from 'node:test';
 import assert from 'node:assert';
-import { connectDB, flushDB, closeDB } from '../src/config/database.config';
+import {
+  connectDB,
+  flushDB,
+  closeDB,
+  dropDB,
+} from '../src/config/database.config';
 import { getStringEnvVariable } from '../src/config/env.config';
 import { registerModels } from './fixtures/model.register';
 
@@ -35,6 +40,10 @@ before(async () => {
 
 beforeEach(async () => {
   await flushDB();
+});
+
+afterEach(async () => {
+  await dropDB(`auth_db_test_${process.pid}`);
 });
 
 after(async () => {

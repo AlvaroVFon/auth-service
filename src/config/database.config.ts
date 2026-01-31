@@ -27,6 +27,7 @@ const flushDB = async (): Promise<void> => {
     const collections = Object.keys(db.collections);
     for (const collectionName of collections) {
       const collection = db.collections[collectionName];
+      if (!collection) continue;
       await collection.deleteMany({});
     }
     console.log('Database flushed successfully');
@@ -42,4 +43,13 @@ const getDB = (): mongoose.Connection | null => {
   return db;
 };
 
-export { connectDB, closeDB, flushDB, getDB };
+const dropDB = async (dbName: string): Promise<void> => {
+  if (db && db.name === dbName) {
+    await db.dropDatabase();
+    console.log('Database dropped successfully');
+  } else {
+    console.warn('No database connection to drop');
+  }
+};
+
+export { connectDB, closeDB, flushDB, getDB, dropDB };
