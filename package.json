@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
-    "test": "node --test --test-concurrency=1 --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
-    "tdd": "node --test --watch --test-concurrency=1 --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
+    "test": "NODE_ENV=test node --test --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
+    "tdd": "NODE_ENV=test node --test --watch --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
     "format": "prettier --write .",
     "commit": "cz",
     "prepare": "husky"
@@ -28,9 +28,12 @@
   "packageManager": "pnpm@10.28.2",
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.1.0",
     "@types/supertest": "^6.0.3",
+    "@types/winston": "^2.4.4",
     "cz-conventional-changelog": "^3.3.0",
     "eslint": "^9.39.2",
     "husky": "^9.1.7",
@@ -42,9 +45,12 @@
     "typescript-eslint": "^8.54.0"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "commitizen": "^4.3.1",
     "express": "^5.2.1",
-    "mongoose": "^9.1.5"
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.1.5",
+    "winston": "^3.19.0"
   },
   "config": {
     "commitizen": {

@@ -5,6 +5,7 @@ export const DEFAULT_USER_ID = new Types.ObjectId('000000000000000000000001');
 export const DEFAULT_USER = {
   _id: DEFAULT_USER_ID,
   email: 'defaultuser@example.com',
+  password: '$2b$10$DOgX16YaMx3WlA8/4v5gH.qMMDUPxnsbFzl5mSRmT6Gj3.cwCxQjy',
 };
 
 export const generateRandomEmail = (prefix: string) => {

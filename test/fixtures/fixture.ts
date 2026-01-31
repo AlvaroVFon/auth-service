@@ -3,7 +3,10 @@ import mongoose from 'mongoose';
 import { defaultsRegistry } from './defaults/defaults.registry';
 
 export class Fixture {
-  async registerModel<T>(modelName: string, schema: mongoose.Schema<T>): Promise<void> {
+  async registerModel<T>(
+    modelName: string,
+    schema: mongoose.Schema<T>,
+  ): Promise<void> {
     if (!mongoose.models[modelName]) {
       mongoose.model<T>(modelName, schema);
     }
@@ -22,7 +25,10 @@ export class Fixture {
     return Model.create(mergedData);
   }
 
-  async createMany<T>(modelName: string, dataArray?: Partial<T>[]): Promise<T[]> {
+  async createMany<T>(
+    modelName: string,
+    dataArray?: Partial<T>[],
+  ): Promise<T[]> {
     const Model = mongoose.model<T>(modelName);
     const items = dataArray && dataArray.length > 0 ? dataArray : [{}];
 
@@ -48,7 +54,10 @@ export class Fixture {
     return Model.find(query).exec();
   }
 
-  async findOne<T>(modelName: string, query: QueryFilter<T>): Promise<T | null> {
+  async findOne<T>(
+    modelName: string,
+    query: QueryFilter<T>,
+  ): Promise<T | null> {
     const Model = mongoose.model<T>(modelName);
     return Model.findOne(query).exec();
   }

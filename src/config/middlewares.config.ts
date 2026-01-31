@@ -1,8 +1,10 @@
 import express, { Application } from 'express';
+import { RequiredBodyMiddleware } from '../common/middlewares/required-body.middleware';
 
-const setupGlobalMiddlewares = (app: Application) => {
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
-};
-
-export { setupGlobalMiddlewares };
+export class GlobalMiddlewares {
+  static initialize(app: Application) {
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+    app.use(RequiredBodyMiddleware.initialize);
+  }
+}

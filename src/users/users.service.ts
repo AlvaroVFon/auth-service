@@ -1,14 +1,18 @@
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { User as UserInterface } from '../users/users.interface';
 import {
   EntityAlreadyExistsError,
+  EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { CryptoService } from '../libs/crypto/crypto.service';
+import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
 
 export class UsersService {
-  constructor(private readonly usersModel: Model<UserInterface>) {}
+  constructor(
+    private readonly usersModel: Model<UserInterface>,
+    private readonly cryptoService: CryptoService,
+  ) {}
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
     if (!data.email) {
@@ -17,6 +21,11 @@ export class UsersService {
     if (!EMAIL_REGEX.test(data.email)) {
       throw new InvalidArgumentError('Invalid email format');
     }
+    if (!data.password) {
+      throw new InvalidArgumentError('Password is required to create a user');
+    }
+
+    data.password = await this.cryptoService.hashString(data.password);
 
     const existingUser = await this.usersModel.findOne({ email: data.email });
     if (existingUser) {
@@ -42,11 +51,16 @@ export class UsersService {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
-    if (!Types.ObjectId.isValid(id)) {
+    if (!OBJECTID_REGEX.test(id)) {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    return this.usersModel.findById(id);
+    const user = await this.usersModel.findById(id);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return user;
   }
 
   async updateOneById(
@@ -56,21 +70,39 @@ export class UsersService {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
-    if (!Types.ObjectId.isValid(id)) {
+    if (!OBJECTID_REGEX.test(id)) {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    return this.usersModel.findByIdAndUpdate(id, updateData, { new: true });
+    if (updateData.password) {
+      updateData.password = await this.cryptoService.hashString(
+        updateData.password,
+      );
+    }
+
+    const user = this.usersModel.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return user;
   }
 
   async deleteOneById(id: string): Promise<UserInterface | null> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
-    if (!Types.ObjectId.isValid(id)) {
+    if (!OBJECTID_REGEX.test(id)) {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    return this.usersModel.findByIdAndDelete(id);
+    const user = await this.usersModel.findByIdAndDelete(id);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return user;
   }
 }

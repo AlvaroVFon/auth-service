@@ -16,7 +16,10 @@ describe('Fixture Methods', () => {
     });
 
     test('should create a document with overridden data when data is provided', async () => {
-      const customData = { username: 'customuser', email: 'customuser@example.com' };
+      const customData = {
+        username: 'customuser',
+        email: 'customuser@example.com',
+      };
       const user = await fixture.create<UserInterface>('User', customData);
       assert.strictEqual(user.username, 'customuser');
       assert.strictEqual(user.email, 'customuser@example.com');
@@ -73,8 +76,12 @@ describe('Fixture Methods', () => {
     });
 
     test('should find one document based on query', async () => {
-      await fixture.create<UserInterface>('User', { email: 'user1@example.com' });
-      const user = await fixture.findOne<UserInterface>('User', { email: 'user1@example.com' });
+      await fixture.create<UserInterface>('User', {
+        email: 'user1@example.com',
+      });
+      const user = await fixture.findOne<UserInterface>('User', {
+        email: 'user1@example.com',
+      });
       assert.ok(user);
       assert.strictEqual(user!.email, 'user1@example.com');
     });
@@ -83,7 +90,10 @@ describe('Fixture Methods', () => {
       const createdUser = await fixture.create<UserInterface>('User', {
         email: 'user1@example.com',
       });
-      const foundUser = await fixture.findById<UserInterface>('User', createdUser._id.toString());
+      const foundUser = await fixture.findById<UserInterface>(
+        'User',
+        createdUser._id.toString(),
+      );
       assert.ok(foundUser);
       assert.strictEqual(foundUser!._id.toString(), createdUser._id.toString());
     });
