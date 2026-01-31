@@ -13,7 +13,7 @@ export class HttpInterceptor {
     next: NextFunction,
   ) {
     if (err instanceof BaseError) {
-      //TODO: Add logging here
+      this.injectErrorDetails(err, req, res);
       return res.status(err.statusCode).json({
         message: err.message,
         code: err.code,
@@ -31,5 +31,18 @@ export class HttpInterceptor {
 
   static initialize(app: Application) {
     new HttpInterceptor(app);
+  }
+
+  injectErrorDetails(error: BaseError, req: Request, res: Response): void {
+    const errorMessage = {
+      path: req?.originalUrl,
+      method: req?.method,
+      name: error.name,
+      code: error.code,
+      message: error.message,
+      statusCode: error.statusCode,
+    };
+
+    res.locals.errorDetails = errorMessage;
   }
 }

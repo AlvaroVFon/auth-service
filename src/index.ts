@@ -1,4 +1,3 @@
-process.loadEnvFile();
 import { bootstrap } from './config/bootstrap';
 
 bootstrap().catch((error) => {

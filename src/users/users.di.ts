@@ -5,10 +5,16 @@ import { UsersController } from './users.controller';
 import { UsersRouter } from './users.routers';
 import { Application } from 'express';
 
-export const initializeUsersModule = (app: Application) => {
-  const cryptoService = new CryptoService();
-  const usersService = new UsersService(User, cryptoService);
-  const usersController = new UsersController(usersService);
-  const usersRouter = new UsersRouter(usersController, app);
-  return usersRouter.router;
-};
+export class UsersModule {
+  public readonly service: UsersService;
+  public readonly controller: UsersController;
+
+  constructor(private readonly cryptoService: CryptoService) {
+    this.service = new UsersService(User, this.cryptoService);
+    this.controller = new UsersController(this.service);
+  }
+
+  initialize(app: Application): void {
+    new UsersRouter(this.controller, app);
+  }
+}
