@@ -304,6 +304,39 @@ describe('UsersService', () => {
       });
     });
 
+    describe('FindAll()', () => {
+      test('should return an empty array if no users exist', async () => {
+        const users = await usersService.findAll();
+        assert.ok(Array.isArray(users));
+        assert.strictEqual(users.length, 0);
+      });
+
+      test('should return all users', async () => {
+        const users = await fixture.createMany<UserInterface>('User', [
+          {
+            email: generateRandomEmail('findall1+'),
+            username: 'findalluser1',
+            password: 'hashedpassword123',
+          },
+          {
+            email: generateRandomEmail('findall2+'),
+            username: 'findalluser2',
+            password: 'hashedpassword123',
+          },
+        ]);
+
+        const foundUsers = await usersService.findAll();
+        assert.ok(Array.isArray(foundUsers));
+        assert.strictEqual(foundUsers.length, users.length);
+        assert.strictEqual(foundUsers[0].email, users[0].email);
+        assert.strictEqual(foundUsers[1].email, users[1].email);
+        assert.ok(foundUsers[0]._id);
+        assert.ok(foundUsers[1]._id);
+        assert.ok(foundUsers[0].password);
+        assert.ok(foundUsers[1].password);
+      });
+    });
+
     describe('updateOneById()', () => {
       test('should throw an error on missing id', async () => {
         await assert.rejects(

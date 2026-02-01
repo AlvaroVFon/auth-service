@@ -63,6 +63,10 @@ export class UsersService {
     return user;
   }
 
+  async findAll(): Promise<UserInterface[]> {
+    return this.usersModel.find();
+  }
+
   async updateOneById(
     id: string,
     updateData: Partial<UserInterface>,

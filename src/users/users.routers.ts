@@ -10,36 +10,24 @@ export class UsersRouter {
   }
 
   private initializeRoutes() {
-    this.app.post('/users', async (req, res, next) => {
-      try {
-        await this.userController.createUser(req, res);
-      } catch (error) {
-        next(error);
-      }
-    });
+    this.app.post(
+      '/users',
+      this.userController.createUser.bind(this.userController),
+    );
 
-    this.app.get('/users/:id', async (req, res, next) => {
-      try {
-        await this.userController.getById(req, res);
-      } catch (error) {
-        next(error);
-      }
-    });
+    this.app.get(
+      '/users/:id',
+      this.userController.getById.bind(this.userController),
+    );
 
-    this.app.patch('/users/:id', async (req, res, next) => {
-      try {
-        await this.userController.updateOneById(req, res);
-      } catch (error) {
-        next(error);
-      }
-    });
+    this.app.patch(
+      '/users/:id',
+      this.userController.updateOneById.bind(this.userController),
+    );
 
-    this.app.delete('/users/:id', async (req, res, next) => {
-      try {
-        await this.userController.deleteUser(req, res);
-      } catch (error) {
-        next(error);
-      }
-    });
+    this.app.delete(
+      '/users/:id',
+      this.userController.deleteUser.bind(this.userController),
+    );
   }
 }
