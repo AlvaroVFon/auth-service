@@ -411,6 +411,7 @@ describe('UsersService', () => {
             });
           },
           (error: any) => {
+            assert.ok(error instanceof EntityNotFoundError);
             assert.strictEqual(error.name, 'EntityNotFoundError');
             assert.strictEqual(error.message, 'User not found');
             return true;

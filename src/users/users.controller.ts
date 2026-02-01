@@ -22,6 +22,13 @@ export class UsersController {
   }
 
   @Catch()
+  async findAll(req: Request, res: Response): Promise<void> {
+    const users = await this.userService.findAll();
+
+    res.status(200).json(users);
+  }
+
+  @Catch()
   async updateOneById(req: Request, res: Response): Promise<void> {
     const id = req.params.id as string;
     const updateData = req.body;

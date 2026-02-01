@@ -20,6 +20,11 @@ export class UsersRouter {
       this.userController.getById.bind(this.userController),
     );
 
+    this.app.get(
+      '/users',
+      this.userController.findAll.bind(this.userController),
+    );
+
     this.app.patch(
       '/users/:id',
       this.userController.updateOneById.bind(this.userController),

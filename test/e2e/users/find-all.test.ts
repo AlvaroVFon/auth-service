@@ -1,0 +1,30 @@
+import request from 'supertest';
+import { Application } from 'express';
+import { getTestAppInstance } from '../../utils/app';
+import fixture from '../../fixtures/fixture';
+
+describe('E2E Test: Find All Users', () => {
+  let app: Application;
+
+  before(async () => {
+    app = await getTestAppInstance();
+  });
+
+  test('should retrieve all users', async () => {
+    const users = await fixture.createMany('User', [
+      { email: 'alice@example.com' },
+      { email: 'bob@example.com' },
+    ]);
+
+    const response = await request(app).get('/users').expect(200);
+
+    assert.strictEqual(response.body.length, users.length);
+    assert.strictEqual(response.body[0].email, 'alice@example.com');
+  });
+
+  test('should return an empty array when no users exist', async () => {
+    const response = await request(app).get('/users').expect(200);
+
+    assert.deepStrictEqual(response.body, []);
+  });
+});
