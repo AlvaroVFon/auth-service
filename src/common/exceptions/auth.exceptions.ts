@@ -7,3 +7,11 @@ export class InvalidCredentialsError extends BaseError {
     this.statusCode = 401;
   }
 }
+
+export class ForbiddenError extends BaseError {
+  constructor(message: string) {
+    super(message);
+    this.code = 'FORBIDDEN';
+    this.statusCode = 403;
+  }
+}

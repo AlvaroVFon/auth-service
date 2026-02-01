@@ -24,11 +24,10 @@ export class AuthenticationMiddleware {
         throw new InvalidCredentialsError('Invalid token payload');
       }
 
-      req.user = { id: payload.userId };
+      req.user = { id: payload.userId, role: payload.role };
 
       next();
     } catch (error) {
-      console.log('Authentication error:', error);
       next(error);
     }
   };

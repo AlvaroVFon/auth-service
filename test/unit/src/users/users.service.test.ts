@@ -328,12 +328,12 @@ describe('UsersService', () => {
         const foundUsers = await usersService.findAll();
         assert.ok(Array.isArray(foundUsers));
         assert.strictEqual(foundUsers.length, users.length);
-        assert.strictEqual(foundUsers[0].email, users[0].email);
-        assert.strictEqual(foundUsers[1].email, users[1].email);
-        assert.ok(foundUsers[0]._id);
-        assert.ok(foundUsers[1]._id);
-        assert.ok(foundUsers[0].password);
-        assert.ok(foundUsers[1].password);
+        assert.strictEqual(foundUsers[0]!.email, users[0]!.email);
+        assert.strictEqual(foundUsers[1]!.email, users[1]!.email);
+        assert.ok(foundUsers[0]!._id);
+        assert.ok(foundUsers[1]!._id);
+        assert.ok(foundUsers[0]!.password);
+        assert.ok(foundUsers[1]!.password);
       });
     });
 

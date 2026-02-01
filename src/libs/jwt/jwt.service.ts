@@ -4,6 +4,7 @@ import { Payload } from './jwt.interfaces';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { InvalidTokenError } from './jwt.errors';
 import { randomUUID } from 'node:crypto';
+import { Roles } from '../../common/enums/roles.enum';
 
 export class JwtService {
   constructor(
@@ -39,8 +40,8 @@ export class JwtService {
     }
   }
 
-  generateAccessToken(userId: string): string {
-    const payload: Payload = { userId, type: 'access' };
+  generateAccessToken(userId: string, role: Roles): string {
+    const payload: Payload = { userId, role, type: 'access' };
     return this.generateToken(payload);
   }
 }

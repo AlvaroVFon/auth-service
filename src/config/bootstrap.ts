@@ -12,6 +12,7 @@ import { CryptoService } from '../libs/crypto/crypto.service';
 import { AuthModule } from '../auth/auth.module';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
+import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 
 const app: Application = express();
 
@@ -28,9 +29,15 @@ const database = new Database(DB_CONNECTION_STRING, winstonLogger);
 const cryptoService = new CryptoService();
 const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
+const authorizationMiddleware = new AuthorizationMiddleware();
 
 // Modules
-const usersModule = new UsersModule(cryptoService, authenticationMiddleware);
+const usersModule = new UsersModule(
+  cryptoService,
+  authenticationMiddleware,
+  authorizationMiddleware,
+);
+
 const authModule = new AuthModule(
   usersModule.service,
   cryptoService,

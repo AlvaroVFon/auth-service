@@ -1,10 +1,12 @@
 import { Application } from 'express';
 import { UsersController } from './users.controller';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
+import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 
 export class UsersRouter {
   constructor(
     private readonly authenticationMiddleware: AuthenticationMiddleware,
+    private readonly authorizationMiddleware: AuthorizationMiddleware,
     private readonly userController: UsersController,
     private readonly app: Application,
   ) {

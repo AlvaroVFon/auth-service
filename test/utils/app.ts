@@ -9,6 +9,7 @@ import { getStringEnvVariable } from '../../src/config/env.config';
 import { JwtService } from '../../src/libs/jwt/jwt.service';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
+import { AuthorizationMiddleware } from '../../src/common/middlewares/authorization.middleware';
 
 let app: Application;
 
@@ -22,8 +23,14 @@ const winstonLogger = new WinstonLogger();
 const cryptoService = new CryptoService();
 const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
+const authorizationMiddleware = new AuthorizationMiddleware();
 
-const usersModule = new UsersModule(cryptoService, authenticationMiddleware);
+const usersModule = new UsersModule(
+  cryptoService,
+  authenticationMiddleware,
+  authorizationMiddleware,
+);
+
 const authModule = new AuthModule(
   usersModule.service,
   cryptoService,
