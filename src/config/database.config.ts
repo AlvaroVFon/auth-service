@@ -16,6 +16,7 @@ export class Database {
       this.logger.log('Database connected successfully');
     } catch (error) {
       this.logger.error('Error connecting to database:', error);
+      throw error;
     }
   }
 

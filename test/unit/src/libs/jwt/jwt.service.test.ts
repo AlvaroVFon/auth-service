@@ -1,3 +1,4 @@
+import { Roles } from '../../../../../src/common/enums/roles.enum';
 import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
 import { Payload } from '../../../../../src/libs/jwt/jwt.interfaces';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
@@ -16,6 +17,7 @@ describe('JwtService', () => {
       const invalidPayload: Payload = {
         userId: 'invalid-object-id',
         type: 'access',
+        role: Roles.USER,
       };
       try {
         jwtService.generateToken(invalidPayload);
@@ -44,7 +46,11 @@ describe('JwtService', () => {
     });
 
     test('should generate a valid JWT token', () => {
-      const payload: Payload = { userId: '0'.repeat(24), type: 'access' };
+      const payload: Payload = {
+        userId: '0'.repeat(24),
+        type: 'access',
+        role: Roles.USER,
+      };
       const token = jwtService.generateToken(payload);
       assert.ok(token);
       assert.strictEqual(typeof token, 'string');
@@ -56,6 +62,7 @@ describe('JwtService', () => {
       const payload: Payload = {
         userId: '0'.repeat(24),
         type: 'access',
+        role: Roles.USER,
         jti: 'test-jti',
       };
       const token = jwtService.generateToken(payload);
@@ -68,6 +75,7 @@ describe('JwtService', () => {
         // @ts-expect-error 'iat' and 'exp' are added by jsonwebtoken
         exp: isValid['exp'],
         jti: payload.jti,
+        role: payload.role,
       });
     });
 
@@ -90,7 +98,7 @@ describe('JwtService', () => {
   describe('generateAccessToken', () => {
     test('should generate a valid access token', () => {
       const userId = '0'.repeat(24);
-      const token = jwtService.generateAccessToken(userId);
+      const token = jwtService.generateAccessToken(userId, Roles.USER);
       assert.ok(token);
       assert.strictEqual(typeof token, 'string');
 
@@ -98,8 +106,10 @@ describe('JwtService', () => {
         iat: number;
         exp: number;
       };
+      console.log({ decoded });
       assert.strictEqual(decoded.userId, userId);
       assert.strictEqual(decoded.type, 'access');
+      assert.strictEqual(decoded.role, Roles.USER);
     });
   });
 });

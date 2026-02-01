@@ -37,7 +37,7 @@ export class AuthService {
       throw new InvalidCredentialsError('Invalid email or password');
     }
 
-    return this.jwtService.generateAccessToken(user._id?.toString());
+    return this.jwtService.generateAccessToken(user._id?.toString(), user.role);
   }
 
   async signup(credentials: SignupCredentials): Promise<User> {
