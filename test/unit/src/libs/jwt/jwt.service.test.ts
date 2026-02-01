@@ -53,7 +53,11 @@ describe('JwtService', () => {
 
   describe('verifyToken', () => {
     test('should verify a valid JWT token', () => {
-      const payload: Payload = { userId: '0'.repeat(24), type: 'access' };
+      const payload: Payload = {
+        userId: '0'.repeat(24),
+        type: 'access',
+        jti: 'test-jti',
+      };
       const token = jwtService.generateToken(payload);
       const isValid = jwtService.verifyToken(token);
       assert.deepStrictEqual(isValid, {
@@ -63,6 +67,7 @@ describe('JwtService', () => {
         iat: isValid['iat'],
         // @ts-expect-error 'iat' and 'exp' are added by jsonwebtoken
         exp: isValid['exp'],
+        jti: payload.jti,
       });
     });
 

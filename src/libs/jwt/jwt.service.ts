@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { Payload } from './jwt.interfaces';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { InvalidTokenError } from './jwt.errors';
+import { randomUUID } from 'node:crypto';
 
 export class JwtService {
   constructor(
@@ -21,6 +22,9 @@ export class JwtService {
         'InvalidArgumentError: Payload type is not valid',
       );
     }
+
+    const jti = randomUUID();
+    payload.jti = jti;
 
     return jwt.sign(payload, this.secret, { expiresIn: this.expiresIn });
   }
