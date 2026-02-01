@@ -1,6 +1,13 @@
 import { Types } from 'mongoose';
+import jwt from 'jsonwebtoken';
 
 export const DEFAULT_USER_ID = new Types.ObjectId('000000000000000000000001');
+
+export const DEFAULT_ACCESS_TOKEN = jwt.sign(
+  { userId: DEFAULT_USER_ID.toString(), type: 'access' },
+  process.env.JWT_SECRET || 'test-secret-fallback',
+  { expiresIn: '100y' },
+);
 
 export const DEFAULT_USER = {
   _id: DEFAULT_USER_ID,

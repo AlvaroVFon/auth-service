@@ -23,7 +23,7 @@ export class EntityAlreadyExistsError extends BaseError {
   constructor(message: string) {
     super(message);
     this.code = 'ENTITY_ALREADY_EXISTS';
-    this.statusCode = 409;
+    this.statusCode = 400;
   }
 }
 

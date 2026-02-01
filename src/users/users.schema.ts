@@ -20,7 +20,17 @@ const userSchema = new Schema<UserInterface>(
       trim: true,
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      transform: (_doc, ret: any) => {
+        delete ret.password;
+        delete ret.__v;
+        return ret;
+      },
+    },
+  },
 );
 
 export const User = model<UserInterface>('User', userSchema);

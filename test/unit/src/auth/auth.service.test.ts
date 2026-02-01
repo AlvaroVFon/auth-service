@@ -1,5 +1,5 @@
 import { InvalidCredentialsError } from '../../../../src/common/exceptions/auth.exceptions';
-import { AuthService } from '../../../../src/auth/auth.servive';
+import { AuthService } from '../../../../src/auth/auth.service';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import { JwtService } from '../../../../src/libs/jwt/jwt.service';
 import { UsersService } from '../../../../src/users/users.service';
@@ -54,7 +54,7 @@ describe('Auth Service', () => {
       assert.ok(jwtRegex.test(result));
     });
 
-    test('should throw an error for invalid email', async () => {
+    test('should throw an error for non existing email', async () => {
       await assert.rejects(
         async () =>
           await authService.login({
@@ -77,9 +77,9 @@ describe('Auth Service', () => {
             password: '',
           }),
         {
-          name: 'InvalidCredentialsError',
+          name: 'InvalidArgumentError',
           message: 'Email and password are required',
-          code: 'INVALID_CREDENTIALS',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -108,9 +108,9 @@ describe('Auth Service', () => {
             password: '',
           }),
         {
-          name: 'InvalidCredentialsError',
+          name: 'InvalidArgumentError',
           message: 'Email and password are required',
-          code: 'INVALID_CREDENTIALS',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -126,9 +126,9 @@ describe('Auth Service', () => {
             passwordConfirmation: 'ValidPass123!',
           }),
         {
-          name: 'InvalidCredentialsError',
+          name: 'InvalidArgumentError',
           message: 'Invalid email format',
-          code: 'INVALID_CREDENTIALS',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -142,9 +142,9 @@ describe('Auth Service', () => {
             passwordConfirmation: 'ValidPass123!',
           }),
         {
-          name: 'InvalidCredentialsError',
+          name: 'InvalidArgumentError',
           message: 'Email is required',
-          code: 'INVALID_CREDENTIALS',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -158,9 +158,9 @@ describe('Auth Service', () => {
             passwordConfirmation: '',
           }),
         {
-          name: 'InvalidCredentialsError',
+          name: 'InvalidArgumentError',
           message: 'Password is required',
-          code: 'INVALID_CREDENTIALS',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -174,9 +174,9 @@ describe('Auth Service', () => {
             passwordConfirmation: 'DifferentPass123!',
           }),
         {
-          name: 'InvalidCredentialsError',
+          name: 'InvalidArgumentError',
           message: 'Password and password confirmation do not match',
-          code: 'INVALID_CREDENTIALS',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -190,9 +190,9 @@ describe('Auth Service', () => {
             passwordConfirmation: 'alllowercase',
           }),
         {
-          name: 'InvalidCredentialsError',
+          name: 'InvalidArgumentError',
           message: 'Password does not meet complexity requirements',
-          code: 'INVALID_CREDENTIALS',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -206,9 +206,9 @@ describe('Auth Service', () => {
             passwordConfirmation: 'ValidPass123!',
           }),
         {
-          name: 'EntityAlreadyExistsError',
-          message: 'Email is already in use',
-          code: 'ENTITY_ALREADY_EXISTS',
+          name: 'InvalidArgumentError',
+          message: 'Invalid email or password',
+          code: 'INVALID_ARGUMENT',
         },
       );
     });

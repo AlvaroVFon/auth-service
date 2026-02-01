@@ -1,0 +1,23 @@
+import { Request, Response } from 'express';
+import { AuthService } from './auth.service';
+import { Catch } from '../common/decorators/catch.decorator';
+
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Catch()
+  async login(req: Request, res: Response): Promise<void> {
+    const credentials = req.body;
+    const token = await this.authService.login(credentials);
+
+    res.status(200).json({ accessToken: token });
+  }
+
+  @Catch()
+  async signup(req: Request, res: Response): Promise<void> {
+    const credentials = req.body;
+    const newUser = await this.authService.signup(credentials);
+
+    res.status(201).json(newUser);
+  }
+}

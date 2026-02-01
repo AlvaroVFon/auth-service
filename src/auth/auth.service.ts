@@ -4,7 +4,7 @@ import { UsersService } from '../users/users.service';
 import { InvalidCredentialsError } from '../common/exceptions/auth.exceptions';
 import { Credentials, SignupCredentials } from './auth.interface';
 import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
-import { EntityAlreadyExistsError } from '../common/exceptions/base.exception';
+import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { User } from '../users/users.interface';
 
 export class AuthService {
@@ -16,7 +16,11 @@ export class AuthService {
 
   async login(credentials: Credentials): Promise<string> {
     if (!credentials.email || !credentials.password) {
-      throw new InvalidCredentialsError('Email and password are required');
+      throw new InvalidArgumentError('Email and password are required');
+    }
+
+    if (!EMAIL_REGEX.test(credentials.email)) {
+      throw new InvalidArgumentError('Invalid email or password');
     }
 
     const user = await this.usersService.findByEmail(credentials.email);
@@ -38,31 +42,31 @@ export class AuthService {
 
   async signup(credentials: SignupCredentials): Promise<User> {
     if (!credentials.email) {
-      throw new InvalidCredentialsError('Email is required');
+      throw new InvalidArgumentError('Email is required');
     }
     if (EMAIL_REGEX.test(credentials.email) === false) {
-      throw new InvalidCredentialsError('Invalid email format');
+      throw new InvalidArgumentError('Invalid email format');
     }
     if (!credentials.password) {
-      throw new InvalidCredentialsError('Password is required');
+      throw new InvalidArgumentError('Password is required');
     }
     if (PASSWORD_REGEX.test(credentials.password) === false) {
-      throw new InvalidCredentialsError(
+      throw new InvalidArgumentError(
         'Password does not meet complexity requirements',
       );
     }
     if (!credentials.passwordConfirmation) {
-      throw new InvalidCredentialsError('Password confirmation is required');
+      throw new InvalidArgumentError('Password confirmation is required');
     }
     if (credentials.password !== credentials.passwordConfirmation) {
-      throw new InvalidCredentialsError(
+      throw new InvalidArgumentError(
         'Password and password confirmation do not match',
       );
     }
 
     const existingUser = await this.usersService.findByEmail(credentials.email);
     if (existingUser) {
-      throw new EntityAlreadyExistsError('Email is already in use');
+      throw new InvalidArgumentError('Invalid email or password');
     }
 
     return this.usersService.create({
