@@ -2,6 +2,7 @@ import request from 'supertest';
 import { Application } from 'express';
 import { getTestAppInstance } from '../../utils/app';
 import fixture from '../../fixtures/fixture';
+import { DEFAULT_USER_TOKEN } from '../../fixtures/defaults';
 
 describe('E2E Test: Find All Users', () => {
   let app: Application;
@@ -16,14 +17,20 @@ describe('E2E Test: Find All Users', () => {
       { email: 'bob@example.com' },
     ]);
 
-    const response = await request(app).get('/users').expect(200);
+    const response = await request(app)
+      .get('/users')
+      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .expect(200);
 
     assert.strictEqual(response.body.length, users.length);
     assert.strictEqual(response.body[0].email, 'alice@example.com');
   });
 
   test('should return an empty array when no users exist', async () => {
-    const response = await request(app).get('/users').expect(200);
+    const response = await request(app)
+      .get('/users')
+      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .expect(200);
 
     assert.deepStrictEqual(response.body, []);
   });

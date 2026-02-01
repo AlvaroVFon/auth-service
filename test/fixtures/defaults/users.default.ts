@@ -1,7 +1,15 @@
+process.loadEnvFile('.env.test');
 import { Types } from 'mongoose';
 import jwt from 'jsonwebtoken';
+import { getStringEnvVariable } from '../../../src/config/env.config';
 
 export const DEFAULT_USER_ID = new Types.ObjectId('000000000000000000000001');
+
+export const DEFAULT_USER_TOKEN = jwt.sign(
+  { userId: DEFAULT_USER_ID.toString() },
+  getStringEnvVariable('JWT_SECRET'),
+  { expiresIn: '1h' },
+);
 
 export const DEFAULT_USER = {
   _id: DEFAULT_USER_ID,

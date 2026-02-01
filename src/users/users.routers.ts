@@ -1,8 +1,10 @@
 import { Application } from 'express';
 import { UsersController } from './users.controller';
+import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 
 export class UsersRouter {
   constructor(
+    private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly userController: UsersController,
     private readonly app: Application,
   ) {
@@ -10,6 +12,8 @@ export class UsersRouter {
   }
 
   private initializeRoutes() {
+    this.app.use('/users', this.authenticationMiddleware.authenticate);
+
     this.app.post(
       '/users',
       this.userController.createUser.bind(this.userController),

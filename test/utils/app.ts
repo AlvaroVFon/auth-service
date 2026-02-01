@@ -8,6 +8,7 @@ import { CryptoService } from '../../src/libs/crypto/crypto.service';
 import { getStringEnvVariable } from '../../src/config/env.config';
 import { JwtService } from '../../src/libs/jwt/jwt.service';
 import { AuthModule } from '../../src/auth/auth.module';
+import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
 
 let app: Application;
 
@@ -20,8 +21,9 @@ const JWT_EXPIRES_IN = parseInt(
 const winstonLogger = new WinstonLogger();
 const cryptoService = new CryptoService();
 const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
+const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 
-const usersModule = new UsersModule(cryptoService);
+const usersModule = new UsersModule(cryptoService, authenticationMiddleware);
 const authModule = new AuthModule(
   usersModule.service,
   cryptoService,

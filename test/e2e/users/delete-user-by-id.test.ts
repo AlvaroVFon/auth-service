@@ -4,6 +4,7 @@ import request from 'supertest';
 import fixture from '../../fixtures/fixture';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import { User } from '../../../src/users/users.interface';
+import { DEFAULT_USER_TOKEN } from '../../fixtures/defaults';
 
 describe('Delete User By ID E2E Test', () => {
   let app: Application;
@@ -20,6 +21,7 @@ describe('Delete User By ID E2E Test', () => {
 
     const deleteResponse = await request(app)
       .delete(`/users/${newUser._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
       .expect(204);
 
     const deletedUser = await fixture.findById<User>(
