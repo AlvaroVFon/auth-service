@@ -80,9 +80,10 @@ export class UsersService {
       );
     }
 
-    const user = this.usersModel.findByIdAndUpdate(id, updateData, {
+    const user = await this.usersModel.findByIdAndUpdate(id, updateData, {
       new: true,
     });
+
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }

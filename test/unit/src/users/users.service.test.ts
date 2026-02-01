@@ -5,6 +5,7 @@ import { generateRandomEmail } from '../../../fixtures/defaults/users.default';
 import fixture from '../../../fixtures/fixture';
 import {
   EntityAlreadyExistsError,
+  EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
 import { DEFAULT_USER } from '../../../fixtures/defaults/index';
@@ -370,10 +371,18 @@ describe('UsersService', () => {
 
       test('should return null when updating a non-existent user', async () => {
         const nonExistentId = '60d21b4667d0d8992e610c85'; // Example of a valid but non-existent ObjectId
-        const updatedUser = await usersService.updateOneById(nonExistentId, {
-          username: 'newusername',
-        });
-        assert.strictEqual(updatedUser, null);
+        await assert.rejects(
+          async () => {
+            await usersService.updateOneById(nonExistentId, {
+              username: 'newusername',
+            });
+          },
+          (error: any) => {
+            assert.strictEqual(error.name, 'EntityNotFoundError');
+            assert.strictEqual(error.message, 'User not found');
+            return true;
+          },
+        );
       });
 
       test('should update only provided fields', async () => {

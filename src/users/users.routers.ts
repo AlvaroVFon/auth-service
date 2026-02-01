@@ -1,26 +1,45 @@
-import { Application, Router } from 'express';
+import { Application } from 'express';
 import { UsersController } from './users.controller';
 
 export class UsersRouter {
-  public router: Router;
-
   constructor(
     private readonly userController: UsersController,
     private readonly app: Application,
   ) {
-    this.router = Router();
     this.initializeRoutes();
   }
 
   private initializeRoutes() {
-    this.router.post('/users', (req, res) =>
-      this.userController.createUser(req, res),
-    );
+    this.app.post('/users', async (req, res, next) => {
+      try {
+        await this.userController.createUser(req, res);
+      } catch (error) {
+        next(error);
+      }
+    });
 
-    this.router.get('/users/:id', (req, res) =>
-      this.userController.getById(req, res),
-    );
+    this.app.get('/users/:id', async (req, res, next) => {
+      try {
+        await this.userController.getById(req, res);
+      } catch (error) {
+        next(error);
+      }
+    });
 
-    this.app.use(this.router);
+    this.app.patch('/users/:id', async (req, res, next) => {
+      try {
+        await this.userController.updateOneById(req, res);
+      } catch (error) {
+        next(error);
+      }
+    });
+
+    this.app.delete('/users/:id', async (req, res, next) => {
+      try {
+        await this.userController.deleteUser(req, res);
+      } catch (error) {
+        next(error);
+      }
+    });
   }
 }

@@ -17,4 +17,19 @@ export class UsersController {
 
     res.status(200).json(users);
   }
+
+  async updateOneById(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const updateData = req.body;
+    const updatedUser = await this.userService.updateOneById(id, updateData);
+
+    res.status(200).json(updatedUser);
+  }
+
+  async deleteUser(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    await this.userService.deleteOneById(id);
+
+    res.status(204).send();
+  }
 }
