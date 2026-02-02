@@ -10,6 +10,7 @@ import { JwtService } from '../../src/libs/jwt/jwt.service';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../../src/common/middlewares/authorization.middleware';
+import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
 
 let app: Application;
 
@@ -24,6 +25,9 @@ const cryptoService = new CryptoService();
 const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 const authorizationMiddleware = new AuthorizationMiddleware();
+const mailService = {
+  sendMailWithTemplate: mock.fn(() => Promise.resolve()),
+} as MailerInterface;
 
 const usersModule = new UsersModule(
   cryptoService,
@@ -37,6 +41,7 @@ const authModule = new AuthModule(
   cryptoService,
   jwtService,
   winstonLogger,
+  mailService,
 );
 
 export const createAppTestInstance = async () => {

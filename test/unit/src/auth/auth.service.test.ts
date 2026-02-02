@@ -7,6 +7,8 @@ import { DEFAULT_USER, generateRandomEmail } from '../../../fixtures/defaults';
 import fixture from '../../../fixtures/fixture';
 import { User } from '../../../../src/users/users.schema';
 import { Types } from 'mongoose';
+import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
+import { link } from 'node:fs';
 
 describe('Auth Service', () => {
   let authService: AuthService;
@@ -14,6 +16,9 @@ describe('Auth Service', () => {
   const mockCryptoService = {
     compareString: mock.fn(() => true),
     hashString: mock.fn((str: string) => Promise.resolve(`hashed_${str}`)),
+  };
+  const mockMailerService = {
+    sendMailWithTemplate: mock.fn(() => Promise.resolve()),
   };
 
   const jwtSecret = process.env.JWT_SECRET;
@@ -33,6 +38,7 @@ describe('Auth Service', () => {
       userService,
       mockCryptoService as unknown as CryptoService,
       jwtService as JwtService,
+      mockMailerService as MailerInterface,
     );
   });
 
@@ -225,6 +231,21 @@ describe('Auth Service', () => {
       assert.ok(Types.ObjectId.isValid(user._id?.toString()));
       assert.ok(user.password);
       assert.notStrictEqual(user.password, 'ValidPass123!');
+      assert.ok(mockMailerService.sendMailWithTemplate.mock.calls.length === 1);
+      assert.deepStrictEqual(
+        mockMailerService.sendMailWithTemplate.mock.calls[0].arguments,
+        [
+          email,
+          'Welcome to Our Service',
+          'welcome',
+          {
+            userName: email,
+            appName: 'Our Service',
+            link: 'https://ourservice.com/dashboard',
+            year: new Date().getFullYear().toString(),
+          },
+        ],
+      );
     });
   });
 });
