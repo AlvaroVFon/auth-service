@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
     "test": "NODE_ENV=test node --test --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
+    "test:coverage": "NODE_ENV=test node --test --experimental-test-coverage --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
     "tdd": "NODE_ENV=test node --test --watch --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
     "format": "prettier --write .",
     "commit": "cz",

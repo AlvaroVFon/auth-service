@@ -1,14 +1,15 @@
-import { InvalidCredentialsError } from '../../../../src/common/exceptions/auth.exceptions';
-import { AuthService } from '../../../../src/auth/auth.service';
-import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
-import { JwtService } from '../../../../src/libs/jwt/jwt.service';
-import { UsersService } from '../../../../src/users/users.service';
-import { DEFAULT_USER, generateRandomEmail } from '../../../fixtures/defaults';
-import fixture from '../../../fixtures/fixture';
-import { User } from '../../../../src/users/users.schema';
+import { AuthService } from '../../../../../src/auth/auth.service';
+import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
+import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
+import { UsersService } from '../../../../../src/users/users.service';
+import {
+  DEFAULT_USER,
+  generateRandomEmail,
+} from '../../../../fixtures/defaults';
+import fixture from '../../../../fixtures/fixture';
+import { User } from '../../../../../src/users/users.schema';
 import { Types } from 'mongoose';
-import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
-import { link } from 'node:fs';
+import { MailerInterface } from '../../../../../src/libs/mailer/mailer.interface';
 
 describe('Auth Service', () => {
   let authService: AuthService;

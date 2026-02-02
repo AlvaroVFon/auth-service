@@ -7,3 +7,5 @@ export const OBJECTID_REGEX = /^[a-fA-F0-9]{24}$/;
 
 export const JWT_REGEX =
   /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/;
+
+export const CODE_REGEX = /^[A-Z0-9]{6}$/;
