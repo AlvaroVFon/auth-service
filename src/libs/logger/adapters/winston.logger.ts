@@ -1,4 +1,4 @@
-import { LoggerInterface } from '../../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../logger.interface';
 import winston, { Logger } from 'winston';
 
 export class WinstonLogger implements LoggerInterface {

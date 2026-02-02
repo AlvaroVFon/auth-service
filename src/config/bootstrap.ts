@@ -6,11 +6,9 @@ import { GlobalMiddlewares } from './middlewares.config';
 import express, { Application } from 'express';
 import { UsersModule } from '../users/users.module';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
-import {
-  HttpLoggerInterceptor,
-  LoggerInterface,
-} from '../common/interceptors/httplogger.interceptor';
-import { WinstonLogger } from '../libs/logger/winston.logger';
+import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../libs/logger/logger.interface';
+import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { AuthModule } from '../auth/auth.module';
 import { JwtService } from '../libs/jwt/jwt.service';

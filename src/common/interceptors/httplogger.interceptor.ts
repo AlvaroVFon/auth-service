@@ -1,11 +1,5 @@
 import { Application, NextFunction, Request, Response } from 'express';
-
-export interface LoggerInterface {
-  log(message: string): void;
-  error(message: string, error?: Error | unknown): void;
-  warn(message: string, error?: Error | unknown): void;
-  debug(message: string, error?: Error | unknown): void;
-}
+import { LoggerInterface } from '../../libs/logger/logger.interface';
 
 export class HttpLoggerInterceptor {
   constructor(private readonly logger: LoggerInterface) {}

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { LoggerInterface } from '../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../libs/logger/logger.interface';
 import { InfraError } from '../common/exceptions/infra.exceptions';
 
 let db: mongoose.Connection | null = null;

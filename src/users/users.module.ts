@@ -6,7 +6,7 @@ import { UsersRouter } from './users.router';
 import { Application } from 'express';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
-import { LoggerInterface } from '../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../libs/logger/logger.interface';
 
 export class UsersModule {
   public readonly service: UsersService;

@@ -25,9 +25,9 @@ describe('User Fixture', () => {
       { email: 'user4@example.com', username: 'user4' },
     ]);
     assert.strictEqual(users.length, 3);
-    assert.strictEqual(users[0].email, 'user2@example.com');
-    assert.strictEqual(users[1].username, 'user3');
-    assert.strictEqual(users[2].email, 'user4@example.com');
-    assert.strictEqual(users[2].username, 'user4');
+    assert.strictEqual(users[0]!.email, 'user2@example.com');
+    assert.strictEqual(users[1]!.username, 'user3');
+    assert.strictEqual(users[2]!.email, 'user4@example.com');
+    assert.strictEqual(users[2]!.username, 'user4');
   });
 });

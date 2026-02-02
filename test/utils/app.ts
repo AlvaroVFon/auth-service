@@ -3,7 +3,7 @@ import { GlobalMiddlewares } from '../../src/config/middlewares.config';
 import { UsersModule } from '../../src/users/users.module';
 import { HttpInterceptor } from '../../src/common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../../src/common/interceptors/httplogger.interceptor';
-import { WinstonLogger } from '../../src/libs/logger/winston.logger';
+import { WinstonLogger } from '../../src/libs/logger/adapters/winston.logger';
 import { CryptoService } from '../../src/libs/crypto/crypto.service';
 import { getStringEnvVariable } from '../../src/config/env.config';
 import { JwtService } from '../../src/libs/jwt/jwt.service';
@@ -29,21 +29,27 @@ const usersModule = new UsersModule(
   cryptoService,
   authenticationMiddleware,
   authorizationMiddleware,
+  winstonLogger,
 );
 
 const authModule = new AuthModule(
   usersModule.service,
   cryptoService,
   jwtService,
+  winstonLogger,
 );
 
 export const createAppTestInstance = async () => {
   app = express();
+
   HttpLoggerInterceptor.initialize(app, winstonLogger);
   GlobalMiddlewares.initialize(app);
+
   usersModule.initialize(app);
   authModule.initialize(app);
-  HttpInterceptor.initialize(app);
+
+  HttpInterceptor.initialize(app, winstonLogger);
+
   return app;
 };
 

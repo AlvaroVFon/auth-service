@@ -5,7 +5,7 @@ import { AuthRouter } from './auth.router';
 import { UsersService } from '../users/users.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { JwtService } from '../libs/jwt/jwt.service';
-import { LoggerInterface } from '../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../libs/logger/logger.interface';
 
 export class AuthModule {
   public readonly service: AuthService;
