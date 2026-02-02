@@ -6,7 +6,6 @@ import {
   getNumberEnvVariable,
 } from '../../../config/env.config';
 import { LoggerInterface } from '../../logger/logger.interface';
-import { InfraError } from '../../../common/exceptions/infra.exceptions';
 
 export class NodeMailerAdapter implements Mailer {
   private readonly transporter: Transporter;
@@ -68,9 +67,6 @@ export class NodeMailerAdapter implements Mailer {
       const body = this.templateRenderer.render(templatePath, context);
       return await this.sendEmail(to, subject, body);
     } catch (error) {
-      if (error instanceof InfraError) {
-        throw error;
-      }
       this.logger.error(`Error rendering or sending template email: ${error}`);
     }
   }
