@@ -8,7 +8,7 @@ export interface LoggerInterface {
 }
 
 export class HttpLoggerInterceptor {
-  constructor(private readonly loggerService: LoggerInterface) {}
+  constructor(private readonly logger: LoggerInterface) {}
 
   intercept(request: Request, response: Response, next: NextFunction) {
     const start = process.hrtime.bigint();
@@ -30,19 +30,19 @@ export class HttpLoggerInterceptor {
       }
 
       if (statusCode >= 500) {
-        this.loggerService.error(logMessage);
+        this.logger.error(logMessage);
       } else if (statusCode >= 400) {
-        this.loggerService.warn(logMessage);
+        this.logger.warn(logMessage);
       } else {
-        this.loggerService.log(logMessage);
+        this.logger.log(logMessage);
       }
     });
 
     next();
   }
 
-  static initialize(app: Application, loggerService: LoggerInterface) {
-    const interceptor = new HttpLoggerInterceptor(loggerService);
+  static initialize(app: Application, logger: LoggerInterface) {
+    const interceptor = new HttpLoggerInterceptor(logger);
     app.use((req: Request, res: Response, next: NextFunction) => {
       interceptor.intercept(req, res, next);
     });

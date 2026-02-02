@@ -6,7 +6,10 @@ import { GlobalMiddlewares } from './middlewares.config';
 import express, { Application } from 'express';
 import { UsersModule } from '../users/users.module';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
-import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
+import {
+  HttpLoggerInterceptor,
+  LoggerInterface,
+} from '../common/interceptors/httplogger.interceptor';
 import { WinstonLogger } from '../libs/logger/winston.logger';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { AuthModule } from '../auth/auth.module';
@@ -36,20 +39,31 @@ const usersModule = new UsersModule(
   cryptoService,
   authenticationMiddleware,
   authorizationMiddleware,
+  winstonLogger,
 );
 
 const authModule = new AuthModule(
   usersModule.service,
   cryptoService,
   jwtService,
+  winstonLogger,
 );
 
-export const bootstrap = async () => {
-  await database.connect();
-  HttpLoggerInterceptor.initialize(app, winstonLogger);
-  GlobalMiddlewares.initialize(app);
-  usersModule.initialize(app);
-  authModule.initialize(app);
-  HttpInterceptor.initialize(app);
-  startServer(app, winstonLogger);
+export const bootstrap = async (logger: LoggerInterface) => {
+  try {
+    await database.connect();
+
+    HttpLoggerInterceptor.initialize(app, winstonLogger);
+    GlobalMiddlewares.initialize(app);
+
+    usersModule.initialize(app);
+    authModule.initialize(app);
+
+    HttpInterceptor.initialize(app, winstonLogger);
+
+    startServer(app, winstonLogger);
+  } catch (error) {
+    logger.error('Application bootstrap failed', error);
+    process.exit(1);
+  }
 };

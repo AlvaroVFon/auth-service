@@ -5,6 +5,7 @@ import { AuthRouter } from './auth.router';
 import { UsersService } from '../users/users.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { JwtService } from '../libs/jwt/jwt.service';
+import { LoggerInterface } from '../common/interceptors/httplogger.interceptor';
 
 export class AuthModule {
   public readonly service: AuthService;
@@ -14,6 +15,7 @@ export class AuthModule {
     private readonly usersService: UsersService,
     private readonly cryptoService: CryptoService,
     private readonly jwtService: JwtService,
+    private readonly logger: LoggerInterface,
   ) {
     this.service = new AuthService(
       this.usersService,
@@ -25,5 +27,6 @@ export class AuthModule {
 
   initialize(app: Application): void {
     new AuthRouter(this.controller, app);
+    this.logger.log('Init Module - Auth - OK');
   }
 }

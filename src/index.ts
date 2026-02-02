@@ -1,6 +1,6 @@
 import { bootstrap } from './config/bootstrap';
+import { WinstonLogger } from './libs/logger/winston.logger';
 
-bootstrap().catch((error) => {
-  console.error('Failed to bootstrap the application:', error);
-  process.exit(1);
-});
+const logger = new WinstonLogger();
+
+await bootstrap(logger);

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { LoggerInterface } from '../common/interceptors/httplogger.interceptor';
+import { InfraError } from '../common/exceptions/infra.exceptions';
 
 let db: mongoose.Connection | null = null;
 
@@ -14,9 +15,8 @@ export class Database {
       const connection = await mongoose.connect(this.connectionString);
       db = connection.connection;
       this.logger.log('Database connected successfully');
-    } catch (error) {
-      this.logger.error('Error connecting to database:', error);
-      throw error;
+    } catch {
+      throw new InfraError('Database connection failed');
     }
   }
 
