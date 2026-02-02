@@ -1,5 +1,6 @@
 import { Application, NextFunction, Request, Response } from 'express';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
+import { HeadersBlackList } from '../enums/black-lists.enum';
 
 export class HttpLoggerInterceptor {
   constructor(private readonly logger: LoggerInterface) {}
@@ -17,7 +18,10 @@ export class HttpLoggerInterceptor {
         logMessage = JSON.stringify({
           ...response.locals.errorDetails,
           duration: `${duration.toFixed(2)} ms`,
-          headers, // TODO: sanitize headers to avoid logging sensitive info
+          headers: this.sanitizeHeaders(
+            headers,
+            Object.values(HeadersBlackList),
+          ),
         });
       } else {
         logMessage = `${method} ${originalUrl} ${statusCode} - ${duration.toFixed(2)} ms`;
@@ -40,5 +44,22 @@ export class HttpLoggerInterceptor {
     app.use((req: Request, res: Response, next: NextFunction) => {
       interceptor.intercept(req, res, next);
     });
+  }
+
+  sanitizeHeaders(
+    headers: Record<string, string | string[] | undefined>,
+    blackList: string[],
+  ): Record<string, string | string[] | undefined> {
+    const sanitizedHeaders: Record<string, string | string[] | undefined> = {
+      ...headers,
+    };
+
+    blackList.forEach((key) => {
+      if (sanitizedHeaders[key]) {
+        sanitizedHeaders[key] = '****';
+      }
+    });
+
+    return sanitizedHeaders;
   }
 }
