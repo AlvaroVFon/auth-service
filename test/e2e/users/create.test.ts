@@ -3,7 +3,10 @@ import { generateRandomEmail } from '../../fixtures/defaults';
 import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
 import { Types } from 'mongoose';
-import { DEFAULT_USER_TOKEN } from '../../fixtures/defaults';
+import {
+  DEFAULT_ADMIN_TOKEN,
+  DEFAULT_USER_TOKEN,
+} from '../../fixtures/defaults';
 
 describe('Create User E2E Test', () => {
   let app: Application;
@@ -20,7 +23,7 @@ describe('Create User E2E Test', () => {
     const response = await request(app)
       .post('/users')
       .send(newUser)
-      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
       .set('Accept', 'application/json')
       .expect(201);
 
@@ -38,7 +41,7 @@ describe('Create User E2E Test', () => {
     const response = await request(app)
       .post('/users')
       .send(invalidUser)
-      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
       .set('Accept', 'application/json')
       .expect(400);
 
@@ -49,10 +52,26 @@ describe('Create User E2E Test', () => {
   test('should handle error if no body is sent', async () => {
     const response = await request(app)
       .post('/users')
-      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
       .set('Accept', 'application/json')
       .expect(400);
 
     assert.ok(response.body.message.includes('Request body is required'));
+  });
+
+  test('should return 403 when a non-admin user tries to create a user', async () => {
+    const newUser = {
+      password: 'Test@1234',
+      email: generateRandomEmail('nonadminuser'),
+    };
+
+    const response = await request(app)
+      .post('/users')
+      .send(newUser)
+      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .set('Accept', 'application/json')
+      .expect(403);
+
+    assert.ok(response.body.message.includes('Access denied'));
   });
 });

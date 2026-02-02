@@ -2,7 +2,7 @@ import { User } from './users.schema';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
-import { UsersRouter } from './users.routes';
+import { UsersRouter } from './users.router';
 import { Application } from 'express';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';

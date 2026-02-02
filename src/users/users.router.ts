@@ -2,6 +2,7 @@ import { Application } from 'express';
 import { UsersController } from './users.controller';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
+import { Roles } from '../common/enums/roles.enum';
 
 export class UsersRouter {
   constructor(
@@ -15,6 +16,10 @@ export class UsersRouter {
 
   private initializeRoutes() {
     this.app.use('/users', this.authenticationMiddleware.authenticate);
+    this.app.use(
+      '/users',
+      this.authorizationMiddleware.allowRoles(Roles.ADMIN),
+    );
 
     this.app.post(
       '/users',

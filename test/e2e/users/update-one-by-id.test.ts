@@ -4,7 +4,10 @@ import request from 'supertest';
 import fixture from '../../fixtures/fixture';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import { User } from '../../../src/users/users.interface';
-import { DEFAULT_USER_TOKEN } from '../../fixtures/defaults';
+import {
+  DEFAULT_ADMIN_TOKEN,
+  DEFAULT_USER_TOKEN,
+} from '../../fixtures/defaults';
 
 describe('E2E Test - Update User By ID', () => {
   let app: Application;
@@ -21,7 +24,7 @@ describe('E2E Test - Update User By ID', () => {
 
     const response = await request(app)
       .patch(`/users/${user._id}`)
-      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
       .send({ password: 'newpassword456' })
       .expect(200);
 
@@ -36,7 +39,7 @@ describe('E2E Test - Update User By ID', () => {
 
     await request(app)
       .patch(`/users/${nonExistentUserId}`)
-      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
       .send({ password: 'newpassword456' })
       .expect(404);
   });
@@ -49,10 +52,23 @@ describe('E2E Test - Update User By ID', () => {
 
     const response = await request(app)
       .patch(`/users/${user._id}`)
-      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
       .send({})
       .expect(400);
 
     assert.ok(response.body.message.includes('Request body is required'));
+  });
+
+  test('should return 403 when a non-admin user attempts to update a user', async () => {
+    const user = await fixture.create<User>('User', {
+      email: generateRandomEmail('nonadminupdate'),
+      password: 'password123',
+    });
+
+    await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
+      .send({ password: 'newpassword456' })
+      .expect(403);
   });
 });
