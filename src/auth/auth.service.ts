@@ -98,6 +98,34 @@ export class AuthService {
     return newUser;
   }
 
+  async resetPassword(
+    userId: string,
+    newPassword: string,
+    passwordConfirmation: string,
+  ): Promise<void> {
+    if (!userId) {
+      throw new InvalidArgumentError('userId is required');
+    }
+    if (!newPassword) {
+      throw new InvalidArgumentError('newPassword is required');
+    }
+    if (PASSWORD_REGEX.test(newPassword) === false) {
+      throw new InvalidArgumentError(
+        'Password does not meet complexity requirements',
+      );
+    }
+    if (!passwordConfirmation) {
+      throw new InvalidArgumentError('passwordConfirmation is required');
+    }
+    if (newPassword !== passwordConfirmation) {
+      throw new InvalidArgumentError(
+        'Password and password confirmation do not match',
+      );
+    }
+
+    await this.usersService.updateOneById(userId, { password: newPassword });
+  }
+
   async generateSignupVerificationCode(userId: string) {
     return this.codeService.create(userId, CodeType.SIGNUP);
   }
