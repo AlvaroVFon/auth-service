@@ -20,4 +20,13 @@ export class AuthController {
 
     res.status(201).json(newUser);
   }
+
+  @Catch()
+  async verifyEmail(req: Request, res: Response): Promise<void> {
+    const userId = req.query.userId as string;
+    const { code } = req.body;
+    await this.authService.validateSignupVerificationCode(userId, code);
+
+    res.status(204).send();
+  }
 }

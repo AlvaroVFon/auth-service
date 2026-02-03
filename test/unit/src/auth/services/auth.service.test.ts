@@ -8,6 +8,7 @@ import {
 } from '../../../../fixtures/defaults';
 import fixture from '../../../../fixtures/fixture';
 import { User } from '../../../../../src/users/users.schema';
+import { User as UserInterface } from '../../../../../src/users/users.interface';
 import { Types } from 'mongoose';
 import { MailerInterface } from '../../../../../src/libs/mailer/mailer.interface';
 import { CodesService } from '../../../../../src/auth/codes/codes.service';
@@ -245,7 +246,6 @@ describe('Auth Service', () => {
         type: CodeType.SIGNUP,
       });
 
-      console.log({ code });
       assert.deepStrictEqual(
         mockMailerService.sendMailWithTemplate.mock.calls[0].arguments,
         [
@@ -256,10 +256,65 @@ describe('Auth Service', () => {
             userName: email,
             appName: 'Our Service',
             code: code.toObject().code,
-            link: 'https://ourservice.com/verify',
+            link: `https://ourservice.com/verify?userId=${user._id.toString()}&code=${code.toObject().code}`,
             year: new Date().getFullYear().toString(),
           },
         ],
+      );
+    });
+  });
+
+  describe('validateSignupVerificationCode()', () => {
+    test('should verify user with valid code', async () => {
+      const user = await fixture.create<UserInterface>('User', {
+        verified: false,
+      });
+      const code = await fixture.create<Code>('Code', {
+        userId: user._id,
+        type: CodeType.SIGNUP,
+      });
+
+      await authService.validateSignupVerificationCode(
+        user._id.toString(),
+        code.code,
+      );
+
+      const updatedUser = await fixture.findById<UserInterface>(
+        'User',
+        user._id.toString(),
+      );
+      assert.ok(updatedUser);
+      assert.strictEqual(updatedUser!.verified, true);
+    });
+
+    test('should throw an error for non provided userId', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.validateSignupVerificationCode('', 'somecode'),
+        {
+          name: 'InvalidArgumentError',
+          message: 'userId is required',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error for non provided code', async () => {
+      const user = await fixture.create<UserInterface>('User', {
+        verified: false,
+      });
+
+      await assert.rejects(
+        async () =>
+          await authService.validateSignupVerificationCode(
+            user._id.toString(),
+            '',
+          ),
+        {
+          name: 'InvalidArgumentError',
+          message: 'code is required',
+          code: 'INVALID_ARGUMENT',
+        },
       );
     });
   });

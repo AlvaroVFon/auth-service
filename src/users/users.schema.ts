@@ -25,6 +25,10 @@ const userSchema = new Schema<UserInterface>(
       enum: Roles,
       default: Roles.USER,
     },
+    verified: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

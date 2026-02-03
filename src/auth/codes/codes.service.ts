@@ -86,7 +86,7 @@ export class CodesService {
 
     if (!isValidCode) {
       throw new InvalidCodeError(
-        'The provided code is invalid, used, or expired',
+        'The provided code is invalid, used or expired',
       );
     }
 

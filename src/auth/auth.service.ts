@@ -84,14 +84,16 @@ export class AuthService {
       newUser._id.toString(),
     );
 
-    this.sendVerificationEmail(newUser.email, verificationCode.code).catch(
-      (error) => {
-        console.error(
-          `Failed to send verification email to ${newUser.email}:`,
-          error,
-        );
-      },
-    );
+    this.sendVerificationEmail(
+      newUser._id.toString(),
+      newUser.email,
+      verificationCode.code,
+    ).catch((error) => {
+      console.error(
+        `Failed to send verification email to ${newUser.email}:`,
+        error,
+      );
+    });
 
     return newUser;
   }
@@ -104,10 +106,15 @@ export class AuthService {
     userId: string,
     code: string,
   ): Promise<void> {
-    return this.codeService.validateCode(userId, code, CodeType.SIGNUP);
+    await this.codeService.validateCode(userId, code, CodeType.SIGNUP);
+    await this.usersService.updateOneById(userId, { verified: true });
   }
 
-  async sendVerificationEmail(email: string, code: string): Promise<void> {
+  async sendVerificationEmail(
+    userId: string,
+    email: string,
+    code: string,
+  ): Promise<void> {
     await this.mailService.sendMailWithTemplate(
       email,
       'Verify your account',
@@ -116,7 +123,7 @@ export class AuthService {
         userName: email,
         appName: 'Our Service',
         code: code,
-        link: 'https://ourservice.com/verify',
+        link: `https://ourservice.com/verify?userId=${userId}&code=${code}`,
         year: new Date().getFullYear().toString(),
       },
     );

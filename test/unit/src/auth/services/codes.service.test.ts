@@ -181,7 +181,7 @@ describe('Codes Service', () => {
         },
         {
           name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used, or expired',
+          message: 'The provided code is invalid, used or expired',
         },
       );
     });
@@ -200,7 +200,7 @@ describe('Codes Service', () => {
         },
         {
           name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used, or expired',
+          message: 'The provided code is invalid, used or expired',
         },
       );
     });
@@ -222,7 +222,7 @@ describe('Codes Service', () => {
         },
         {
           name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used, or expired',
+          message: 'The provided code is invalid, used or expired',
         },
       );
     });
@@ -241,7 +241,7 @@ describe('Codes Service', () => {
         },
         {
           name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used, or expired',
+          message: 'The provided code is invalid, used or expired',
         },
       );
     });
