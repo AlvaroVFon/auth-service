@@ -16,6 +16,8 @@ import { AuthenticationMiddleware } from '../common/middlewares/authentication.m
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
+import { CodesService } from '../auth/codes/codes.service';
+import { CodesModel } from '../auth/codes/codes.schema';
 
 const app: Application = express();
 
@@ -35,6 +37,7 @@ const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 const authorizationMiddleware = new AuthorizationMiddleware();
 const templateRenderer = new HandlebarsEngine();
 const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
+const codeService = new CodesService(CodesModel);
 
 // Modules
 const usersModule = new UsersModule(
@@ -50,6 +53,7 @@ const authModule = new AuthModule(
   jwtService,
   winstonLogger,
   mailService,
+  codeService,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

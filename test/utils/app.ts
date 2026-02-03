@@ -11,6 +11,8 @@ import { AuthModule } from '../../src/auth/auth.module';
 import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../../src/common/middlewares/authorization.middleware';
 import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
+import { CodesService } from '../../src/auth/codes/codes.service';
+import { CodesModel } from '../../src/auth/codes/codes.schema';
 
 let app: Application;
 
@@ -28,6 +30,7 @@ const authorizationMiddleware = new AuthorizationMiddleware();
 const mailService = {
   sendMailWithTemplate: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
+const codeService = new CodesService(CodesModel);
 
 const usersModule = new UsersModule(
   cryptoService,
@@ -42,6 +45,7 @@ const authModule = new AuthModule(
   jwtService,
   winstonLogger,
   mailService,
+  codeService,
 );
 
 export const createAppTestInstance = async () => {

@@ -23,7 +23,7 @@ export class MailService {
     await this.mailer.sendMailWithTemplate(
       to,
       `Verification Email`,
-      MailTemplate.VERIFICATION,
+      MailTemplate.SIGNUP_VERIFICATION,
       context,
     );
   }

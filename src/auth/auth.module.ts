@@ -7,6 +7,7 @@ import { CryptoService } from '../libs/crypto/crypto.service';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { LoggerInterface } from '../libs/logger/logger.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
+import { CodesService } from './codes/codes.service';
 
 export class AuthModule {
   public readonly service: AuthService;
@@ -18,12 +19,14 @@ export class AuthModule {
     private readonly jwtService: JwtService,
     private readonly logger: LoggerInterface,
     private readonly mailService: MailerInterface,
+    private readonly codeService: CodesService,
   ) {
     this.service = new AuthService(
       this.usersService,
       this.cryptoService,
       this.jwtService,
       this.mailService,
+      this.codeService,
     );
     this.controller = new AuthController(this.service);
   }

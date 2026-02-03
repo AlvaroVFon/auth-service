@@ -10,10 +10,15 @@ import fixture from '../../../../fixtures/fixture';
 import { User } from '../../../../../src/users/users.schema';
 import { Types } from 'mongoose';
 import { MailerInterface } from '../../../../../src/libs/mailer/mailer.interface';
+import { CodesService } from '../../../../../src/auth/codes/codes.service';
+import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
+import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 
 describe('Auth Service', () => {
   let authService: AuthService;
   let userService: UsersService;
+  let codeService: CodesService;
+
   const mockCryptoService = {
     compareString: mock.fn(() => true),
     hashString: mock.fn((str: string) => Promise.resolve(`hashed_${str}`)),
@@ -34,12 +39,14 @@ describe('Auth Service', () => {
     );
 
     const jwtService = new JwtService(jwtSecret!, jwtExpiresIn);
+    codeService = new CodesService(CodesModel);
 
     authService = new AuthService(
       userService,
       mockCryptoService as unknown as CryptoService,
       jwtService as JwtService,
       mockMailerService as MailerInterface,
+      codeService,
     );
   });
 
@@ -233,16 +240,23 @@ describe('Auth Service', () => {
       assert.ok(user.password);
       assert.notStrictEqual(user.password, 'ValidPass123!');
       assert.ok(mockMailerService.sendMailWithTemplate.mock.calls.length === 1);
+      const code = await fixture.findOne<Code>('Code', {
+        userId: user._id,
+        type: CodeType.SIGNUP,
+      });
+
+      console.log({ code });
       assert.deepStrictEqual(
         mockMailerService.sendMailWithTemplate.mock.calls[0].arguments,
         [
           email,
-          'Welcome to Our Service',
-          'welcome',
+          'Verify your account',
+          'signup_verification',
           {
             userName: email,
             appName: 'Our Service',
-            link: 'https://ourservice.com/dashboard',
+            code: code.toObject().code,
+            link: 'https://ourservice.com/verify',
             year: new Date().getFullYear().toString(),
           },
         ],

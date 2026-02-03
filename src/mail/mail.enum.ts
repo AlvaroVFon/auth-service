@@ -1,4 +1,4 @@
 export enum MailTemplate {
   WELCOME = 'welcome',
-  VERIFICATION = 'verification',
+  SIGNUP_VERIFICATION = 'signup_verification',
 }

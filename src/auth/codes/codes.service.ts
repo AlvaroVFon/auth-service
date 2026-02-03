@@ -11,7 +11,7 @@ import {
 export class CodesService {
   private readonly ALPHANUMERIC: string =
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  private readonly codeLength: number = 6;
+  private readonly codeLength: number;
   private readonly codeExpirationMs: number;
 
   constructor(private readonly codeModel: Model<Code>) {
@@ -77,13 +77,14 @@ export class CodesService {
 
     const existingCode = await this.codeModel.findOne({
       userId: new Types.ObjectId(userId),
-      code,
       type,
       used: false,
-      expiresAt: { $gt: new Date() },
     });
 
-    if (!existingCode) {
+    const isValidCode =
+      existingCode?.code === code && existingCode.expiresAt > new Date();
+
+    if (!isValidCode) {
       throw new InvalidCodeError(
         'The provided code is invalid, used, or expired',
       );

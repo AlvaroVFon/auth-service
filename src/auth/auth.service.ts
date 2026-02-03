@@ -7,6 +7,9 @@ import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { User } from '../users/users.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
+import { MailTemplate } from '../mail/mail.enum';
+import { CodesService } from './codes/codes.service';
+import { CodeType } from './codes/code.interface';
 
 export class AuthService {
   constructor(
@@ -14,6 +17,7 @@ export class AuthService {
     private readonly cryptoService: CryptoService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailerInterface,
+    private readonly codeService: CodesService,
   ) {}
 
   async login(credentials: Credentials): Promise<string> {
@@ -76,20 +80,45 @@ export class AuthService {
       password: credentials.password,
     });
 
-    this.mailService
-      .sendMailWithTemplate(
-        newUser.email,
-        'Welcome to Our Service',
-        'welcome',
-        {
-          userName: newUser.email,
-          appName: 'Our Service',
-          link: 'https://ourservice.com/dashboard',
-          year: new Date().getFullYear().toString(),
-        },
-      )
-      .catch(() => {});
+    const verificationCode = await this.generateSignupVerificationCode(
+      newUser._id.toString(),
+    );
+
+    this.sendVerificationEmail(newUser.email, verificationCode.code).catch(
+      (error) => {
+        console.error(
+          `Failed to send verification email to ${newUser.email}:`,
+          error,
+        );
+      },
+    );
 
     return newUser;
+  }
+
+  async generateSignupVerificationCode(userId: string) {
+    return this.codeService.create(userId, CodeType.SIGNUP);
+  }
+
+  async validateSignupVerificationCode(
+    userId: string,
+    code: string,
+  ): Promise<void> {
+    return this.codeService.validateCode(userId, code, CodeType.SIGNUP);
+  }
+
+  async sendVerificationEmail(email: string, code: string): Promise<void> {
+    await this.mailService.sendMailWithTemplate(
+      email,
+      'Verify your account',
+      MailTemplate.SIGNUP_VERIFICATION,
+      {
+        userName: email,
+        appName: 'Our Service',
+        code: code,
+        link: 'https://ourservice.com/verify',
+        year: new Date().getFullYear().toString(),
+      },
+    );
   }
 }
