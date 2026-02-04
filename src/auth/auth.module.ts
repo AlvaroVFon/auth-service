@@ -34,7 +34,7 @@ export class AuthModule {
         codeService,
         authenticationMiddleware,
       },
-      'AuthModule',
+      this.constructor.name,
     );
 
     this.service = new AuthService(

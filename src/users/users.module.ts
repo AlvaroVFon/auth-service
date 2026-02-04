@@ -26,7 +26,7 @@ export class UsersModule {
         authorizationMiddleware,
         logger,
       },
-      'UsersModule',
+      this.constructor.name,
     );
 
     this.service = new UsersService(User, this.cryptoService);
