@@ -6,12 +6,17 @@ import { Credentials, SignupCredentials } from './auth.interface';
 import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { User } from '../users/users.interface';
+import { MailerInterface } from '../libs/mailer/mailer.interface';
+import { CodesService } from './codes/codes.service';
+import { CodeType } from './codes/code.interface';
 
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly cryptoService: CryptoService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailerInterface,
+    private readonly codeService: CodesService,
   ) {}
 
   async login(credentials: Credentials): Promise<string> {
@@ -69,9 +74,61 @@ export class AuthService {
       throw new InvalidArgumentError('Invalid email or password');
     }
 
-    return this.usersService.create({
+    const newUser = await this.usersService.create({
       email: credentials.email,
       password: credentials.password,
     });
+
+    const verificationCode = await this.generateSignupVerificationCode(
+      newUser._id.toString(),
+    );
+
+    await this.mailService.sendSignupVerificationEmail(newUser.email, {
+      userName: newUser.email,
+      code: verificationCode.code,
+      link: `https://ourservice.com/verify?userId=${newUser._id}&code=${verificationCode.code}`,
+    });
+
+    return newUser;
+  }
+
+  async resetPassword(
+    userId: string,
+    newPassword: string,
+    passwordConfirmation: string,
+  ): Promise<void> {
+    if (!userId) {
+      throw new InvalidArgumentError('userId is required');
+    }
+    if (!newPassword) {
+      throw new InvalidArgumentError('newPassword is required');
+    }
+    if (PASSWORD_REGEX.test(newPassword) === false) {
+      throw new InvalidArgumentError(
+        'Password does not meet complexity requirements',
+      );
+    }
+    if (!passwordConfirmation) {
+      throw new InvalidArgumentError('passwordConfirmation is required');
+    }
+    if (newPassword !== passwordConfirmation) {
+      throw new InvalidArgumentError(
+        'Password and password confirmation do not match',
+      );
+    }
+
+    await this.usersService.updateOneById(userId, { password: newPassword });
+  }
+
+  async generateSignupVerificationCode(userId: string) {
+    return this.codeService.create(userId, CodeType.SIGNUP);
+  }
+
+  async validateSignupVerificationCode(
+    userId: string,
+    code: string,
+  ): Promise<void> {
+    await this.codeService.validateCode(userId, code, CodeType.SIGNUP);
+    await this.usersService.updateOneById(userId, { verified: true });
   }
 }

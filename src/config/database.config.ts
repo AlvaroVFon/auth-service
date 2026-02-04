@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { LoggerInterface } from '../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../libs/logger/logger.interface';
 import { InfraError } from '../common/exceptions/infra.exceptions';
 
 let db: mongoose.Connection | null = null;
@@ -14,7 +14,7 @@ export class Database {
     try {
       const connection = await mongoose.connect(this.connectionString);
       db = connection.connection;
-      this.logger.log('Database connected successfully');
+      this.logger.info('Database connected successfully');
     } catch {
       throw new InfraError('Database connection failed');
     }
@@ -24,7 +24,7 @@ export class Database {
     if (db) {
       await mongoose.disconnect();
       db = null;
-      this.logger.log('Database connection closed');
+      this.logger.info('Database connection closed');
     } else {
       this.logger.warn('No database connection to close');
     }
@@ -38,7 +38,7 @@ export class Database {
         if (!collection) continue;
         await collection.deleteMany({});
       }
-      this.logger.log('Database flushed successfully');
+      this.logger.info('Database flushed successfully');
     } else {
       this.logger.warn('No database connection to flush');
     }
@@ -54,7 +54,7 @@ export class Database {
   async drop(dbName: string): Promise<void> {
     if (db && db.name === dbName) {
       await db.dropDatabase();
-      this.logger.log('Database dropped successfully');
+      this.logger.info('Database dropped successfully');
     } else {
       this.logger.warn('No database connection to drop');
     }

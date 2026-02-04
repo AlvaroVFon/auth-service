@@ -1,4 +1,4 @@
-import { LoggerInterface } from '../../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../logger.interface';
 import winston, { Logger } from 'winston';
 
 export class WinstonLogger implements LoggerInterface {
@@ -8,19 +8,22 @@ export class WinstonLogger implements LoggerInterface {
     this.logger = this.createLogger();
   }
 
-  log(message: string): void {
+  info(message: string): void {
     this.logger.info(message);
   }
+
   error(message: string, error?: Error) {
     return error
       ? this.logger.error(message, error)
       : this.logger.error(message);
   }
+
   warn(message: string, warning?: Error) {
     return warning
       ? this.logger.warn(message, warning)
       : this.logger.warn(message);
   }
+
   debug(message: string, debug?: Error) {
     return debug
       ? this.logger.debug(message, debug)

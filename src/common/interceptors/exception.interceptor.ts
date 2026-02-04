@@ -1,6 +1,6 @@
 import { Application, Request, Response, NextFunction } from 'express';
 import { BaseError } from '../exceptions/base.exception';
-import { LoggerInterface } from './httplogger.interceptor';
+import { LoggerInterface } from '../../libs/logger/logger.interface';
 
 export class HttpInterceptor {
   constructor(private readonly app: Application) {
@@ -32,7 +32,7 @@ export class HttpInterceptor {
 
   static initialize(app: Application, logger: LoggerInterface): void {
     new HttpInterceptor(app);
-    logger.log('Init Interceptor - Exception - OK');
+    logger.info('Init Interceptor - Exception - OK');
   }
 
   injectErrorDetails(error: BaseError, req: Request, res: Response): void {

@@ -26,6 +26,7 @@ export const DEFAULT_USER: User = {
   email: 'defaultuser@example.com',
   password: '$2b$10$DOgX16YaMx3WlA8/4v5gH.qMMDUPxnsbFzl5mSRmT6Gj3.cwCxQjy',
   role: Roles.USER,
+  verified: true,
 };
 
 const defaultAdminPayload: Payload = {
@@ -45,6 +46,7 @@ export const DEFAULT_ADMIN: User = {
   email: 'defaultadmin@example.com',
   password: '$2b$10$DOgX16YaMx3WlA8/4v5gH.qMMDUPxnsbFzl5mSRmT6Gj3.cwCxQjy',
   role: Roles.ADMIN,
+  verified: true,
 };
 
 export const generateRandomEmail = (prefix: string) => {

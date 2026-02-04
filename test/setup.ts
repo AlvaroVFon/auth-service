@@ -12,7 +12,7 @@ import assert from 'node:assert';
 import { Database } from '../src/config/database.config';
 import { getStringEnvVariable } from '../src/config/env.config';
 import { registerModels } from './fixtures/model.register';
-import { LoggerInterface } from '../src/common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../src/libs/logger/logger.interface';
 
 const baseUri = getStringEnvVariable(
   'MONGO_URI',
@@ -21,7 +21,7 @@ const baseUri = getStringEnvVariable(
 const TEST_DB_URI = `${baseUri}_${process.pid}`;
 
 const logger: LoggerInterface = {
-  log: () => {},
+  info: () => {},
   error: () => {},
   warn: () => {},
   debug: () => {},

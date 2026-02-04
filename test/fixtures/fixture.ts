@@ -67,6 +67,20 @@ export class Fixture {
     return Model.findById(id).exec();
   }
 
+  async updateOne<T>(
+    modelName: string,
+    query: QueryFilter<T>,
+    updateData: Partial<T>,
+  ): Promise<void> {
+    const Model = mongoose.model<T>(modelName);
+    await Model.updateOne(query, updateData).exec();
+  }
+
+  async deleteOne<T>(modelName: string, query: QueryFilter<T>): Promise<void> {
+    const Model = mongoose.model<T>(modelName);
+    await Model.deleteOne(query).exec();
+  }
+
   private async alreadyCreated<T>(modelName: string): Promise<boolean> {
     const Model = mongoose.model<T>(modelName);
     const defaultData: any = defaultsRegistry[modelName] ?? {};

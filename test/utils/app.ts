@@ -3,13 +3,16 @@ import { GlobalMiddlewares } from '../../src/config/middlewares.config';
 import { UsersModule } from '../../src/users/users.module';
 import { HttpInterceptor } from '../../src/common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../../src/common/interceptors/httplogger.interceptor';
-import { WinstonLogger } from '../../src/libs/logger/winston.logger';
+import { WinstonLogger } from '../../src/libs/logger/adapters/winston.logger';
 import { CryptoService } from '../../src/libs/crypto/crypto.service';
 import { getStringEnvVariable } from '../../src/config/env.config';
 import { JwtService } from '../../src/libs/jwt/jwt.service';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../../src/common/middlewares/authorization.middleware';
+import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
+import { CodesService } from '../../src/auth/codes/codes.service';
+import { CodesModel } from '../../src/auth/codes/codes.schema';
 
 let app: Application;
 
@@ -24,26 +27,39 @@ const cryptoService = new CryptoService();
 const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 const authorizationMiddleware = new AuthorizationMiddleware();
+const mailService = {
+  sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
+} as MailerInterface;
+const codeService = new CodesService(CodesModel);
 
 const usersModule = new UsersModule(
   cryptoService,
   authenticationMiddleware,
   authorizationMiddleware,
+  winstonLogger,
 );
 
 const authModule = new AuthModule(
   usersModule.service,
   cryptoService,
   jwtService,
+  winstonLogger,
+  mailService,
+  codeService,
+  authenticationMiddleware,
 );
 
 export const createAppTestInstance = async () => {
   app = express();
+
   HttpLoggerInterceptor.initialize(app, winstonLogger);
   GlobalMiddlewares.initialize(app);
+
   usersModule.initialize(app);
   authModule.initialize(app);
-  HttpInterceptor.initialize(app);
+
+  HttpInterceptor.initialize(app, winstonLogger);
+
   return app;
 };
 

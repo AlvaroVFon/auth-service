@@ -1,5 +1,5 @@
 import { bootstrap } from './config/bootstrap';
-import { WinstonLogger } from './libs/logger/winston.logger';
+import { WinstonLogger } from './libs/logger/adapters/winston.logger';
 
 const logger = new WinstonLogger();
 

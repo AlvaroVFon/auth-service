@@ -1,4 +1,4 @@
-import { LoggerInterface } from '../../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../logger.interface';
 
 export class ConsoleLogger implements LoggerInterface {
   log(message: string): void {

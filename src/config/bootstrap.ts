@@ -6,16 +6,18 @@ import { GlobalMiddlewares } from './middlewares.config';
 import express, { Application } from 'express';
 import { UsersModule } from '../users/users.module';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
-import {
-  HttpLoggerInterceptor,
-  LoggerInterface,
-} from '../common/interceptors/httplogger.interceptor';
-import { WinstonLogger } from '../libs/logger/winston.logger';
+import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
+import { LoggerInterface } from '../libs/logger/logger.interface';
+import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { AuthModule } from '../auth/auth.module';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
+import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
+import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
+import { CodesService } from '../auth/codes/codes.service';
+import { CodesModel } from '../auth/codes/codes.schema';
 
 const app: Application = express();
 
@@ -33,6 +35,9 @@ const cryptoService = new CryptoService();
 const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 const authorizationMiddleware = new AuthorizationMiddleware();
+const templateRenderer = new HandlebarsEngine();
+const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
+const codeService = new CodesService(CodesModel);
 
 // Modules
 const usersModule = new UsersModule(
@@ -47,6 +52,9 @@ const authModule = new AuthModule(
   cryptoService,
   jwtService,
   winstonLogger,
+  mailService,
+  codeService,
+  authenticationMiddleware,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

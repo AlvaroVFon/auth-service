@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
     "test": "NODE_ENV=test node --test --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
+    "test:coverage": "NODE_ENV=test node --test --experimental-test-coverage --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
     "tdd": "NODE_ENV=test node --test --watch --import tsx --import ./test/setup.ts \"test/**/*.test.ts\"",
     "format": "prettier --write .",
     "commit": "cz",
@@ -32,6 +33,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.1.0",
+    "@types/nodemailer": "^7.0.9",
     "@types/supertest": "^6.0.3",
     "@types/winston": "^2.4.4",
     "cz-conventional-changelog": "^3.3.0",
@@ -48,8 +50,10 @@
     "bcrypt": "^6.0.0",
     "commitizen": "^4.3.1",
     "express": "^5.2.1",
+    "handlebars": "^4.7.8",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.5",
+    "nodemailer": "^7.0.13",
     "winston": "^3.19.0"
   },
   "config": {

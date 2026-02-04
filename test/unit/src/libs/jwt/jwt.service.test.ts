@@ -106,7 +106,7 @@ describe('JwtService', () => {
         iat: number;
         exp: number;
       };
-      console.log({ decoded });
+
       assert.strictEqual(decoded.userId, userId);
       assert.strictEqual(decoded.type, 'access');
       assert.strictEqual(decoded.role, Roles.USER);

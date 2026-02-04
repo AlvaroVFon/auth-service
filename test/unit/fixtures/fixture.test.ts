@@ -38,8 +38,8 @@ describe('Fixture Methods', () => {
       ]);
 
       assert.strictEqual(users.length, 2);
-      assert.strictEqual(users[0].email, 'user1@example.com');
-      assert.strictEqual(users[1].email, 'user2@example.com');
+      assert.strictEqual(users[0]!.email, 'user1@example.com');
+      assert.strictEqual(users[1]!.email, 'user2@example.com');
     });
 
     test('should create multiple documents with overridden data when data is provided', async () => {
@@ -48,8 +48,8 @@ describe('Fixture Methods', () => {
         { email: 'customuser2@example.com' },
       ]);
       assert.strictEqual(users.length, 2);
-      assert.strictEqual(users[0].email, 'customuser1@example.com');
-      assert.strictEqual(users[1].email, 'customuser2@example.com');
+      assert.strictEqual(users[0]!.email, 'customuser1@example.com');
+      assert.strictEqual(users[1]!.email, 'customuser2@example.com');
     });
 
     test('should handle default _id correctly when creating multiple documents', async () => {
@@ -58,8 +58,8 @@ describe('Fixture Methods', () => {
         { email: 'user2@example.com' },
       ]);
       assert.strictEqual(users.length, 2);
-      assert.strictEqual(users[0].email, 'user1@example.com');
-      assert.strictEqual(users[1].email, 'user2@example.com');
+      assert.strictEqual(users[0]!.email, 'user1@example.com');
+      assert.strictEqual(users[1]!.email, 'user2@example.com');
     });
   });
 
@@ -70,7 +70,7 @@ describe('Fixture Methods', () => {
         { email: 'user2@example.com' },
       ]);
       const foundUsers = await fixture.find<UserInterface>('User', {
-        email: { $in: [users[0].email, users[1].email] },
+        email: { $in: [users[0]!.email, users[1]!.email] },
       });
       assert.strictEqual(foundUsers.length, 2);
     });
