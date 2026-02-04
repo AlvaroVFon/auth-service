@@ -1,19 +1,16 @@
-import { AuthService } from '../../../../../src/auth/auth.service';
-import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
-import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
-import { UsersService } from '../../../../../src/users/users.service';
-import {
-  DEFAULT_USER,
-  generateRandomEmail,
-} from '../../../../fixtures/defaults';
-import fixture from '../../../../fixtures/fixture';
-import { User } from '../../../../../src/users/users.schema';
-import { User as UserInterface } from '../../../../../src/users/users.interface';
+import { AuthService } from '../../../../src/auth/auth.service';
+import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
+import { JwtService } from '../../../../src/libs/jwt/jwt.service';
+import { UsersService } from '../../../../src/users/users.service';
+import { DEFAULT_USER, generateRandomEmail } from '../../../fixtures/defaults';
+import fixture from '../../../fixtures/fixture';
+import { User } from '../../../../src/users/users.schema';
+import { User as UserInterface } from '../../../../src/users/users.interface';
 import { Types } from 'mongoose';
-import { MailerInterface } from '../../../../../src/libs/mailer/mailer.interface';
-import { CodesService } from '../../../../../src/auth/codes/codes.service';
-import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
-import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
+import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
+import { CodesService } from '../../../../src/auth/codes/codes.service';
+import { CodesModel } from '../../../../src/auth/codes/codes.schema';
+import { Code, CodeType } from '../../../../src/auth/codes/code.interface';
 
 describe('Auth Service', () => {
   let authService: AuthService;
@@ -30,6 +27,10 @@ describe('Auth Service', () => {
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
+  const refreshTokenExpiresIn = parseInt(
+    process.env.REFRESH_TOKEN_EXPIRES_IN || '86400',
+    10,
+  );
 
   beforeEach(async () => {
     await fixture.create('User');
@@ -39,7 +40,11 @@ describe('Auth Service', () => {
       mockCryptoService as unknown as CryptoService,
     );
 
-    const jwtService = new JwtService(jwtSecret!, jwtExpiresIn);
+    const jwtService = new JwtService(
+      jwtSecret!,
+      jwtExpiresIn,
+      refreshTokenExpiresIn,
+    );
     codeService = new CodesService(CodesModel);
 
     authService = new AuthService(
@@ -254,8 +259,8 @@ describe('Auth Service', () => {
           email,
           {
             userName: email,
-            code: code.toObject().code,
-            link: `https://ourservice.com/verify?userId=${user._id.toString()}&code=${code.toObject().code}`,
+            code: code!.toObject().code,
+            link: `https://ourservice.com/verify?userId=${user._id.toString()}&code=${code!.toObject().code}`,
           },
         ],
       );
