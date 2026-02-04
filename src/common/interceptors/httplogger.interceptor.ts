@@ -32,7 +32,7 @@ export class HttpLoggerInterceptor {
       } else if (statusCode >= 400) {
         this.logger.warn(logMessage);
       } else {
-        this.logger.log(logMessage);
+        this.logger.info(logMessage);
       }
     });
 

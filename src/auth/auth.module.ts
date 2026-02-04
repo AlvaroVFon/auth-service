@@ -35,6 +35,6 @@ export class AuthModule {
 
   initialize(app: Application): void {
     new AuthRouter(this.controller, app, this.authenticationMiddleware);
-    this.logger.log('Init Module - Auth - OK');
+    this.logger.info('Init Module - Auth - OK');
   }
 }

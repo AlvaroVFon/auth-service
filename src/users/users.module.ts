@@ -29,6 +29,6 @@ export class UsersModule {
       this.controller,
       app,
     );
-    this.logger.log('Init Module - Users - OK');
+    this.logger.info('Init Module - Users - OK');
   }
 }

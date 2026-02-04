@@ -21,7 +21,7 @@ const baseUri = getStringEnvVariable(
 const TEST_DB_URI = `${baseUri}_${process.pid}`;
 
 const logger: LoggerInterface = {
-  log: () => {},
+  info: () => {},
   error: () => {},
   warn: () => {},
   debug: () => {},

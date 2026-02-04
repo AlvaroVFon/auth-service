@@ -32,7 +32,7 @@ export class HttpInterceptor {
 
   static initialize(app: Application, logger: LoggerInterface): void {
     new HttpInterceptor(app);
-    logger.log('Init Interceptor - Exception - OK');
+    logger.info('Init Interceptor - Exception - OK');
   }
 
   injectErrorDetails(error: BaseError, req: Request, res: Response): void {
