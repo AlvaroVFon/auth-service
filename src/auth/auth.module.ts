@@ -8,6 +8,7 @@ import { JwtService } from '../libs/jwt/jwt.service';
 import { LoggerInterface } from '../libs/logger/logger.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { CodesService } from './codes/codes.service';
+import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 
 export class AuthModule {
   public readonly service: AuthService;
@@ -20,6 +21,7 @@ export class AuthModule {
     private readonly logger: LoggerInterface,
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
+    private readonly authenticationMiddleware: AuthenticationMiddleware,
   ) {
     this.service = new AuthService(
       this.usersService,
@@ -32,7 +34,7 @@ export class AuthModule {
   }
 
   initialize(app: Application): void {
-    new AuthRouter(this.controller, app);
+    new AuthRouter(this.controller, app, this.authenticationMiddleware);
     this.logger.log('Init Module - Auth - OK');
   }
 }

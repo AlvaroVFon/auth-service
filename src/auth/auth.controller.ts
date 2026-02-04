@@ -29,4 +29,19 @@ export class AuthController {
 
     res.status(204).send();
   }
+
+  @Catch()
+  async resetPassword(req: Request, res: Response): Promise<void> {
+    const userId = req.user.id as string;
+    const newPassword = req.body.newPassword;
+    const passwordConfirmation = req.body.passwordConfirmation;
+
+    await this.authService.resetPassword(
+      userId,
+      newPassword,
+      passwordConfirmation,
+    );
+
+    res.status(204).send();
+  }
 }

@@ -46,6 +46,7 @@ const authModule = new AuthModule(
   winstonLogger,
   mailService,
   codeService,
+  authenticationMiddleware,
 );
 
 export const createAppTestInstance = async () => {
