@@ -28,7 +28,7 @@ const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 const authorizationMiddleware = new AuthorizationMiddleware();
 const mailService = {
-  sendMailWithTemplate: mock.fn(() => Promise.resolve()),
+  sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
 const codeService = new CodesService(CodesModel);
 

@@ -25,7 +25,7 @@ describe('Auth Service', () => {
     hashString: mock.fn((str: string) => Promise.resolve(`hashed_${str}`)),
   };
   const mockMailerService = {
-    sendMailWithTemplate: mock.fn(() => Promise.resolve()),
+    sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
   };
 
   const jwtSecret = process.env.JWT_SECRET;
@@ -240,24 +240,22 @@ describe('Auth Service', () => {
       assert.ok(Types.ObjectId.isValid(user._id?.toString()));
       assert.ok(user.password);
       assert.notStrictEqual(user.password, 'ValidPass123!');
-      assert.ok(mockMailerService.sendMailWithTemplate.mock.calls.length === 1);
+      assert.ok(
+        mockMailerService.sendSignupVerificationEmail.mock.calls.length === 1,
+      );
       const code = await fixture.findOne<Code>('Code', {
         userId: user._id,
         type: CodeType.SIGNUP,
       });
 
       assert.deepStrictEqual(
-        mockMailerService.sendMailWithTemplate.mock.calls[0].arguments,
+        mockMailerService.sendSignupVerificationEmail.mock.calls[0].arguments,
         [
           email,
-          'Verify your account',
-          'signup_verification',
           {
             userName: email,
-            appName: 'Our Service',
             code: code.toObject().code,
             link: `https://ourservice.com/verify?userId=${user._id.toString()}&code=${code.toObject().code}`,
-            year: new Date().getFullYear().toString(),
           },
         ],
       );
@@ -314,6 +312,158 @@ describe('Auth Service', () => {
           name: 'InvalidArgumentError',
           message: 'code is required',
           code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+  });
+
+  describe('resetPassword()', () => {
+    test('should throw an error for non provided userId', async () => {
+      await assert.rejects(
+        async () => await authService.resetPassword('', '', 'NewPass123!'),
+        {
+          name: 'InvalidArgumentError',
+          message: 'userId is required',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error for non provided newPassword', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.rejects(
+        async () =>
+          await authService.resetPassword(
+            user._id.toString(),
+            '',
+            'Password123!',
+          ),
+        {
+          name: 'InvalidArgumentError',
+          message: 'newPassword is required',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error for weak newPassword', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.rejects(
+        async () =>
+          await authService.resetPassword(user._id.toString(), 'weak', 'weak'),
+        {
+          name: 'InvalidArgumentError',
+          message: 'Password does not meet complexity requirements',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error if password confirmation does not match', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.rejects(
+        async () =>
+          await authService.resetPassword(
+            user._id.toString(),
+            'NewPass123!',
+            'DifferentPass123!',
+          ),
+        {
+          name: 'InvalidArgumentError',
+          message: 'Password and password confirmation do not match',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error for non provided passwordConfirmation', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.rejects(
+        async () =>
+          await authService.resetPassword(
+            user._id.toString(),
+            'NewPass123!',
+            '',
+          ),
+        {
+          name: 'InvalidArgumentError',
+          message: 'passwordConfirmation is required',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should succeed with valid inputs', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.doesNotReject(
+        async () =>
+          await authService.resetPassword(
+            user._id.toString(),
+            'NewPass123!',
+            'NewPass123!',
+          ),
+      );
+    });
+
+    test('should hash the new password when resetting password', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      const newPassword = 'NewPass123!';
+      await authService.resetPassword(
+        user._id.toString(),
+        newPassword,
+        newPassword,
+      );
+
+      const updatedUser = await fixture.findById<UserInterface>(
+        'User',
+        user._id.toString(),
+      );
+      assert.ok(updatedUser);
+      assert.notStrictEqual(updatedUser!.password, newPassword);
+      assert.strictEqual(updatedUser!.password, `hashed_${newPassword}`);
+    });
+
+    test('should call updateOneById with correct parameters', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      const newPassword = 'NewPass123!';
+
+      const updateOneByIdSpy = mock.method(userService, 'updateOneById');
+
+      await authService.resetPassword(
+        user._id.toString(),
+        newPassword,
+        newPassword,
+      );
+
+      assert.ok(updateOneByIdSpy.mock.calls.length === 1);
+      assert.deepStrictEqual(updateOneByIdSpy.mock.calls[0].arguments, [
+        user._id.toString(),
+        { password: `hashed_${newPassword}` },
+      ]);
+    });
+
+    test('should throw an error if userId does not exist', async () => {
+      const nonExistentUserId = new Types.ObjectId().toString();
+      const newPassword = 'NewPass123!';
+
+      await assert.rejects(
+        async () =>
+          await authService.resetPassword(
+            nonExistentUserId,
+            newPassword,
+            newPassword,
+          ),
+        {
+          name: 'EntityNotFoundError',
+          message: 'User not found',
+          code: 'NOT_FOUND',
         },
       );
     });

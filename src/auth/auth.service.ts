@@ -7,7 +7,6 @@ import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { User } from '../users/users.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
-import { MailTemplate } from '../mail/mail.enum';
 import { CodesService } from './codes/codes.service';
 import { CodeType } from './codes/code.interface';
 
@@ -84,15 +83,10 @@ export class AuthService {
       newUser._id.toString(),
     );
 
-    this.sendVerificationEmail(
-      newUser._id.toString(),
-      newUser.email,
-      verificationCode.code,
-    ).catch((error) => {
-      console.error(
-        `Failed to send verification email to ${newUser.email}:`,
-        error,
-      );
+    await this.mailService.sendSignupVerificationEmail(newUser.email, {
+      userName: newUser.email,
+      code: verificationCode.code,
+      link: `https://ourservice.com/verify?userId=${newUser._id}&code=${verificationCode.code}`,
     });
 
     return newUser;
@@ -136,24 +130,5 @@ export class AuthService {
   ): Promise<void> {
     await this.codeService.validateCode(userId, code, CodeType.SIGNUP);
     await this.usersService.updateOneById(userId, { verified: true });
-  }
-
-  async sendVerificationEmail(
-    userId: string,
-    email: string,
-    code: string,
-  ): Promise<void> {
-    await this.mailService.sendMailWithTemplate(
-      email,
-      'Verify your account',
-      MailTemplate.SIGNUP_VERIFICATION,
-      {
-        userName: email,
-        appName: 'Our Service',
-        code: code,
-        link: `https://ourservice.com/verify?userId=${userId}&code=${code}`,
-        year: new Date().getFullYear().toString(),
-      },
-    );
   }
 }

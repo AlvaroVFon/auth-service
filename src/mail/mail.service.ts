@@ -1,5 +1,4 @@
 import { MailerInterface as Mailer } from '../libs/mailer/mailer.interface';
-import { MailTemplate } from './mail.enum';
 
 export class MailService {
   constructor(private readonly mailer: Mailer) {}
@@ -8,23 +7,13 @@ export class MailService {
     to: string,
     context: Record<string, string>,
   ): Promise<void> {
-    await this.mailer.sendMailWithTemplate(
-      to,
-      `Welcome to Our Service`,
-      MailTemplate.WELCOME,
-      context,
-    );
+    await this.mailer.sendWelcomeEmail(to, context);
   }
 
   async sendVerificationEmail(
     to: string,
     context: Record<string, string>,
   ): Promise<void> {
-    await this.mailer.sendMailWithTemplate(
-      to,
-      `Verification Email`,
-      MailTemplate.SIGNUP_VERIFICATION,
-      context,
-    );
+    await this.mailer.sendSignupVerificationEmail(to, context);
   }
 }

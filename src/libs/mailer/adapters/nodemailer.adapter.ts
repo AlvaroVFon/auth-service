@@ -6,6 +6,7 @@ import {
   getNumberEnvVariable,
 } from '../../../config/env.config';
 import { LoggerInterface } from '../../logger/logger.interface';
+import { MailTemplate } from '../../../mail/mail.enum';
 
 export class NodeMailerAdapter implements Mailer {
   private readonly transporter: Transporter;
@@ -14,6 +15,8 @@ export class NodeMailerAdapter implements Mailer {
   private readonly smtpUser: string;
   private readonly smtpPass: string;
   private readonly mailFrom: string;
+  private readonly appName: string;
+  private readonly year: string;
 
   constructor(
     private readonly templateRenderer: TemplateRenderer,
@@ -27,6 +30,8 @@ export class NodeMailerAdapter implements Mailer {
       'MAIL_FROM',
       'no-reply@auth-service.com',
     );
+    this.appName = getStringEnvVariable('APP_NAME', 'Auth Service');
+    this.year = new Date().getFullYear().toString();
     this.transporter = this.createTransport();
   }
 
@@ -69,5 +74,32 @@ export class NodeMailerAdapter implements Mailer {
     } catch (error) {
       this.logger.error(`Error rendering or sending template email: ${error}`);
     }
+  }
+
+  async sendWelcomeEmail(
+    to: string,
+    context: Record<string, string>,
+  ): Promise<void> {
+    const subject = `Welcome to ${this.appName}`;
+    context.appName = this.appName;
+    context.year = this.year;
+
+    await this.sendMailWithTemplate(to, subject, MailTemplate.WELCOME, context);
+  }
+
+  async sendSignupVerificationEmail(
+    to: string,
+    context: Record<string, string>,
+  ): Promise<void> {
+    const subject = `Verify your account`;
+    context.appName = this.appName;
+    context.year = this.year;
+
+    await this.sendMailWithTemplate(
+      to,
+      subject,
+      MailTemplate.SIGNUP_VERIFICATION,
+      context,
+    );
   }
 }
