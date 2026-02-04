@@ -9,6 +9,7 @@ import { LoggerInterface } from '../libs/logger/logger.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { CodesService } from './codes/codes.service';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
+import { assertDependencies } from '../common/depencencies-validator';
 
 export class AuthModule {
   public readonly service: AuthService;
@@ -23,6 +24,19 @@ export class AuthModule {
     private readonly codeService: CodesService,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
   ) {
+    assertDependencies(
+      {
+        usersService,
+        cryptoService,
+        jwtService,
+        logger,
+        mailService,
+        codeService,
+        authenticationMiddleware,
+      },
+      'AuthModule',
+    );
+
     this.service = new AuthService(
       this.usersService,
       this.cryptoService,
