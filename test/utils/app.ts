@@ -13,6 +13,8 @@ import { AuthorizationMiddleware } from '../../src/common/middlewares/authorizat
 import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
 import { CodesService } from '../../src/auth/codes/codes.service';
 import { CodesModel } from '../../src/auth/codes/codes.schema';
+import { RefreshTokenService } from '../../src/auth/tokens/refresh-token.service';
+import { RefreshTokenModel } from '../../src/auth/tokens/refresh-token.schema';
 
 let app: Application;
 
@@ -39,6 +41,10 @@ const mailService = {
   sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
 const codeService = new CodesService(CodesModel);
+const refreshTokenService = new RefreshTokenService(
+  RefreshTokenModel,
+  cryptoService,
+);
 
 const usersModule = new UsersModule(
   cryptoService,
@@ -55,6 +61,7 @@ const authModule = new AuthModule(
   mailService,
   codeService,
   authenticationMiddleware,
+  refreshTokenService,
 );
 
 export const createAppTestInstance = async () => {

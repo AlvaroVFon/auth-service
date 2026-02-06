@@ -9,6 +9,8 @@ import { Payload } from '../../../src/libs/jwt/jwt.interfaces';
 export const DEFAULT_USER_ID = new Types.ObjectId('000000000000000000000001');
 export const DEFAULT_ADMIN_ID = new Types.ObjectId('000000000000000000000002');
 
+export const DEFAULT_USER_PLAIN_PASSWORD = 'Password123!';
+
 const defaultUserPayload: Payload = {
   userId: DEFAULT_USER_ID.toString(),
   role: Roles.USER,

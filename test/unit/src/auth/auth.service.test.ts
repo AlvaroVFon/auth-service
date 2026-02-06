@@ -11,11 +11,16 @@ import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
 import { CodesService } from '../../../../src/auth/codes/codes.service';
 import { CodesModel } from '../../../../src/auth/codes/codes.schema';
 import { Code, CodeType } from '../../../../src/auth/codes/code.interface';
+import { RefreshTokenService } from '../../../../src/auth/tokens/refresh-token.service';
+import { RefreshTokenModel } from '../../../../src/auth/tokens/refresh-token.schema';
+import { RefreshToken } from '../../../../src/auth/tokens/refresh-token.interface';
+import { JWT_REGEX } from '../../../../src/common/constants/regex';
 
 describe('Auth Service', () => {
   let authService: AuthService;
   let userService: UsersService;
   let codeService: CodesService;
+  let refreshTokenService: RefreshTokenService;
 
   const mockCryptoService = {
     compareString: mock.fn(() => true),
@@ -46,6 +51,10 @@ describe('Auth Service', () => {
       refreshTokenExpiresIn,
     );
     codeService = new CodesService(CodesModel);
+    refreshTokenService = new RefreshTokenService(
+      RefreshTokenModel,
+      mockCryptoService as unknown as CryptoService,
+    );
 
     authService = new AuthService(
       userService,
@@ -53,6 +62,7 @@ describe('Auth Service', () => {
       jwtService as JwtService,
       mockMailerService as MailerInterface,
       codeService,
+      refreshTokenService,
     );
   });
 
@@ -61,17 +71,17 @@ describe('Auth Service', () => {
   });
 
   describe('login()', () => {
-    test('should authenticate user and return a token', async () => {
-      const jwtRegex =
-        /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/;
+    test('should authenticate user and return a tokens', async () => {
       const result = await authService.login({
         email: DEFAULT_USER.email,
         password: 'password123',
       });
 
       assert.ok(result);
-      assert.strictEqual(typeof result, 'string');
-      assert.ok(jwtRegex.test(result));
+      assert.strictEqual(typeof result.accessToken, 'string');
+      assert.strictEqual(typeof result.refreshToken, 'string');
+      assert.ok(JWT_REGEX.test(result.accessToken));
+      assert.ok(JWT_REGEX.test(result.refreshToken));
     });
 
     test('should throw an error for non existing email', async () => {
@@ -471,6 +481,58 @@ describe('Auth Service', () => {
           code: 'NOT_FOUND',
         },
       );
+    });
+  });
+
+  describe('logout()', () => {
+    test('should throw an error if userId is not provided', async () => {
+      await assert.rejects(async () => await authService.logout(''), {
+        name: 'InvalidArgumentError',
+        message: 'userId is required',
+        code: 'INVALID_ARGUMENT',
+      });
+    });
+
+    test('should throw an error if userId is not a valid ObjectId', async () => {
+      await assert.rejects(async () => await authService.logout('invalid-id'), {
+        name: 'InvalidArgumentError',
+        message: 'userId is not a valid ObjectId',
+        code: 'INVALID_ARGUMENT',
+      });
+    });
+
+    test('should throw an error if no active refresh token is found for the user', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.rejects(
+        async () => await authService.logout(user._id.toString()),
+        {
+          name: 'EntityNotFoundError',
+          message: 'No active refresh token found for the given userId',
+          code: 'NOT_FOUND',
+        },
+      );
+    });
+
+    test('should revoke refresh token', async () => {
+      const user = await fixture.create<UserInterface>('User');
+      const plainToken = 'plain-refresh-token';
+      const refreshToken = await refreshTokenService.create({
+        userId: user._id,
+        token: plainToken,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60), // 1 hour from now
+      });
+
+      await authService.logout(user._id.toString());
+
+      const revokedToken = await fixture.findById<RefreshToken>(
+        'RefreshToken',
+        refreshToken._id.toString(),
+      );
+
+      assert.ok(revokedToken);
+      assert.ok(revokedToken!.revokedAt);
+      assert.strictEqual(revokedToken!.replacedByToken, null);
     });
   });
 });

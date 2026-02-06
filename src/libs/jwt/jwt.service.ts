@@ -64,4 +64,13 @@ export class JwtService {
     const payload: Payload = { userId, role, type: TokenTypes.REFRESH };
     return this.generateToken(payload, this.refreshExpiresIn);
   }
+
+  generateTokens(
+    userId: string,
+    role: Roles,
+  ): { accessToken: string; refreshToken: string } {
+    const accessToken = this.generateAccessToken(userId, role);
+    const refreshToken = this.generateRefreshToken(userId, role);
+    return { accessToken, refreshToken };
+  }
 }

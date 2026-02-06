@@ -8,9 +8,9 @@ export class AuthController {
   @Catch()
   async login(req: Request, res: Response): Promise<void> {
     const credentials = req.body;
-    const token = await this.authService.login(credentials);
+    const tokens = await this.authService.login(credentials);
 
-    res.status(200).json({ accessToken: token });
+    res.status(200).json(tokens);
   }
 
   @Catch()
@@ -32,7 +32,7 @@ export class AuthController {
 
   @Catch()
   async resetPassword(req: Request, res: Response): Promise<void> {
-    const userId = req.user.id as string;
+    const userId = req.user?.id as string;
     const newPassword = req.body.newPassword;
     const passwordConfirmation = req.body.passwordConfirmation;
 
@@ -41,6 +41,14 @@ export class AuthController {
       newPassword,
       passwordConfirmation,
     );
+
+    res.status(204).send();
+  }
+
+  @Catch()
+  async logout(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.id as string;
+    await this.authService.logout(userId);
 
     res.status(204).send();
   }

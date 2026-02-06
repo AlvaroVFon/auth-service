@@ -3,12 +3,18 @@ import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-toke
 import { RefreshTokenModel } from '../../../../../src/auth/tokens/refresh-token.schema';
 import { RefreshToken } from '../../../../../src/auth/tokens/refresh-token.interface';
 import fixture from '../../../../fixtures/fixture';
+import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
 
 describe('RefreshTokenService', () => {
   let refreshTokenService: RefreshTokenService;
+  let cryptoService: CryptoService;
 
   before(() => {
-    refreshTokenService = new RefreshTokenService(RefreshTokenModel);
+    cryptoService = new CryptoService();
+    refreshTokenService = new RefreshTokenService(
+      RefreshTokenModel,
+      cryptoService,
+    );
   });
 
   describe('create', () => {
@@ -36,17 +42,11 @@ describe('RefreshTokenService', () => {
       });
     });
 
-    test('should throw an error if expiresAt is missing', async () => {
-      const invalidData = { userId: new Types.ObjectId(), token: 'some-token' };
-      await assert.rejects(() => refreshTokenService.create(invalidData), {
-        name: 'InvalidArgumentError',
-      });
-    });
-
     test('should create a refresh token successfully', async () => {
+      const plainToken = 'plain.test.valid.token';
       const refreshTokenData = {
         userId: new Types.ObjectId(),
-        token: 'some-token',
+        token: plainToken,
         expiresAt: new Date(Date.now() + 1000 * 60 * 60), // 1 hour from now
       };
 
@@ -56,10 +56,14 @@ describe('RefreshTokenService', () => {
         refreshToken.userId.toString(),
         refreshTokenData.userId.toString(),
       );
-      assert.strictEqual(refreshToken.token, refreshTokenData.token);
+      assert.notStrictEqual(refreshToken.token, plainToken);
       assert.strictEqual(
         refreshToken.expiresAt.getTime(),
         refreshTokenData.expiresAt.getTime(),
+      );
+
+      assert.ok(
+        await cryptoService.compareString(plainToken, refreshToken.token),
       );
 
       const dbRefreshToken = await fixture.findOne<RefreshToken>(
@@ -71,7 +75,7 @@ describe('RefreshTokenService', () => {
         dbRefreshToken?.userId.toString(),
         refreshTokenData.userId.toString(),
       );
-      assert.strictEqual(dbRefreshToken?.token, refreshTokenData.token);
+      assert.notStrictEqual(dbRefreshToken?.token, plainToken);
       assert.strictEqual(
         dbRefreshToken?.expiresAt.getTime(),
         refreshTokenData.expiresAt.getTime(),

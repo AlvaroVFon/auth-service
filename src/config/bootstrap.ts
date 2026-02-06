@@ -18,6 +18,8 @@ import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
 import { CodesService } from '../auth/codes/codes.service';
 import { CodesModel } from '../auth/codes/codes.schema';
+import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
+import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
 
 const app: Application = express();
 
@@ -46,6 +48,10 @@ const authorizationMiddleware = new AuthorizationMiddleware();
 const templateRenderer = new HandlebarsEngine();
 const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
 const codeService = new CodesService(CodesModel);
+const refreshTokenService = new RefreshTokenService(
+  RefreshTokenModel,
+  cryptoService,
+);
 
 // Modules
 const usersModule = new UsersModule(
@@ -63,6 +69,7 @@ const authModule = new AuthModule(
   mailService,
   codeService,
   authenticationMiddleware,
+  refreshTokenService,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

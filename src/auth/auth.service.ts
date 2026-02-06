@@ -3,12 +3,20 @@ import { JwtService } from '../libs/jwt/jwt.service';
 import { UsersService } from '../users/users.service';
 import { InvalidCredentialsError } from '../common/exceptions/auth.exceptions';
 import { Credentials, SignupCredentials } from './auth.interface';
-import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
-import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import {
+  EMAIL_REGEX,
+  OBJECTID_REGEX,
+  PASSWORD_REGEX,
+} from '../common/constants/regex';
+import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../common/exceptions/base.exception';
 import { User } from '../users/users.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { CodesService } from './codes/codes.service';
 import { CodeType } from './codes/code.interface';
+import { RefreshTokenService } from './tokens/refresh-token.service';
 
 export class AuthService {
   constructor(
@@ -17,9 +25,12 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
+    private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
-  async login(credentials: Credentials): Promise<string> {
+  async login(
+    credentials: Credentials,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     if (!credentials.email || !credentials.password) {
       throw new InvalidArgumentError('Email and password are required');
     }
@@ -42,7 +53,17 @@ export class AuthService {
       throw new InvalidCredentialsError('Invalid email or password');
     }
 
-    return this.jwtService.generateAccessToken(user._id?.toString(), user.role);
+    const { accessToken, refreshToken } = this.jwtService.generateTokens(
+      user._id.toString(),
+      user.role,
+    );
+
+    await this.refreshTokenService.create({
+      userId: user._id,
+      token: refreshToken,
+    });
+
+    return { accessToken, refreshToken };
   }
 
   async signup(credentials: SignupCredentials): Promise<User> {
@@ -79,7 +100,7 @@ export class AuthService {
       password: credentials.password,
     });
 
-    const verificationCode = await this.generateSignupVerificationCode(
+    const verificationCode = await this.codeService.createSignupCode(
       newUser._id.toString(),
     );
 
@@ -120,15 +141,31 @@ export class AuthService {
     await this.usersService.updateOneById(userId, { password: newPassword });
   }
 
-  async generateSignupVerificationCode(userId: string) {
-    return this.codeService.create(userId, CodeType.SIGNUP);
-  }
-
   async validateSignupVerificationCode(
     userId: string,
     code: string,
   ): Promise<void> {
     await this.codeService.validateCode(userId, code, CodeType.SIGNUP);
     await this.usersService.updateOneById(userId, { verified: true });
+  }
+
+  async logout(userId: string): Promise<void> {
+    if (!userId) {
+      throw new InvalidArgumentError('userId is required');
+    }
+    if (OBJECTID_REGEX.test(userId) === false) {
+      throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+
+    const existingToken =
+      await this.refreshTokenService.findActiveByUserId(userId);
+
+    if (!existingToken) {
+      throw new EntityNotFoundError(
+        'No active refresh token found for the given userId',
+      );
+    }
+
+    await this.refreshTokenService.revokeToken(existingToken._id.toString());
   }
 }

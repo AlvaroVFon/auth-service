@@ -54,6 +54,10 @@ export class CodesService {
     });
   }
 
+  async createSignupCode(userId: string): Promise<Code> {
+    return this.create(userId, CodeType.SIGNUP);
+  }
+
   async validateCode(
     userId: string,
     code: string,

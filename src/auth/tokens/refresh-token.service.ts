@@ -5,9 +5,17 @@ import {
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
 import { OBJECTID_REGEX, JWT_REGEX } from '../../common/constants/regex';
+import { CryptoService } from '../../libs/crypto/crypto.service';
+import { getNumberEnvVariable } from '../../config/env.config';
 
 export class RefreshTokenService {
-  constructor(private refreshTokenModel: Model<RefreshToken>) {}
+  private readonly jwtRefreshExpiresIn;
+  constructor(
+    private refreshTokenModel: Model<RefreshToken>,
+    private readonly cryptoService: CryptoService,
+  ) {
+    this.jwtRefreshExpiresIn = getNumberEnvVariable('JWT_REFRESH_EXPIRATION');
+  }
 
   async create(refreshTokenData: Partial<RefreshToken>): Promise<RefreshToken> {
     if (Object.keys(refreshTokenData).length === 0) {
@@ -19,9 +27,14 @@ export class RefreshTokenService {
     if (!refreshTokenData.token) {
       throw new InvalidArgumentError('token is required');
     }
-    if (!refreshTokenData.expiresAt) {
-      throw new InvalidArgumentError('expiresAt is required');
-    }
+
+    refreshTokenData.expiresAt = new Date(
+      Date.now() + this.jwtRefreshExpiresIn * 1000,
+    );
+
+    refreshTokenData.token = await this.cryptoService.hashString(
+      refreshTokenData.token,
+    );
 
     return this.refreshTokenModel.create(refreshTokenData);
   }
