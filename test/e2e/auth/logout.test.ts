@@ -3,6 +3,7 @@ import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import { JWT_REGEX } from '../../../src/common/constants/regex';
+import fixture from '../../fixtures/fixture';
 
 describe('E2E Auth Logout', () => {
   let app: Application;
@@ -14,15 +15,27 @@ describe('E2E Auth Logout', () => {
   test('should logout an authenticated user successfully', async () => {
     const singupCredentials = {
       email: generateRandomEmail('login'),
-      password: 'SecurePass123!',
-      passwordConfirmation: 'SecurePass123!',
+      password: 'StrongPassword123!',
+      passwordConfirmation: 'StrongPassword123!',
     };
 
-    await request(app).post('/auth/signup').send(singupCredentials).expect(201);
+    const signupResponse = await request(app)
+      .post('/auth/signup')
+      .send(singupCredentials)
+      .expect(201);
+
+    const holderId = signupResponse.body._id;
+    const codeDoc: any = await fixture.findOne('Code', { holderId });
+
+    await request(app)
+      .post('/auth/verify')
+      .query({ holderId })
+      .send({ code: codeDoc.code })
+      .expect(204);
 
     const loginCredentials = {
       email: singupCredentials.email,
-      password: 'SecurePass123!',
+      password: 'StrongPassword123!',
     };
 
     const loginResponse = await request(app)

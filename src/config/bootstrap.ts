@@ -20,6 +20,8 @@ import { CodesService } from '../auth/codes/codes.service';
 import { CodesModel } from '../auth/codes/codes.schema';
 import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
 import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
+import { HoldersModel } from '../holders/holders.schema';
+import { HoldersService } from '../holders/holders.service';
 
 const app: Application = express();
 
@@ -30,7 +32,7 @@ const JWT_EXPIRES_IN = parseInt(
   10,
 );
 const JWT_REFRESH_EXPIRES_IN = parseInt(
-  getStringEnvVariable('JWT_REFRESH_EXPIRES_IN', '86400'),
+  getStringEnvVariable('JWT_REFRESH_EXPIRATION', '86400'),
   10,
 );
 
@@ -52,6 +54,7 @@ const refreshTokenService = new RefreshTokenService(
   RefreshTokenModel,
   cryptoService,
 );
+const holdersService = new HoldersService(HoldersModel, cryptoService);
 
 // Modules
 const usersModule = new UsersModule(
@@ -70,6 +73,7 @@ const authModule = new AuthModule(
   codeService,
   authenticationMiddleware,
   refreshTokenService,
+  holdersService,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

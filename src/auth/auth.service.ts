@@ -12,11 +12,12 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
-import { User } from '../users/users.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { CodesService } from './codes/codes.service';
 import { CodeType } from './codes/code.interface';
 import { RefreshTokenService } from './tokens/refresh-token.service';
+import { HoldersService } from '../holders/holders.service';
+import { Holder } from '../holders/holders.interface';
 
 export class AuthService {
   constructor(
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
     private readonly refreshTokenService: RefreshTokenService,
+    private readonly holdersService: HoldersService,
   ) {}
 
   async login(
@@ -66,7 +68,7 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async signup(credentials: SignupCredentials): Promise<User> {
+  async signup(credentials: SignupCredentials): Promise<Holder> {
     if (!credentials.email) {
       throw new InvalidArgumentError('Email is required');
     }
@@ -90,27 +92,32 @@ export class AuthService {
       );
     }
 
+    const existingHolder = await this.holdersService.findByEmail(
+      credentials.email,
+    );
+
     const existingUser = await this.usersService.findByEmail(credentials.email);
-    if (existingUser) {
+
+    if (existingHolder || existingUser) {
       throw new InvalidArgumentError('Invalid email or password');
     }
 
-    const newUser = await this.usersService.create({
-      email: credentials.email,
-      password: credentials.password,
-    });
-
-    const verificationCode = await this.codeService.createSignupCode(
-      newUser._id.toString(),
+    const newHolder = await this.holdersService.create(
+      credentials.email,
+      credentials.password,
     );
 
-    await this.mailService.sendSignupVerificationEmail(newUser.email, {
-      userName: newUser.email,
+    const verificationCode = await this.codeService.createSignupCode(
+      newHolder._id.toString(),
+    );
+
+    await this.mailService.sendSignupVerificationEmail(newHolder.email, {
+      userName: newHolder.email,
       code: verificationCode.code,
-      link: `https://ourservice.com/verify?userId=${newUser._id}&code=${verificationCode.code}`,
+      link: `https://ourservice.com/verify?holderId=${newHolder._id}&code=${verificationCode.code}`,
     });
 
-    return newUser;
+    return newHolder;
   }
 
   async resetPassword(
@@ -142,11 +149,18 @@ export class AuthService {
   }
 
   async validateSignupVerificationCode(
-    userId: string,
+    holderId: string,
     code: string,
   ): Promise<void> {
-    await this.codeService.validateCode(userId, code, CodeType.SIGNUP);
-    await this.usersService.updateOneById(userId, { verified: true });
+    await this.codeService.validateCode(holderId, code, CodeType.SIGNUP);
+
+    const holder = await this.holdersService.findById(holderId);
+    if (!holder) {
+      throw new EntityNotFoundError('Holder not found');
+    }
+
+    await this.usersService.createFromHolder(holder);
+    await this.holdersService.deleteById(holderId);
   }
 
   async logout(userId: string): Promise<void> {

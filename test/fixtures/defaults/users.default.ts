@@ -9,7 +9,7 @@ import { Payload } from '../../../src/libs/jwt/jwt.interfaces';
 export const DEFAULT_USER_ID = new Types.ObjectId('000000000000000000000001');
 export const DEFAULT_ADMIN_ID = new Types.ObjectId('000000000000000000000002');
 
-export const DEFAULT_USER_PLAIN_PASSWORD = 'Password123!';
+export const DEFAULT_USER_PLAIN_PASSWORD = 'StrongPassword123!';
 
 const defaultUserPayload: Payload = {
   userId: DEFAULT_USER_ID.toString(),
@@ -26,7 +26,7 @@ export const DEFAULT_USER_TOKEN = jwt.sign(
 export const DEFAULT_USER: User = {
   _id: DEFAULT_USER_ID,
   email: 'defaultuser@example.com',
-  password: '$2b$10$DOgX16YaMx3WlA8/4v5gH.qMMDUPxnsbFzl5mSRmT6Gj3.cwCxQjy',
+  password: '$2b$10$njKm0/jBAa8VjVT4XXTbOOUqALanrKZLGrPaWXIACh6iZpoI1NUzm',
   role: Roles.USER,
   verified: true,
 };
@@ -46,7 +46,7 @@ export const DEFAULT_ADMIN_TOKEN = jwt.sign(
 export const DEFAULT_ADMIN: User = {
   _id: DEFAULT_ADMIN_ID,
   email: 'defaultadmin@example.com',
-  password: '$2b$10$DOgX16YaMx3WlA8/4v5gH.qMMDUPxnsbFzl5mSRmT6Gj3.cwCxQjy',
+  password: '$2b$10$njKm0/jBAa8VjVT4XXTbOOUqALanrKZLGrPaWXIACh6iZpoI1NUzm',
   role: Roles.ADMIN,
   verified: true,
 };

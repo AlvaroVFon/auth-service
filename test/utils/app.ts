@@ -15,6 +15,8 @@ import { CodesService } from '../../src/auth/codes/codes.service';
 import { CodesModel } from '../../src/auth/codes/codes.schema';
 import { RefreshTokenService } from '../../src/auth/tokens/refresh-token.service';
 import { RefreshTokenModel } from '../../src/auth/tokens/refresh-token.schema';
+import { HoldersModel } from '../../src/holders/holders.schema';
+import { HoldersService } from '../../src/holders/holders.service';
 
 let app: Application;
 
@@ -45,6 +47,7 @@ const refreshTokenService = new RefreshTokenService(
   RefreshTokenModel,
   cryptoService,
 );
+const holdersService = new HoldersService(HoldersModel, cryptoService);
 
 const usersModule = new UsersModule(
   cryptoService,
@@ -62,6 +65,7 @@ const authModule = new AuthModule(
   codeService,
   authenticationMiddleware,
   refreshTokenService,
+  holdersService,
 );
 
 export const createAppTestInstance = async () => {

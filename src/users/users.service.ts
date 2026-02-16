@@ -7,6 +7,7 @@ import {
 } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
+import { Holder } from '../holders/holders.interface';
 
 export class UsersService {
   constructor(
@@ -33,6 +34,21 @@ export class UsersService {
     }
 
     return this.usersModel.create(data);
+  }
+
+  async createFromHolder(holder: Holder): Promise<UserInterface> {
+    const userData: Partial<UserInterface> = {
+      email: holder.email,
+      password: holder.password,
+      verified: true,
+    };
+
+    const existingUser = await this.usersModel.findOne({ email: holder.email });
+    if (existingUser) {
+      throw new EntityAlreadyExistsError('Email already exists');
+    }
+
+    return this.usersModel.create(userData);
   }
 
   async findByEmail(email: string): Promise<UserInterface | null> {

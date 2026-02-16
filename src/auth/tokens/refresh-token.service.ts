@@ -14,7 +14,10 @@ export class RefreshTokenService {
     private refreshTokenModel: Model<RefreshToken>,
     private readonly cryptoService: CryptoService,
   ) {
-    this.jwtRefreshExpiresIn = getNumberEnvVariable('JWT_REFRESH_EXPIRATION');
+    this.jwtRefreshExpiresIn = getNumberEnvVariable(
+      'JWT_REFRESH_EXPIRES_IN',
+      86400,
+    );
   }
 
   async create(refreshTokenData: Partial<RefreshToken>): Promise<RefreshToken> {

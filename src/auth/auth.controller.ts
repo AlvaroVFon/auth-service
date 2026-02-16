@@ -23,9 +23,9 @@ export class AuthController {
 
   @Catch()
   async verifyEmail(req: Request, res: Response): Promise<void> {
-    const userId = req.query.userId as string;
+    const holderId = req.query.holderId as string;
     const { code } = req.body;
-    await this.authService.validateSignupVerificationCode(userId, code);
+    await this.authService.validateSignupVerificationCode(holderId, code);
 
     res.status(204).send();
   }

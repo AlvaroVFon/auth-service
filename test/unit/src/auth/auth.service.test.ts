@@ -15,10 +15,15 @@ import { RefreshTokenService } from '../../../../src/auth/tokens/refresh-token.s
 import { RefreshTokenModel } from '../../../../src/auth/tokens/refresh-token.schema';
 import { RefreshToken } from '../../../../src/auth/tokens/refresh-token.interface';
 import { JWT_REGEX } from '../../../../src/common/constants/regex';
+import { HoldersService } from '../../../../src/holders/holders.service';
+import { HoldersModel } from '../../../../src/holders/holders.schema';
+import { Holder } from '../../../../src/holders/holders.interface';
+import { DEFAULT_HOLDER } from '../../../fixtures/defaults/holders.default';
 
 describe('Auth Service', () => {
   let authService: AuthService;
   let userService: UsersService;
+  let holdersService: HoldersService;
   let codeService: CodesService;
   let refreshTokenService: RefreshTokenService;
 
@@ -51,6 +56,10 @@ describe('Auth Service', () => {
       refreshTokenExpiresIn,
     );
     codeService = new CodesService(CodesModel);
+    holdersService = new HoldersService(
+      HoldersModel,
+      mockCryptoService as unknown as CryptoService,
+    );
     refreshTokenService = new RefreshTokenService(
       RefreshTokenModel,
       mockCryptoService as unknown as CryptoService,
@@ -63,6 +72,7 @@ describe('Auth Service', () => {
       mockMailerService as MailerInterface,
       codeService,
       refreshTokenService,
+      holdersService,
     );
   });
 
@@ -228,10 +238,11 @@ describe('Auth Service', () => {
     });
 
     test('should throw an error if email is already in use', async () => {
+      await fixture.create<Holder>('Holder');
       await assert.rejects(
         async () =>
           await authService.signup({
-            email: DEFAULT_USER.email,
+            email: DEFAULT_HOLDER.email,
             password: 'ValidPass123!',
             passwordConfirmation: 'ValidPass123!',
           }),
@@ -245,21 +256,21 @@ describe('Auth Service', () => {
 
     test('should succeed with valid credentials', async () => {
       const email = generateRandomEmail('auth+');
-      const user = await authService.signup({
+      const holder = await authService.signup({
         email,
         password: 'ValidPass123!',
         passwordConfirmation: 'ValidPass123!',
       });
 
-      assert.strictEqual(user.email, email);
-      assert.ok(Types.ObjectId.isValid(user._id?.toString()));
-      assert.ok(user.password);
-      assert.notStrictEqual(user.password, 'ValidPass123!');
+      assert.strictEqual(holder.email, email);
+      assert.ok(Types.ObjectId.isValid(holder._id?.toString()));
+      assert.ok(holder.password);
+      assert.notStrictEqual(holder.password, 'ValidPass123!');
       assert.ok(
         mockMailerService.sendSignupVerificationEmail.mock.calls.length === 1,
       );
       const code = await fixture.findOne<Code>('Code', {
-        userId: user._id,
+        holderId: holder._id,
         type: CodeType.SIGNUP,
       });
 
@@ -270,7 +281,7 @@ describe('Auth Service', () => {
           {
             userName: email,
             code: code!.toObject().code,
-            link: `https://ourservice.com/verify?userId=${user._id.toString()}&code=${code!.toObject().code}`,
+            link: `https://ourservice.com/verify?holderId=${holder._id.toString()}&code=${code!.toObject().code}`,
           },
         ],
       );
@@ -278,49 +289,45 @@ describe('Auth Service', () => {
   });
 
   describe('validateSignupVerificationCode()', () => {
-    test('should verify user with valid code', async () => {
-      const user = await fixture.create<UserInterface>('User', {
-        verified: false,
-      });
+    test('should verify holder with valid code', async () => {
+      const holder = await fixture.create<Holder>('Holder');
       const code = await fixture.create<Code>('Code', {
-        userId: user._id,
+        holderId: holder._id,
         type: CodeType.SIGNUP,
       });
 
       await authService.validateSignupVerificationCode(
-        user._id.toString(),
+        holder._id.toString(),
         code.code,
       );
 
-      const updatedUser = await fixture.findById<UserInterface>(
-        'User',
-        user._id.toString(),
-      );
-      assert.ok(updatedUser);
-      assert.strictEqual(updatedUser!.verified, true);
+      const user = await fixture.findOne<UserInterface>('User', {
+        email: holder.email,
+      });
+
+      assert.ok(user);
+      assert.strictEqual(user!.verified, true);
     });
 
-    test('should throw an error for non provided userId', async () => {
+    test('should throw an error for non provided holder', async () => {
       await assert.rejects(
         async () =>
           await authService.validateSignupVerificationCode('', 'somecode'),
         {
           name: 'InvalidArgumentError',
-          message: 'userId is required',
+          message: 'holderId is required',
           code: 'INVALID_ARGUMENT',
         },
       );
     });
 
     test('should throw an error for non provided code', async () => {
-      const user = await fixture.create<UserInterface>('User', {
-        verified: false,
-      });
+      const holder = await fixture.create<Holder>('Holder');
 
       await assert.rejects(
         async () =>
           await authService.validateSignupVerificationCode(
-            user._id.toString(),
+            holder._id.toString(),
             '',
           ),
         {

@@ -19,12 +19,12 @@ export class CodesService {
     this.codeLength = getNumberEnvVariable('CODE_LENGTH', 6);
   }
 
-  async create(userId: string, type: CodeType): Promise<Code> {
-    if (!userId) {
-      throw new InvalidArgumentError('userId is required');
+  async create(holderId: string, type: CodeType): Promise<Code> {
+    if (!holderId) {
+      throw new InvalidArgumentError('holderId is required');
     }
-    if (!OBJECTID_REGEX.test(userId)) {
-      throw new InvalidArgumentError('Invalid userId');
+    if (!OBJECTID_REGEX.test(holderId)) {
+      throw new InvalidArgumentError('Invalid holderId');
     }
     if (!type) {
       throw new InvalidArgumentError('codeType is required');
@@ -34,7 +34,7 @@ export class CodesService {
     }
 
     const existingCode = await this.codeModel.findOne({
-      userId: new Types.ObjectId(userId),
+      holderId: new Types.ObjectId(holderId),
       type,
       used: false,
       expiresAt: { $gt: new Date() },
@@ -49,25 +49,25 @@ export class CodesService {
     return this.codeModel.create({
       code: this.generateCode(),
       expiresAt: new Date(Date.now() + this.codeExpirationMs),
-      userId: new Types.ObjectId(userId),
+      holderId: new Types.ObjectId(holderId),
       type,
     });
   }
 
-  async createSignupCode(userId: string): Promise<Code> {
-    return this.create(userId, CodeType.SIGNUP);
+  async createSignupCode(holderId: string): Promise<Code> {
+    return this.create(holderId, CodeType.SIGNUP);
   }
 
   async validateCode(
-    userId: string,
+    holderId: string,
     code: string,
     type: CodeType,
   ): Promise<void> {
-    if (!userId) {
-      throw new InvalidArgumentError('userId is required');
+    if (!holderId) {
+      throw new InvalidArgumentError('holderId is required');
     }
-    if (!OBJECTID_REGEX.test(userId)) {
-      throw new InvalidArgumentError('Invalid userId');
+    if (!OBJECTID_REGEX.test(holderId)) {
+      throw new InvalidArgumentError('Invalid holderId');
     }
     if (!code) {
       throw new InvalidArgumentError('code is required');
@@ -80,7 +80,7 @@ export class CodesService {
     }
 
     const existingCode = await this.codeModel.findOne({
-      userId: new Types.ObjectId(userId),
+      holderId: new Types.ObjectId(holderId),
       type,
       used: false,
     });

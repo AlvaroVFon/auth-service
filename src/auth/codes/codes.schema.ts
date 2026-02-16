@@ -4,7 +4,7 @@ import { Code, CodeType } from './code.interface';
 export const CodesSchema = new Schema<Code>(
   {
     code: { type: String, required: true },
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    holderId: { type: Schema.Types.ObjectId, ref: 'Holder', required: true },
     expiresAt: { type: Date, required: true },
     used: { type: Boolean, default: false },
     type: {

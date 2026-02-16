@@ -4,6 +4,7 @@ import fixture from '../../fixtures/fixture';
 import { Application } from 'express';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import { User } from '../../../src/users/users.interface';
+import { Holder } from '../../../src/holders/holders.interface';
 
 describe('E2E Auth Signup', () => {
   let app: Application;
@@ -31,7 +32,24 @@ describe('E2E Auth Signup', () => {
     assert.strictEqual(newUser.password, undefined);
   });
 
-  test('should fail signup with existing email', async () => {
+  test('should fail signup with email already in use by a holder', async () => {
+    const existingHolder = await fixture.create<Holder>('Holder');
+
+    const signupCredentials = {
+      email: existingHolder.email,
+      password: 'AnotherStrongPassword123!',
+      passwordConfirmation: 'AnotherStrongPassword123!',
+    };
+
+    const response = await request(app)
+      .post('/auth/signup')
+      .send(signupCredentials)
+      .expect(400);
+
+    assert.strictEqual(response.body.message, 'Invalid email or password');
+  });
+
+  test('should fail signup with email already in use by a user', async () => {
     const existingUser = await fixture.create<User>('User');
 
     const signupCredentials = {

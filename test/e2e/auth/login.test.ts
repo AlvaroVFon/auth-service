@@ -2,7 +2,10 @@ import request from 'supertest';
 import { getTestAppInstance } from '../../utils/app';
 import fixture from '../../fixtures/fixture';
 import { Application } from 'express';
-import { generateRandomEmail } from '../../fixtures/defaults';
+import {
+  DEFAULT_USER_PLAIN_PASSWORD,
+  generateRandomEmail,
+} from '../../fixtures/defaults';
 import { User } from '../../../src/users/users.interface';
 import { JWT_REGEX } from '../../../src/common/constants/regex';
 
@@ -14,17 +17,11 @@ describe('E2E Auth Login', () => {
   });
 
   test('should login an existing user successfully', async () => {
-    const singupCredentials = {
-      email: generateRandomEmail('login'),
-      password: 'SecurePass123!',
-      passwordConfirmation: 'SecurePass123!',
-    };
-
-    await request(app).post('/auth/signup').send(singupCredentials).expect(201);
+    const user = await fixture.create<User>('User');
 
     const loginCredentials = {
-      email: singupCredentials.email,
-      password: 'SecurePass123!',
+      email: user.email,
+      password: DEFAULT_USER_PLAIN_PASSWORD,
     };
 
     const response = await request(app)
@@ -42,11 +39,23 @@ describe('E2E Auth Login', () => {
   test('should fail login with incorrect password', async () => {
     const signupCredentials = {
       email: generateRandomEmail('login-fail'),
-      password: 'CorrectPassword123!',
-      passwordConfirmation: 'CorrectPassword123!',
+      password: 'StrongPassword123!',
+      passwordConfirmation: 'StrongPassword123!',
     };
 
-    await request(app).post('/auth/signup').send(signupCredentials).expect(201);
+    const signupResponse = await request(app)
+      .post('/auth/signup')
+      .send(signupCredentials)
+      .expect(201);
+
+    const holderId = signupResponse.body._id;
+    const codeDoc: any = await fixture.findOne('Code', { holderId });
+
+    await request(app)
+      .post('/auth/verify')
+      .query({ holderId })
+      .send({ code: codeDoc.code })
+      .expect(204);
 
     const loginCredentials = {
       email: signupCredentials.email,
@@ -92,15 +101,27 @@ describe('E2E Auth Login', () => {
   test('should generate two different tokens for subsequent logins', async () => {
     const signupCredentials = {
       email: generateRandomEmail('login-multiple'),
-      password: 'UniquePass123!',
-      passwordConfirmation: 'UniquePass123!',
+      password: 'StrongPassword123!',
+      passwordConfirmation: 'StrongPassword123!',
     };
 
-    await request(app).post('/auth/signup').send(signupCredentials).expect(201);
+    const signupResponse = await request(app)
+      .post('/auth/signup')
+      .send(signupCredentials)
+      .expect(201);
+
+    const holderId = signupResponse.body._id;
+    const codeDoc: any = await fixture.findOne('Code', { holderId });
+
+    await request(app)
+      .post('/auth/verify')
+      .query({ holderId })
+      .send({ code: codeDoc.code })
+      .expect(204);
 
     const loginCredentials = {
       email: signupCredentials.email,
-      password: 'UniquePass123!',
+      password: 'StrongPassword123!',
     };
 
     const firstResponse = await request(app)
