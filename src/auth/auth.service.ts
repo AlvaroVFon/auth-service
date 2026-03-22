@@ -3,11 +3,7 @@ import { JwtService } from '../libs/jwt/jwt.service';
 import { UsersService } from '../users/users.service';
 import { InvalidCredentialsError } from '../common/exceptions/auth.exceptions';
 import { Credentials, SignupCredentials } from './auth.interface';
-import {
-  EMAIL_REGEX,
-  OBJECTID_REGEX,
-  PASSWORD_REGEX,
-} from '../common/constants/regex';
+import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -15,7 +11,6 @@ import {
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { CodesService } from './codes/codes.service';
 import { CodeType } from './codes/code.interface';
-import { RefreshTokenService } from './tokens/refresh-token.service';
 import { HoldersService } from '../holders/holders.service';
 import { Holder } from '../holders/holders.interface';
 
@@ -26,13 +21,10 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
-    private readonly refreshTokenService: RefreshTokenService,
     private readonly holdersService: HoldersService,
   ) {}
 
-  async login(
-    credentials: Credentials,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  async login(credentials: Credentials): Promise<{ accessToken: string }> {
     if (!credentials.email || !credentials.password) {
       throw new InvalidArgumentError('Email and password are required');
     }
@@ -55,17 +47,12 @@ export class AuthService {
       throw new InvalidCredentialsError('Invalid email or password');
     }
 
-    const { accessToken, refreshToken } = this.jwtService.generateTokens(
+    const { accessToken } = this.jwtService.generateTokens(
       user._id.toString(),
       user.role,
     );
 
-    await this.refreshTokenService.create({
-      userId: user._id,
-      token: refreshToken,
-    });
-
-    return { accessToken, refreshToken };
+    return { accessToken };
   }
 
   async signup(credentials: SignupCredentials): Promise<Holder> {
@@ -161,25 +148,5 @@ export class AuthService {
 
     await this.usersService.createFromHolder(holder);
     await this.holdersService.deleteById(holderId);
-  }
-
-  async logout(userId: string): Promise<void> {
-    if (!userId) {
-      throw new InvalidArgumentError('userId is required');
-    }
-    if (OBJECTID_REGEX.test(userId) === false) {
-      throw new InvalidArgumentError('userId is not a valid ObjectId');
-    }
-
-    const existingToken =
-      await this.refreshTokenService.findActiveByUserId(userId);
-
-    if (!existingToken) {
-      throw new EntityNotFoundError(
-        'No active refresh token found for the given userId',
-      );
-    }
-
-    await this.refreshTokenService.revokeToken(existingToken._id.toString());
   }
 }

@@ -11,9 +11,6 @@ import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
 import { CodesService } from '../../../../src/auth/codes/codes.service';
 import { CodesModel } from '../../../../src/auth/codes/codes.schema';
 import { Code, CodeType } from '../../../../src/auth/codes/code.interface';
-import { RefreshTokenService } from '../../../../src/auth/tokens/refresh-token.service';
-import { RefreshTokenModel } from '../../../../src/auth/tokens/refresh-token.schema';
-import { RefreshToken } from '../../../../src/auth/tokens/refresh-token.interface';
 import { JWT_REGEX } from '../../../../src/common/constants/regex';
 import { HoldersService } from '../../../../src/holders/holders.service';
 import { HoldersModel } from '../../../../src/holders/holders.schema';
@@ -25,7 +22,6 @@ describe('Auth Service', () => {
   let userService: UsersService;
   let holdersService: HoldersService;
   let codeService: CodesService;
-  let refreshTokenService: RefreshTokenService;
 
   const mockCryptoService = {
     compareString: mock.fn(() => true),
@@ -37,10 +33,6 @@ describe('Auth Service', () => {
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
-  const refreshTokenExpiresIn = parseInt(
-    process.env.REFRESH_TOKEN_EXPIRES_IN || '86400',
-    10,
-  );
 
   beforeEach(async () => {
     await fixture.create('User');
@@ -50,18 +42,10 @@ describe('Auth Service', () => {
       mockCryptoService as unknown as CryptoService,
     );
 
-    const jwtService = new JwtService(
-      jwtSecret!,
-      jwtExpiresIn,
-      refreshTokenExpiresIn,
-    );
+    const jwtService = new JwtService(jwtSecret!, jwtExpiresIn);
     codeService = new CodesService(CodesModel);
     holdersService = new HoldersService(
       HoldersModel,
-      mockCryptoService as unknown as CryptoService,
-    );
-    refreshTokenService = new RefreshTokenService(
-      RefreshTokenModel,
       mockCryptoService as unknown as CryptoService,
     );
 
@@ -71,7 +55,6 @@ describe('Auth Service', () => {
       jwtService as JwtService,
       mockMailerService as MailerInterface,
       codeService,
-      refreshTokenService,
       holdersService,
     );
   });
@@ -89,9 +72,7 @@ describe('Auth Service', () => {
 
       assert.ok(result);
       assert.strictEqual(typeof result.accessToken, 'string');
-      assert.strictEqual(typeof result.refreshToken, 'string');
       assert.ok(JWT_REGEX.test(result.accessToken));
-      assert.ok(JWT_REGEX.test(result.refreshToken));
     });
 
     test('should throw an error for non existing email', async () => {
@@ -488,58 +469,6 @@ describe('Auth Service', () => {
           code: 'NOT_FOUND',
         },
       );
-    });
-  });
-
-  describe('logout()', () => {
-    test('should throw an error if userId is not provided', async () => {
-      await assert.rejects(async () => await authService.logout(''), {
-        name: 'InvalidArgumentError',
-        message: 'userId is required',
-        code: 'INVALID_ARGUMENT',
-      });
-    });
-
-    test('should throw an error if userId is not a valid ObjectId', async () => {
-      await assert.rejects(async () => await authService.logout('invalid-id'), {
-        name: 'InvalidArgumentError',
-        message: 'userId is not a valid ObjectId',
-        code: 'INVALID_ARGUMENT',
-      });
-    });
-
-    test('should throw an error if no active refresh token is found for the user', async () => {
-      const user = await fixture.create<UserInterface>('User');
-
-      await assert.rejects(
-        async () => await authService.logout(user._id.toString()),
-        {
-          name: 'EntityNotFoundError',
-          message: 'No active refresh token found for the given userId',
-          code: 'NOT_FOUND',
-        },
-      );
-    });
-
-    test('should revoke refresh token', async () => {
-      const user = await fixture.create<UserInterface>('User');
-      const plainToken = 'plain-refresh-token';
-      const refreshToken = await refreshTokenService.create({
-        userId: user._id,
-        token: plainToken,
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60), // 1 hour from now
-      });
-
-      await authService.logout(user._id.toString());
-
-      const revokedToken = await fixture.findById<RefreshToken>(
-        'RefreshToken',
-        refreshToken._id.toString(),
-      );
-
-      assert.ok(revokedToken);
-      assert.ok(revokedToken!.revokedAt);
-      assert.strictEqual(revokedToken!.replacedByToken, null);
     });
   });
 });

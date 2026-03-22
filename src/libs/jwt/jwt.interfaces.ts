@@ -7,4 +7,4 @@ export interface Payload {
   jti?: string;
 }
 
-type TokenType = 'access' | 'refresh';
+type TokenType = 'access';

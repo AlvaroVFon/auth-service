@@ -8,13 +8,9 @@ describe('JwtService', () => {
   let jwtService: JwtService;
   const jwtSecret = process.env.JWT_SECRET!;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
-  const jwtRefreshExpiresIn = parseInt(
-    process.env.JWT_REFRESH_EXPIRES_IN || '86400',
-    10,
-  );
 
   beforeEach(() => {
-    jwtService = new JwtService(jwtSecret, jwtExpiresIn, jwtRefreshExpiresIn);
+    jwtService = new JwtService(jwtSecret, jwtExpiresIn);
   });
 
   describe('generateToken', () => {
@@ -114,24 +110,6 @@ describe('JwtService', () => {
 
       assert.strictEqual(decoded.userId, userId);
       assert.strictEqual(decoded.type, TokenTypes.ACCESS);
-      assert.strictEqual(decoded.role, Roles.USER);
-    });
-  });
-
-  describe('generateRefreshToken', () => {
-    test('should generate a valid refresh token', () => {
-      const userId = '0'.repeat(24);
-      const token = jwtService.generateRefreshToken(userId, Roles.USER);
-      assert.ok(token);
-      assert.strictEqual(typeof token, 'string');
-
-      const decoded = jwtService.verifyToken(token) as Payload & {
-        iat: number;
-        exp: number;
-      };
-
-      assert.strictEqual(decoded.userId, userId);
-      assert.strictEqual(decoded.type, TokenTypes.REFRESH);
       assert.strictEqual(decoded.role, Roles.USER);
     });
   });

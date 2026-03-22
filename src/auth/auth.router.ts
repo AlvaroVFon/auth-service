@@ -32,11 +32,5 @@ export class AuthRouter {
       this.authenticationMiddleware.authenticate,
       this.authController.resetPassword.bind(this.authController),
     );
-
-    this.app.post(
-      '/auth/logout',
-      this.authenticationMiddleware.authenticate,
-      this.authController.logout.bind(this.authController),
-    );
   }
 }

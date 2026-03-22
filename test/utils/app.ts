@@ -13,8 +13,6 @@ import { AuthorizationMiddleware } from '../../src/common/middlewares/authorizat
 import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
 import { CodesService } from '../../src/auth/codes/codes.service';
 import { CodesModel } from '../../src/auth/codes/codes.schema';
-import { RefreshTokenService } from '../../src/auth/tokens/refresh-token.service';
-import { RefreshTokenModel } from '../../src/auth/tokens/refresh-token.schema';
 import { HoldersModel } from '../../src/holders/holders.schema';
 import { HoldersService } from '../../src/holders/holders.service';
 
@@ -25,28 +23,16 @@ const JWT_EXPIRES_IN = parseInt(
   getStringEnvVariable('JWT_EXPIRES_IN', '3600'),
   10,
 );
-const JWT_REFRESH_EXPIRES_IN = parseInt(
-  getStringEnvVariable('JWT_REFRESH_EXPIRES_IN', '86400'),
-  10,
-);
 
 const winstonLogger = new WinstonLogger();
 const cryptoService = new CryptoService();
-const jwtService = new JwtService(
-  JWT_SECRET,
-  JWT_EXPIRES_IN,
-  JWT_REFRESH_EXPIRES_IN,
-);
+const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 const authorizationMiddleware = new AuthorizationMiddleware();
 const mailService = {
   sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
 const codeService = new CodesService(CodesModel);
-const refreshTokenService = new RefreshTokenService(
-  RefreshTokenModel,
-  cryptoService,
-);
 const holdersService = new HoldersService(HoldersModel, cryptoService);
 
 const usersModule = new UsersModule(
@@ -64,7 +50,6 @@ const authModule = new AuthModule(
   mailService,
   codeService,
   authenticationMiddleware,
-  refreshTokenService,
   holdersService,
 );
 
