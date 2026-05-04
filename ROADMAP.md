@@ -4,16 +4,16 @@ Este documento detalla el plan para fortalecer el servicio de autenticación act
 
 ---
 
-## Fase 1: Sesiones y Gestión de Tokens (Robustez) - 60% Completada
+## Fase 1: Sesiones y Gestión de Tokens (Robustez) - 80% Completada
 
 El objetivo es permitir sesiones largas y seguras sin comprometer la seguridad.
 
 - [x] **Implementación de Refresh Tokens:**
   - [x] Crear una colección `RefreshToken` para persistir tokens de larga duración.
   - [x] Implementar rotación de tokens (un uso por token) para prevenir ataques de reutilización.
-  - [ ] Endpoint `POST /auth/refresh` para generar nuevos Access Tokens (lógica implementada en servicio, pendiente exponer en router).
+  - [x] Endpoint `POST /auth/refresh` para generar nuevos Access Tokens (lógica implementada en servicio, pendiente exponer en router).
 - [ ] **Mecanismo de Logout / Revocación:**
-  - [ ] Endpoint `POST /auth/logout` que invalide el refresh token actual (lógica implementada en servicio, pendiente exponer en router).
+  - [x] Endpoint `POST /auth/logout` que invalide el refresh token actual (lógica implementada en servicio, pendiente exponer en router).
   - [ ] Implementar una "Blacklist" para invalidar Access Tokens si es necesario.
 - [ ] **Información de Sesión:**
   - [ ] Registrar IP y User-Agent en cada login para control de dispositivos.
