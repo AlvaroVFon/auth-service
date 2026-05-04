@@ -5,6 +5,7 @@ import { getStringEnvVariable } from '../../../src/config/env.config';
 import { User } from '../../../src/users/users.interface';
 import { Roles } from '../../../src/common/enums/roles.enum';
 import { Payload } from '../../../src/libs/jwt/jwt.interfaces';
+import { TokenTypes } from '../../../src/libs/jwt/token-types.enum';
 
 export const DEFAULT_USER_ID = new Types.ObjectId('000000000000000000000001');
 export const DEFAULT_ADMIN_ID = new Types.ObjectId('000000000000000000000002');
@@ -14,7 +15,7 @@ export const DEFAULT_USER_PLAIN_PASSWORD = 'StrongPassword123!';
 const defaultUserPayload: Payload = {
   userId: DEFAULT_USER_ID.toString(),
   role: Roles.USER,
-  type: 'access',
+  type: TokenTypes.ACCESS,
 };
 
 export const DEFAULT_USER_TOKEN = jwt.sign(
@@ -34,7 +35,7 @@ export const DEFAULT_USER: User = {
 const defaultAdminPayload: Payload = {
   userId: DEFAULT_ADMIN_ID.toString(),
   role: Roles.ADMIN,
-  type: 'access',
+  type: TokenTypes.ACCESS,
 };
 
 export const DEFAULT_ADMIN_TOKEN = jwt.sign(

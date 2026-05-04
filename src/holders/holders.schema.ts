@@ -17,9 +17,10 @@ const HoldersSchema = new Schema<Holder>(
   {
     toJSON: {
       transform: (_doc, ret) => {
-        delete ret.password;
-        delete ret.__v;
-        return ret;
+        const { password, __v, ...rest } = ret;
+        void password;
+        void __v;
+        return rest;
       },
     },
   },

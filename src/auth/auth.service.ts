@@ -1,9 +1,17 @@
+import { JwtPayload } from 'jsonwebtoken';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { UsersService } from '../users/users.service';
-import { InvalidCredentialsError } from '../common/exceptions/auth.exceptions';
+import {
+  InvalidCredentialsError,
+  UnauthorizedError,
+} from '../common/exceptions/auth.exceptions';
 import { Credentials, SignupCredentials } from './auth.interface';
-import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
+import {
+  EMAIL_REGEX,
+  OBJECTID_REGEX,
+  PASSWORD_REGEX,
+} from '../common/constants/regex';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -11,6 +19,7 @@ import {
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { CodesService } from './codes/codes.service';
 import { CodeType } from './codes/code.interface';
+import { RefreshTokenService } from './tokens/refresh-token.service';
 import { HoldersService } from '../holders/holders.service';
 import { Holder } from '../holders/holders.interface';
 
@@ -21,10 +30,13 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
+    private readonly refreshTokenService: RefreshTokenService,
     private readonly holdersService: HoldersService,
   ) {}
 
-  async login(credentials: Credentials): Promise<{ accessToken: string }> {
+  async login(
+    credentials: Credentials,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     if (!credentials.email || !credentials.password) {
       throw new InvalidArgumentError('Email and password are required');
     }
@@ -47,12 +59,22 @@ export class AuthService {
       throw new InvalidCredentialsError('Invalid email or password');
     }
 
-    const { accessToken } = this.jwtService.generateTokens(
+    const { accessToken, refreshToken } = this.jwtService.generateTokens(
       user._id.toString(),
       user.role,
     );
 
-    return { accessToken };
+    const decoded = this.jwtService.verifyToken(refreshToken) as JwtPayload;
+
+    await this.refreshTokenService.revokeAllByUserId(user._id.toString());
+
+    await this.refreshTokenService.create(
+      user._id.toString(),
+      decoded.jti as string,
+      new Date(decoded.exp! * 1000),
+    );
+
+    return { accessToken, refreshToken };
   }
 
   async signup(credentials: SignupCredentials): Promise<Holder> {
@@ -148,5 +170,63 @@ export class AuthService {
 
     await this.usersService.createFromHolder(holder);
     await this.holdersService.deleteById(holderId);
+  }
+
+  async refreshToken(
+    userId: string,
+    refreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    if (OBJECTID_REGEX.test(userId) === false) {
+      throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+    if (!refreshToken) {
+      throw new InvalidArgumentError('refreshToken is required');
+    }
+
+    const decoded = this.jwtService.verifyToken(refreshToken) as JwtPayload;
+    const jti = decoded.jti as string;
+
+    const storedToken = await this.refreshTokenService.findByJti(jti);
+
+    if (!storedToken) {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    if (storedToken.revokedAt !== null) {
+      throw new UnauthorizedError('Refresh token has been revoked');
+    }
+
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } =
+      this.jwtService.generateTokens(userId, user.role);
+
+    const newDecoded = this.jwtService.verifyToken(
+      newRefreshToken,
+    ) as JwtPayload;
+
+    await this.refreshTokenService.revokeByJti(jti, newDecoded.jti as string);
+
+    await this.refreshTokenService.create(
+      userId,
+      newDecoded.jti as string,
+      new Date(newDecoded.exp! * 1000),
+    );
+
+    return { accessToken, refreshToken: newRefreshToken };
+  }
+
+  async logout(userId: string): Promise<void> {
+    if (!userId) {
+      throw new InvalidArgumentError('userId is required');
+    }
+    if (OBJECTID_REGEX.test(userId) === false) {
+      throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+
+    await this.refreshTokenService.revokeAllByUserId(userId);
   }
 }

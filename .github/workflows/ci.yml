@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+
+    env:
+      MONGO_URI: mongodb://localhost:27017/auth_db_test
+      JWT_SECRET: Y3iT6r0WLkRDklcdOaCdiNQJoAn604nJSWaPi2ICQNY=
+      JWT_EXPIRATION: 3600
+      JWT_REFRESH_EXPIRES_IN: 86400
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      SMTP_USER: test
+      SMTP_PASS: test
+      MAIL_FROM: no-reply@auth-service.com
+      TEMPLATES_PATH: ./src/mail/templates
+      CODE_LENGTH: 6
+      CODE_EXPIRATION: 300000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm test
+
+      - run: pnpm build

@@ -18,6 +18,8 @@ import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
 import { CodesService } from '../auth/codes/codes.service';
 import { CodesModel } from '../auth/codes/codes.schema';
+import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
+import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 
@@ -29,17 +31,26 @@ const JWT_EXPIRES_IN = parseInt(
   getStringEnvVariable('JWT_EXPIRES_IN', '3600'),
   10,
 );
+const JWT_REFRESH_EXPIRES_IN = parseInt(
+  getStringEnvVariable('JWT_REFRESH_EXPIRATION', '86400'),
+  10,
+);
 
 // Shared instances
 const winstonLogger = new WinstonLogger();
 const database = new Database(DB_CONNECTION_STRING, winstonLogger);
 const cryptoService = new CryptoService();
-const jwtService = new JwtService(JWT_SECRET, JWT_EXPIRES_IN);
+const jwtService = new JwtService(
+  JWT_SECRET,
+  JWT_EXPIRES_IN,
+  JWT_REFRESH_EXPIRES_IN,
+);
 const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
 const authorizationMiddleware = new AuthorizationMiddleware();
 const templateRenderer = new HandlebarsEngine();
 const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
 const codeService = new CodesService(CodesModel);
+const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
 const holdersService = new HoldersService(HoldersModel, cryptoService);
 
 // Modules
@@ -58,6 +69,7 @@ const authModule = new AuthModule(
   mailService,
   codeService,
   authenticationMiddleware,
+  refreshTokenService,
   holdersService,
 );
 

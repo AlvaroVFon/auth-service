@@ -1,10 +1,9 @@
 import { Roles } from '../../common/enums/roles.enum';
+import { TokenTypes } from './token-types.enum';
 
 export interface Payload {
   userId: string;
   role: Roles;
-  type: TokenType;
+  type: TokenTypes;
   jti?: string;
 }
-
-type TokenType = 'access';

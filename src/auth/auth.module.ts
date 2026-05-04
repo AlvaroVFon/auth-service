@@ -10,6 +10,7 @@ import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { CodesService } from './codes/codes.service';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { assertDependencies } from '../common/depencencies-validator';
+import { RefreshTokenService } from './tokens/refresh-token.service';
 import { HoldersService } from '../holders/holders.service';
 
 export class AuthModule {
@@ -24,6 +25,7 @@ export class AuthModule {
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
+    private readonly refreshTokenService: RefreshTokenService,
     private readonly holdersService: HoldersService,
   ) {
     assertDependencies(
@@ -35,6 +37,7 @@ export class AuthModule {
         mailService,
         codeService,
         authenticationMiddleware,
+        refreshTokenService,
         holdersService,
       },
       this.constructor.name,
@@ -46,6 +49,7 @@ export class AuthModule {
       this.jwtService,
       this.mailService,
       this.codeService,
+      this.refreshTokenService,
       this.holdersService,
     );
     this.controller = new AuthController(this.service);
