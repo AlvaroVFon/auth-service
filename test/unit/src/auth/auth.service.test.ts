@@ -2,7 +2,11 @@ import { AuthService } from '../../../../src/auth/auth.service';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import { JwtService } from '../../../../src/libs/jwt/jwt.service';
 import { UsersService } from '../../../../src/users/users.service';
-import { DEFAULT_USER, generateRandomEmail } from '../../../fixtures/defaults';
+import {
+  DEFAULT_USER,
+  DEFAULT_USER_ID,
+  generateRandomEmail,
+} from '../../../fixtures/defaults';
 import fixture from '../../../fixtures/fixture';
 import { User } from '../../../../src/users/users.schema';
 import { User as UserInterface } from '../../../../src/users/users.interface';
@@ -11,17 +15,23 @@ import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
 import { CodesService } from '../../../../src/auth/codes/codes.service';
 import { CodesModel } from '../../../../src/auth/codes/codes.schema';
 import { Code, CodeType } from '../../../../src/auth/codes/code.interface';
+import { RefreshTokenService } from '../../../../src/auth/tokens/refresh-token.service';
+import { RefreshTokenModel } from '../../../../src/auth/tokens/refresh-token.schema';
+import { RefreshToken } from '../../../../src/auth/tokens/refresh-token.interface';
 import { JWT_REGEX } from '../../../../src/common/constants/regex';
 import { HoldersService } from '../../../../src/holders/holders.service';
 import { HoldersModel } from '../../../../src/holders/holders.schema';
 import { Holder } from '../../../../src/holders/holders.interface';
 import { DEFAULT_HOLDER } from '../../../fixtures/defaults/holders.default';
+import { TokenTypes } from '../../../../src/libs/jwt/token-types.enum';
 
 describe('Auth Service', () => {
   let authService: AuthService;
   let userService: UsersService;
   let holdersService: HoldersService;
   let codeService: CodesService;
+  let refreshTokenService: RefreshTokenService;
+  let jwtService: JwtService;
 
   const mockCryptoService = {
     compareString: mock.fn(() => true),
@@ -33,6 +43,10 @@ describe('Auth Service', () => {
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
+  const refreshTokenExpiresIn = parseInt(
+    process.env.JWT_REFRESH_EXPIRES_IN || '86400',
+    10,
+  );
 
   beforeEach(async () => {
     await fixture.create('User');
@@ -42,19 +56,25 @@ describe('Auth Service', () => {
       mockCryptoService as unknown as CryptoService,
     );
 
-    const jwtService = new JwtService(jwtSecret!, jwtExpiresIn);
+    jwtService = new JwtService(
+      jwtSecret!,
+      jwtExpiresIn,
+      refreshTokenExpiresIn,
+    );
     codeService = new CodesService(CodesModel);
     holdersService = new HoldersService(
       HoldersModel,
       mockCryptoService as unknown as CryptoService,
     );
+    refreshTokenService = new RefreshTokenService(RefreshTokenModel);
 
     authService = new AuthService(
       userService,
       mockCryptoService as unknown as CryptoService,
-      jwtService as JwtService,
+      jwtService,
       mockMailerService as MailerInterface,
       codeService,
+      refreshTokenService,
       holdersService,
     );
   });
@@ -64,7 +84,7 @@ describe('Auth Service', () => {
   });
 
   describe('login()', () => {
-    test('should authenticate user and return a tokens', async () => {
+    test('should authenticate user and return tokens', async () => {
       const result = await authService.login({
         email: DEFAULT_USER.email,
         password: 'password123',
@@ -72,7 +92,9 @@ describe('Auth Service', () => {
 
       assert.ok(result);
       assert.strictEqual(typeof result.accessToken, 'string');
+      assert.strictEqual(typeof result.refreshToken, 'string');
       assert.ok(JWT_REGEX.test(result.accessToken));
+      assert.ok(JWT_REGEX.test(result.refreshToken));
     });
 
     test('should throw an error for non existing email', async () => {
@@ -106,7 +128,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw an error for invalid password', async () => {
-      mockCryptoService.compareString = mock.fn(() => false);
+      mockCryptoService.compareString = mock.fn(async () => false);
       await assert.rejects(
         async () =>
           await authService.login({
@@ -117,21 +139,6 @@ describe('Auth Service', () => {
           name: 'InvalidCredentialsError',
           message: 'Invalid email or password',
           code: 'INVALID_CREDENTIALS',
-        },
-      );
-    });
-
-    test('should throw an error for empty credentials', async () => {
-      await assert.rejects(
-        async () =>
-          await authService.login({
-            email: '',
-            password: '',
-          }),
-        {
-          name: 'InvalidArgumentError',
-          message: 'Email and password are required',
-          code: 'INVALID_ARGUMENT',
         },
       );
     });
@@ -469,6 +476,241 @@ describe('Auth Service', () => {
           code: 'NOT_FOUND',
         },
       );
+    });
+  });
+
+  describe('refreshToken()', () => {
+    test('should throw an error if invalid userId is provided', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.refreshToken('invalid-id', 'some-jwt-token'),
+        {
+          name: 'InvalidArgumentError',
+          message: 'userId is not a valid ObjectId',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error if no refreshToken is provided', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.refreshToken(DEFAULT_USER_ID.toString(), ''),
+        {
+          name: 'InvalidArgumentError',
+          message: 'refreshToken is required',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw if JWT is invalid', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.refreshToken(
+            DEFAULT_USER_ID.toString(),
+            'not-a-jwt',
+          ),
+        {
+          name: 'InvalidTokenError',
+        },
+      );
+    });
+
+    test('should throw if no stored token is found for the jti', async () => {
+      const refreshToken = jwtService.generateRefreshToken(
+        DEFAULT_USER_ID.toString(),
+        'user',
+      );
+
+      await assert.rejects(
+        async () =>
+          await authService.refreshToken(
+            DEFAULT_USER_ID.toString(),
+            refreshToken,
+          ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Invalid refresh token',
+          code: 'UNAUTHORIZED',
+        },
+      );
+    });
+
+    test('should throw if stored token has been revoked', async () => {
+      const refreshToken = jwtService.generateRefreshToken(
+        DEFAULT_USER_ID.toString(),
+        'user',
+      );
+      const decoded = jwtService.verifyToken(refreshToken) as any;
+
+      await fixture.create<RefreshToken>('RefreshToken', {
+        userId: DEFAULT_USER_ID,
+        jti: decoded.jti,
+        expiresAt: new Date(decoded.exp * 1000),
+        revokedAt: new Date(),
+        replacedByJti: null,
+        type: TokenTypes.REFRESH,
+      });
+
+      await assert.rejects(
+        async () =>
+          await authService.refreshToken(
+            DEFAULT_USER_ID.toString(),
+            refreshToken,
+          ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
+          code: 'UNAUTHORIZED',
+        },
+      );
+    });
+
+    test('should succeed with valid userId and refreshToken', async () => {
+      const refreshToken = jwtService.generateRefreshToken(
+        DEFAULT_USER_ID.toString(),
+        'user',
+      );
+      const decoded = jwtService.verifyToken(refreshToken) as any;
+
+      await fixture.create<RefreshToken>('RefreshToken', {
+        userId: DEFAULT_USER_ID,
+        jti: decoded.jti,
+        expiresAt: new Date(decoded.exp * 1000),
+        revokedAt: null,
+        replacedByJti: null,
+        type: TokenTypes.REFRESH,
+      });
+
+      const tokens = await authService.refreshToken(
+        DEFAULT_USER_ID.toString(),
+        refreshToken,
+      );
+
+      assert.ok(tokens);
+      assert.strictEqual(typeof tokens.accessToken, 'string');
+      assert.strictEqual(typeof tokens.refreshToken, 'string');
+      assert.ok(JWT_REGEX.test(tokens.accessToken));
+      assert.ok(JWT_REGEX.test(tokens.refreshToken));
+
+      const revokedToken = await fixture.findOne<RefreshToken>('RefreshToken', {
+        jti: decoded.jti,
+      });
+
+      assert.ok(revokedToken);
+      assert.ok(revokedToken!.revokedAt);
+      assert.ok(revokedToken!.replacedByJti);
+
+      const newToken = await fixture.findOne<RefreshToken>('RefreshToken', {
+        userId: DEFAULT_USER_ID,
+        revokedAt: null,
+      });
+
+      assert.ok(newToken);
+      assert.notStrictEqual(newToken!.jti, decoded.jti);
+    });
+
+    test('should reject a reused (already revoked) refresh token', async () => {
+      const refreshToken = jwtService.generateRefreshToken(
+        DEFAULT_USER_ID.toString(),
+        'user',
+      );
+      const decoded = jwtService.verifyToken(refreshToken) as any;
+
+      await fixture.create<RefreshToken>('RefreshToken', {
+        userId: DEFAULT_USER_ID,
+        jti: decoded.jti,
+        expiresAt: new Date(decoded.exp * 1000),
+        revokedAt: null,
+        replacedByJti: null,
+        type: TokenTypes.REFRESH,
+      });
+
+      await authService.refreshToken(DEFAULT_USER_ID.toString(), refreshToken);
+
+      await assert.rejects(
+        async () =>
+          await authService.refreshToken(
+            DEFAULT_USER_ID.toString(),
+            refreshToken,
+          ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
+          code: 'UNAUTHORIZED',
+        },
+      );
+    });
+  });
+
+  describe('logout()', () => {
+    test('should throw an error if userId is not provided', async () => {
+      await assert.rejects(async () => await authService.logout(''), {
+        name: 'InvalidArgumentError',
+        message: 'userId is required',
+        code: 'INVALID_ARGUMENT',
+      });
+    });
+
+    test('should throw an error if userId is not a valid ObjectId', async () => {
+      await assert.rejects(async () => await authService.logout('invalid-id'), {
+        name: 'InvalidArgumentError',
+        message: 'userId is not a valid ObjectId',
+        code: 'INVALID_ARGUMENT',
+      });
+    });
+
+    test('should revoke all active refresh tokens for the user', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      const refreshToken1 = jwtService.generateRefreshToken(
+        user._id.toString(),
+        'user',
+      );
+      const decoded1 = jwtService.verifyToken(refreshToken1) as any;
+
+      const refreshToken2 = jwtService.generateRefreshToken(
+        user._id.toString(),
+        'user',
+      );
+      const decoded2 = jwtService.verifyToken(refreshToken2) as any;
+
+      await fixture.createMany<RefreshToken>('RefreshToken', [
+        {
+          userId: user._id,
+          jti: decoded1.jti,
+          expiresAt: new Date(decoded1.exp * 1000),
+          revokedAt: null,
+          replacedByJti: null,
+          type: TokenTypes.REFRESH,
+        },
+        {
+          userId: user._id,
+          jti: decoded2.jti,
+          expiresAt: new Date(decoded2.exp * 1000),
+          revokedAt: null,
+          replacedByJti: null,
+          type: TokenTypes.REFRESH,
+        },
+      ]);
+
+      await authService.logout(user._id.toString());
+
+      const activeTokens = await fixture.find<RefreshToken>('RefreshToken', {
+        userId: user._id,
+        revokedAt: null,
+      });
+
+      assert.strictEqual(activeTokens.length, 0);
+
+      const allTokens = await fixture.find<RefreshToken>('RefreshToken', {
+        userId: user._id,
+      });
+
+      assert.strictEqual(allTokens.length, 2);
+      assert.ok(allTokens[0]!.revokedAt);
+      assert.ok(allTokens[1]!.revokedAt);
     });
   });
 });

@@ -27,6 +27,6 @@
 - **Testing (Avanzado)**:
   - [x] Configurar y desarrollar tests **e2e** (API completa).
 - **Core Business**:
-  - [ ] Implementar registro de usuarios.
-  - [ ] Implementar login y generación de JWT.
-  - [ ] Hash de contraseñas (bcrypt).
+  - [x] Implementar registro de usuarios.
+  - [x] Implementar login y generación de JWT.
+  - [x] Hash de contraseñas (bcrypt).

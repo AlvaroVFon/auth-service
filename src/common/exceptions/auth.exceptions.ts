@@ -1,5 +1,13 @@
 import { BaseError } from './base.exception';
 
+export class UnauthorizedError extends BaseError {
+  constructor(message: string) {
+    super(message);
+    this.code = 'UNAUTHORIZED';
+    this.statusCode = 401;
+  }
+}
+
 export class InvalidCredentialsError extends BaseError {
   constructor(message: string) {
     super(message);

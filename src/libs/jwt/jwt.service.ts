@@ -12,11 +12,13 @@ export class JwtService {
   constructor(
     private readonly secret: string,
     private readonly expiresIn: number,
+    private readonly refreshTokenExpiresIn: number,
   ) {
     assertDependencies(
       {
         secret: this.secret,
         expiresIn: this.expiresIn,
+        refreshTokenExpiresIn: this.refreshTokenExpiresIn,
       },
       this.constructor.name,
     );
@@ -28,7 +30,10 @@ export class JwtService {
         'InvalidArgumentError: Payload userId is not a valid ObjectId',
       );
     }
-    if (payload.type !== TokenTypes.ACCESS) {
+    if (
+      payload.type !== TokenTypes.ACCESS &&
+      payload.type !== TokenTypes.REFRESH
+    ) {
       throw new InvalidArgumentError(
         'InvalidArgumentError: Payload type is not valid',
       );
@@ -55,8 +60,17 @@ export class JwtService {
     return this.generateToken(payload, this.expiresIn);
   }
 
-  generateTokens(userId: string, role: Roles): { accessToken: string } {
+  generateRefreshToken(userId: string, role: Roles): string {
+    const payload: Payload = { userId, role, type: TokenTypes.REFRESH };
+    return this.generateToken(payload, this.refreshTokenExpiresIn);
+  }
+
+  generateTokens(
+    userId: string,
+    role: Roles,
+  ): { accessToken: string; refreshToken: string } {
     const accessToken = this.generateAccessToken(userId, role);
-    return { accessToken };
+    const refreshToken = this.generateRefreshToken(userId, role);
+    return { accessToken, refreshToken };
   }
 }
