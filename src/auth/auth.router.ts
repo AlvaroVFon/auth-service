@@ -23,6 +23,12 @@ export class AuthRouter {
     );
 
     this.app.post(
+      '/auth/refresh',
+      this.authenticationMiddleware.authenticate,
+      this.authController.refreshToken.bind(this.authController),
+    );
+
+    this.app.post(
       '/auth/verify',
       this.authController.verifyEmail.bind(this.authController),
     );

@@ -22,6 +22,15 @@ export class AuthController {
   }
 
   @Catch()
+  async refreshToken(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.id as string;
+    const refreshToken = req.body.refreshToken;
+    const tokens = await this.authService.refreshToken(userId, refreshToken);
+
+    res.status(200).json(tokens);
+  }
+
+  @Catch()
   async verifyEmail(req: Request, res: Response): Promise<void> {
     const holderId = req.query.holderId as string;
     const { code } = req.body;
