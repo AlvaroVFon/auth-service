@@ -24,6 +24,7 @@ import { HoldersModel } from '../../../../src/holders/holders.schema';
 import { Holder } from '../../../../src/holders/holders.interface';
 import { DEFAULT_HOLDER } from '../../../fixtures/defaults/holders.default';
 import { TokenTypes } from '../../../../src/libs/jwt/token-types.enum';
+import { Roles } from '../../../../src/common/enums/roles.enum';
 
 describe('Auth Service', () => {
   let authService: AuthService;
@@ -268,8 +269,8 @@ describe('Auth Service', () => {
           email,
           {
             userName: email,
-            code: code!.toObject().code,
-            link: `https://ourservice.com/verify?holderId=${holder._id.toString()}&code=${code!.toObject().code}`,
+            code: code!.code,
+            link: `https://ourservice.com/verify?holderId=${holder._id.toString()}&code=${code!.code}`,
           },
         ],
       );
@@ -520,7 +521,7 @@ describe('Auth Service', () => {
     test('should throw if no stored token is found for the jti', async () => {
       const refreshToken = jwtService.generateRefreshToken(
         DEFAULT_USER_ID.toString(),
-        'user',
+        Roles.USER,
       );
 
       await assert.rejects(
@@ -540,7 +541,7 @@ describe('Auth Service', () => {
     test('should throw if stored token has been revoked', async () => {
       const refreshToken = jwtService.generateRefreshToken(
         DEFAULT_USER_ID.toString(),
-        'user',
+        Roles.USER,
       );
       const decoded = jwtService.verifyToken(refreshToken) as any;
 
@@ -570,7 +571,7 @@ describe('Auth Service', () => {
     test('should succeed with valid userId and refreshToken', async () => {
       const refreshToken = jwtService.generateRefreshToken(
         DEFAULT_USER_ID.toString(),
-        'user',
+        Roles.USER,
       );
       const decoded = jwtService.verifyToken(refreshToken) as any;
 
@@ -614,7 +615,7 @@ describe('Auth Service', () => {
     test('should reject a reused (already revoked) refresh token', async () => {
       const refreshToken = jwtService.generateRefreshToken(
         DEFAULT_USER_ID.toString(),
-        'user',
+        Roles.USER,
       );
       const decoded = jwtService.verifyToken(refreshToken) as any;
 
@@ -666,13 +667,13 @@ describe('Auth Service', () => {
 
       const refreshToken1 = jwtService.generateRefreshToken(
         user._id.toString(),
-        'user',
+        Roles.USER,
       );
       const decoded1 = jwtService.verifyToken(refreshToken1) as any;
 
       const refreshToken2 = jwtService.generateRefreshToken(
         user._id.toString(),
-        'user',
+        Roles.USER,
       );
       const decoded2 = jwtService.verifyToken(refreshToken2) as any;
 
