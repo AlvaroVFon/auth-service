@@ -3,4 +3,4 @@ import { WinstonLogger } from './libs/logger/adapters/winston.logger';
 
 const logger = new WinstonLogger();
 
-await bootstrap(logger);
+void bootstrap(logger);
