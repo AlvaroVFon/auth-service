@@ -25,7 +25,7 @@ importers:
         version: 9.0.3
       mongoose:
         specifier: ^9.1.5
-        version: 9.1.5
+        version: 9.1.6
       nodemailer:
         specifier: ^8.0.5
         version: 8.0.5
@@ -332,8 +332,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@mongodb-js/saslprep@1.4.5':
-    resolution: {integrity: sha512-k64Lbyb7ycCSXHSLzxVdb2xsKGPMvYZfCICXvDsI8Z65CeWQzTEKS4YmGbnqw+U9RBvLPTsB6UCmwkgsDTGWIw==}
+  '@mongodb-js/saslprep@1.4.11':
+    resolution: {integrity: sha512-o9rAHc0IpIjuPSxRutWpE1F62x7n+4mVS4rCNHkzhIUMQcc18bb6xEq5wd2NdN0WjepIyXIppRshYI2kQDOZVA==}
 
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
@@ -571,8 +571,8 @@ packages:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
 
-  bson@7.1.1:
-    resolution: {integrity: sha512-TtJgBB+QyOlWjrbM+8bRgH84VM/xrDjyBFgSgGrfZF4xvt6gbEDtcswm27Tn9F9TWsjQybxT8b8VpCP/oJK4Dw==}
+  bson@7.2.0:
+    resolution: {integrity: sha512-YCEo7KjMlbNlyHhz7zAZNDpIpQbd+wOEHJYezv0nMYTn4x31eIUM2yomNNubclAt63dObUzKHWsBLJ9QcZNSnQ==}
     engines: {node: '>=20.19.0'}
 
   buffer-equal-constant-time@1.0.1:
@@ -1404,8 +1404,8 @@ packages:
       socks:
         optional: true
 
-  mongoose@9.1.5:
-    resolution: {integrity: sha512-N6gypEO+wLmZp8kCYNQmrEWxVMT0KhyHvVttBZoKA/1ngY7aUsBjqHzCPtDgz+i8JAnqMOiEKmuJIDEQu1b9Dw==}
+  mongoose@9.1.6:
+    resolution: {integrity: sha512-ZrtgRsJKtW3od36TVXtAnrNHOO3rqhsqfVut6IzyWyJeLLeLTqW66qej/0qB37GZd5jL06nHfAceTikkfnSqbA==}
     engines: {node: '>=20.19.0'}
 
   mpath@0.9.0:
@@ -2086,7 +2086,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@mongodb-js/saslprep@1.4.5':
+  '@mongodb-js/saslprep@1.4.11':
     dependencies:
       sparse-bitfield: 3.0.3
 
@@ -2385,7 +2385,7 @@ snapshots:
     dependencies:
       fill-range: 7.1.1
 
-  bson@7.1.1: {}
+  bson@7.2.0: {}
 
   buffer-equal-constant-time@1.0.1: {}
 
@@ -3255,11 +3255,11 @@ snapshots:
 
   mongodb@7.0.0:
     dependencies:
-      '@mongodb-js/saslprep': 1.4.5
-      bson: 7.1.1
+      '@mongodb-js/saslprep': 1.4.11
+      bson: 7.2.0
       mongodb-connection-string-url: 7.0.1
 
-  mongoose@9.1.5:
+  mongoose@9.1.6:
     dependencies:
       kareem: 3.0.0
       mongodb: 7.0.0
