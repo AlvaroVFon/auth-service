@@ -16,5 +16,5 @@ export interface CreateCodeDTO {
 
 export enum CodeType {
   SIGNUP = 'signup',
-  PASSWORD_RESET = 'password_reset',
+  RESET_PASSWORD = 'reset_password',
 }

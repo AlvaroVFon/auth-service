@@ -14,4 +14,9 @@ export interface MailerInterface {
     to: string,
     context: Record<string, string>,
   ): Promise<void>;
+
+  sendResetPasswordEmail(
+    to: string,
+    context: Record<string, string>,
+  ): Promise<void>;
 }

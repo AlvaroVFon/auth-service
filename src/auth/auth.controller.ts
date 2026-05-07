@@ -40,13 +40,20 @@ export class AuthController {
   }
 
   @Catch()
+  async forgotPassword(req: Request, res: Response): Promise<void> {
+    const { email } = req.body;
+    await this.authService.forgotPassword(email);
+
+    res.status(204).send();
+  }
+
+  @Catch()
   async resetPassword(req: Request, res: Response): Promise<void> {
-    const userId = req.user?.id as string;
-    const newPassword = req.body.newPassword;
-    const passwordConfirmation = req.body.passwordConfirmation;
+    const { userId, code, newPassword, passwordConfirmation } = req.body;
 
     await this.authService.resetPassword(
       userId,
+      code,
       newPassword,
       passwordConfirmation,
     );

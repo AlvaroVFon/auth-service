@@ -34,8 +34,12 @@ export class AuthRouter {
     );
 
     this.app.post(
+      '/auth/forgot-password',
+      this.authController.forgotPassword.bind(this.authController),
+    );
+
+    this.app.post(
       '/auth/reset-password',
-      this.authenticationMiddleware.authenticate,
       this.authController.resetPassword.bind(this.authController),
     );
 

@@ -22,7 +22,7 @@ export class UsersController {
   }
 
   @Catch()
-  async findAll(req: Request, res: Response): Promise<void> {
+  async findAll(_req: Request, res: Response): Promise<void> {
     const users = await this.userService.findAll();
 
     res.status(200).json(users);

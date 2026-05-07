@@ -18,15 +18,15 @@ El objetivo es permitir sesiones largas y seguras sin comprometer la seguridad.
 - [ ] **Información de Sesión:**
   - [ ] Registrar IP y User-Agent en cada login para control de dispositivos.
 
-## Fase 2: Recuperación y Experiencia de Usuario - 30% Completada
+## Fase 2: Recuperación y Experiencia de Usuario - 100% Completada
 
 Completar los flujos esenciales de autoservicio de cuenta.
 
-- [ ] **Flujo Completo de "Forgot Password":**
-  - [ ] Endpoint público `POST /auth/forgot-password` (envío de código por email).
-  - [ ] Agregar `sendPasswordResetEmail()` al `MailerInterface` y adaptadores.
-  - [ ] Crear template `password_reset.hbs` en `src/mail/templates/`.
-  - [ ] Endpoint `POST /auth/reset-password` que valide el código y cambie la contraseña (actual requiere auth, necesita versión pública con código).
+- [x] **Flujo Completo de "Forgot Password":**
+  - [x] Endpoint público `POST /auth/forgot-password` (envío de código por email).
+  - [x] Agregar `sendPasswordResetEmail()` al `MailerInterface` y adaptadores.
+  - [x] Crear template `reset_password.hbs` en `src/mail/templates/`.
+  - [x] Endpoint `POST /auth/reset-password` que valide el código y cambie la contraseña (ahora es público, acepta `userId` + `code`).
 - [x] **Verificación de Email (Hardening):**
   - [x] Asegurar que el flujo de `verify` sea consistente y obligatorio para activar la cuenta.
 
@@ -65,10 +65,9 @@ Una vez el servicio sea robusto, escalar hacia múltiples proyectos.
 ## Próximos Pasos Inmediatos
 
 1. Exponer endpoints `POST /auth/refresh` y `POST /auth/logout` en `auth.router.ts`.
-2. Implementar flujo completo de "Forgot Password" (endpoint, template, mailer method).
-3. Agregar tracking de IP/User-Agent en login (Fase 1).
-4. Implementar Rate Limiting (Fase 3).
-5. Implementar Account Lockout (Fase 3).
+2. Agregar tracking de IP/User-Agent en login (Fase 1).
+3. Implementar Rate Limiting (Fase 3).
+4. Implementar Account Lockout (Fase 3).
 
 ---
 
@@ -76,4 +75,4 @@ Una vez el servicio sea robusto, escalar hacia múltiples proyectos.
 
 - **Estrategia de Datos:** Mantener el uso de Mongoose, moviéndose hacia una arquitectura de modelos dinámicos en la Fase 5.
 - **Prioridad:** Primero robustez y funcionalidad core, luego escalabilidad multi-proyecto.
-- **Estado Actual:** Core user CRUD y auth scaffolding en lugar, refresh tokens lógica completa pero endpoints faltantes, verificación de email funcional.
+- **Estado Actual:** Core user CRUD y auth scaffolding en lugar, refresh tokens lógica completa pero endpoints faltantes, verificación de email funcional, flujo completo de forgot/reset password implementado.

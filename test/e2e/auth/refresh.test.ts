@@ -6,7 +6,6 @@ import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
-import { User } from '../../../src/users/users.interface';
 import { JWT_REGEX } from '../../../src/common/constants/regex';
 
 describe('E2E Auth Refresh Token', () => {

@@ -37,10 +37,12 @@ describe('Auth Service', () => {
   const mockCryptoService = {
     compareString: mock.fn(() => true),
     hashString: mock.fn((str: string) => Promise.resolve(`hashed_${str}`)),
-  };
+  } as CryptoService;
+
   const mockMailerService = {
     sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
-  };
+    sendResetPasswordEmail: mock.fn(() => Promise.resolve()),
+  } as MailerInterface;
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
@@ -256,6 +258,7 @@ describe('Auth Service', () => {
       assert.ok(holder.password);
       assert.notStrictEqual(holder.password, 'ValidPass123!');
       assert.ok(
+        // @ts-expect-error mock.call exists
         mockMailerService.sendSignupVerificationEmail.mock.calls.length === 1,
       );
       const code = await fixture.findOne<Code>('Code', {
@@ -264,6 +267,7 @@ describe('Auth Service', () => {
       });
 
       assert.deepStrictEqual(
+        // @ts-expect-error mock.call exists
         mockMailerService.sendSignupVerificationEmail.mock.calls[0].arguments,
         [
           email,
@@ -328,13 +332,95 @@ describe('Auth Service', () => {
     });
   });
 
+  describe('forgotPassword()', () => {
+    test('should throw an error for non provided email', async () => {
+      await assert.rejects(async () => await authService.forgotPassword(''), {
+        name: 'InvalidArgumentError',
+        message: 'email is required',
+        code: 'INVALID_ARGUMENT',
+      });
+    });
+
+    test('should throw an error for invalid email format', async () => {
+      await assert.rejects(
+        async () => await authService.forgotPassword('invalid-email-format'),
+        {
+          name: 'InvalidArgumentError',
+          message: 'email has invalid format',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error if user does not exist', async () => {
+      const email = generateRandomEmail('auth+');
+      await assert.rejects(
+        async () => await authService.forgotPassword(email),
+        {
+          name: 'EntityNotFoundError',
+          message: `user with email ${email} not found`,
+          code: 'NOT_FOUND',
+        },
+      );
+    });
+
+    test('on yellow brick road', async () => {
+      const email = generateRandomEmail('forgot-password');
+      const user = await fixture.create<UserInterface>('User', { email });
+
+      await authService.forgotPassword(email);
+
+      // @ts-expect-error mock.call exists
+      assert(mockMailerService.sendResetPasswordEmail.mock.calls.length === 1);
+
+      const code = await fixture.findOne<Code>('Code', {
+        holderId: user._id.toString(),
+        used: false,
+      });
+
+      assert.deepStrictEqual(
+        // @ts-expect-error mock.call exists
+        mockMailerService.sendResetPasswordEmail.mock.calls[0].arguments,
+        [
+          email,
+          {
+            username: user.email,
+            email,
+            code: code!.code,
+            link: `https://ourservice.com/reset-password?userId=${user._id}&code=${code!.code}`,
+          },
+        ],
+      );
+    });
+  });
+
   describe('resetPassword()', () => {
     test('should throw an error for non provided userId', async () => {
       await assert.rejects(
-        async () => await authService.resetPassword('', '', 'NewPass123!'),
+        async () =>
+          await authService.resetPassword('', 'CODE123', '', 'NewPass123!'),
         {
           name: 'InvalidArgumentError',
           message: 'userId is required',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should throw an error for non provided code', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.rejects(
+        async () =>
+          await authService.resetPassword(
+            user._id.toString(),
+            '',
+            'NewPass123!',
+            'NewPass123!',
+          ),
+        {
+          name: 'InvalidArgumentError',
+          message: 'code is required',
           code: 'INVALID_ARGUMENT',
         },
       );
@@ -347,6 +433,7 @@ describe('Auth Service', () => {
         async () =>
           await authService.resetPassword(
             user._id.toString(),
+            'CODE123',
             '',
             'Password123!',
           ),
@@ -363,7 +450,12 @@ describe('Auth Service', () => {
 
       await assert.rejects(
         async () =>
-          await authService.resetPassword(user._id.toString(), 'weak', 'weak'),
+          await authService.resetPassword(
+            user._id.toString(),
+            'CODE123',
+            'weak',
+            'weak',
+          ),
         {
           name: 'InvalidArgumentError',
           message: 'Password does not meet complexity requirements',
@@ -379,6 +471,7 @@ describe('Auth Service', () => {
         async () =>
           await authService.resetPassword(
             user._id.toString(),
+            'CODE123',
             'NewPass123!',
             'DifferentPass123!',
           ),
@@ -397,6 +490,7 @@ describe('Auth Service', () => {
         async () =>
           await authService.resetPassword(
             user._id.toString(),
+            'CODE123',
             'NewPass123!',
             '',
           ),
@@ -410,11 +504,18 @@ describe('Auth Service', () => {
 
     test('should succeed with valid inputs', async () => {
       const user = await fixture.create<UserInterface>('User');
+      const code = await fixture.create<Code>('Code', {
+        holderId: user._id,
+        type: CodeType.RESET_PASSWORD,
+        used: false,
+        expiresAt: new Date(Date.now() + 3600000),
+      });
 
       await assert.doesNotReject(
         async () =>
           await authService.resetPassword(
             user._id.toString(),
+            code.code,
             'NewPass123!',
             'NewPass123!',
           ),
@@ -423,10 +524,17 @@ describe('Auth Service', () => {
 
     test('should hash the new password when resetting password', async () => {
       const user = await fixture.create<UserInterface>('User');
+      const code = await fixture.create<Code>('Code', {
+        holderId: user._id,
+        type: CodeType.RESET_PASSWORD,
+        used: false,
+        expiresAt: new Date(Date.now() + 3600000),
+      });
 
       const newPassword = 'NewPass123!';
       await authService.resetPassword(
         user._id.toString(),
+        code.code,
         newPassword,
         newPassword,
       );
@@ -442,6 +550,12 @@ describe('Auth Service', () => {
 
     test('should call updateOneById with correct parameters', async () => {
       const user = await fixture.create<UserInterface>('User');
+      const code = await fixture.create<Code>('Code', {
+        holderId: user._id,
+        type: CodeType.RESET_PASSWORD,
+        used: false,
+        expiresAt: new Date(Date.now() + 3600000),
+      });
 
       const newPassword = 'NewPass123!';
 
@@ -449,6 +563,7 @@ describe('Auth Service', () => {
 
       await authService.resetPassword(
         user._id.toString(),
+        code.code,
         newPassword,
         newPassword,
       );
@@ -460,6 +575,25 @@ describe('Auth Service', () => {
       ]);
     });
 
+    test('should throw an error if code is invalid', async () => {
+      const user = await fixture.create<UserInterface>('User');
+
+      await assert.rejects(
+        async () =>
+          await authService.resetPassword(
+            user._id.toString(),
+            'WRONGCODE',
+            'NewPass123!',
+            'NewPass123!',
+          ),
+        {
+          name: 'InvalidCodeError',
+          message: 'The provided code is invalid, used or expired',
+          code: 'INVALID_CODE',
+        },
+      );
+    });
+
     test('should throw an error if userId does not exist', async () => {
       const nonExistentUserId = new Types.ObjectId().toString();
       const newPassword = 'NewPass123!';
@@ -468,6 +602,7 @@ describe('Auth Service', () => {
         async () =>
           await authService.resetPassword(
             nonExistentUserId,
+            'CODE123',
             newPassword,
             newPassword,
           ),
