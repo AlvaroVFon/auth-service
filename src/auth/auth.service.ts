@@ -129,13 +129,42 @@ export class AuthService {
     return newHolder;
   }
 
+  async forgotPassword(email: string): Promise<void> {
+    if (!email) {
+      throw new InvalidArgumentError('email is required');
+    }
+    if (!EMAIL_REGEX.test(email)) {
+      throw new InvalidArgumentError('email has invalid format');
+    }
+
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new EntityNotFoundError(`user with email ${email} not found`);
+    }
+
+    const code = await this.codeService.createForgotPasswordCode(
+      user._id.toString(),
+    );
+
+    await this.mailService.sendResetPasswordEmail(email, {
+      username: user.email,
+      email,
+      code: code.code,
+      link: `https://ourservice.com/reset-password?userId=${user._id}&code=${code.code}`,
+    });
+  }
+
   async resetPassword(
     userId: string,
+    code: string,
     newPassword: string,
     passwordConfirmation: string,
   ): Promise<void> {
     if (!userId) {
       throw new InvalidArgumentError('userId is required');
+    }
+    if (!code) {
+      throw new InvalidArgumentError('code is required');
     }
     if (!newPassword) {
       throw new InvalidArgumentError('newPassword is required');
@@ -153,6 +182,13 @@ export class AuthService {
         'Password and password confirmation do not match',
       );
     }
+
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    await this.codeService.validateCode(userId, code, CodeType.RESET_PASSWORD);
 
     await this.usersService.updateOneById(userId, { password: newPassword });
   }

@@ -58,6 +58,10 @@ export class CodesService {
     return this.create(holderId, CodeType.SIGNUP);
   }
 
+  async createForgotPasswordCode(userId: string): Promise<Code> {
+    return this.create(userId, CodeType.RESET_PASSWORD);
+  }
+
   async validateCode(
     holderId: string,
     code: string,

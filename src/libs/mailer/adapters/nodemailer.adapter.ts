@@ -102,4 +102,21 @@ export class NodeMailerAdapter implements Mailer {
       context,
     );
   }
+
+  async sendResetPasswordEmail(
+    to: string,
+    context: Record<string, string>,
+  ): Promise<void> {
+    const subject = 'Reset your password';
+
+    context.appName = this.appName;
+    context.year = this.year;
+
+    await this.sendMailWithTemplate(
+      to,
+      subject,
+      MailTemplate.RESET_PASSWORD,
+      context,
+    );
+  }
 }

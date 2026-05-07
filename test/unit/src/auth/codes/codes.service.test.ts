@@ -88,7 +88,7 @@ describe('Codes Service', () => {
       const signupCode = await codesService.create(holderId, CodeType.SIGNUP);
       const resetCode = await codesService.create(
         holderId,
-        CodeType.PASSWORD_RESET,
+        CodeType.RESET_PASSWORD,
       );
 
       assert.notStrictEqual(signupCode.code, resetCode.code);
@@ -97,7 +97,7 @@ describe('Codes Service', () => {
         resetCode.holderId.toString(),
       );
       assert.strictEqual(signupCode.type, CodeType.SIGNUP);
-      assert.strictEqual(resetCode.type, CodeType.PASSWORD_RESET);
+      assert.strictEqual(resetCode.type, CodeType.RESET_PASSWORD);
     });
 
     test('should set expiration time based on CODE_EXPIRATION_MS env variable', async () => {
@@ -240,7 +240,7 @@ describe('Codes Service', () => {
           await codesService.validateCode(
             holderId,
             code.code,
-            CodeType.PASSWORD_RESET,
+            CodeType.RESET_PASSWORD,
           );
         },
         {

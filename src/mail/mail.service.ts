@@ -16,4 +16,11 @@ export class MailService {
   ): Promise<void> {
     await this.mailer.sendSignupVerificationEmail(to, context);
   }
+
+  async sendResetPasswordEmail(
+    to: string,
+    context: Record<string, string>,
+  ): Promise<void> {
+    await this.mailer.sendResetPasswordEmail(to, context);
+  }
 }
