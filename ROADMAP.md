@@ -35,7 +35,7 @@ Completar los flujos esenciales de autoservicio de cuenta.
 Proteger el servicio contra abusos y ataques automatizados.
 
 - [ ] **Rate Limiting:**
-  - [ ] Implementar límites de peticiones por IP (`express-rate-limit`).
+  - [x] Implementar límites de peticiones por IP (`express-rate-limit`).
   - [ ] Aplicar políticas estrictas en `/auth/login`, `/auth/signup` y recuperación de contraseña.
 - [ ] **Bloqueo de Cuentas (Account Lockout):**
   - [ ] Implementar contador de intentos fallidos en `User` schema.
