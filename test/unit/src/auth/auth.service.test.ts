@@ -7,7 +7,7 @@ import {
   DEFAULT_USER_ID,
   generateRandomEmail,
 } from '../../../fixtures/defaults';
-import fixture from '../../../fixtures/fixture';
+import fixture from '../../../fixtures';
 import { User } from '../../../../src/users/users.schema';
 import { User as UserInterface } from '../../../../src/users/users.interface';
 import { Types } from 'mongoose';

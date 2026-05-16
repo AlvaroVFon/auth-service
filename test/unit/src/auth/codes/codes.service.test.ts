@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { CodesService } from '../../../../../src/auth/codes/codes.service';
 import { CODE_REGEX } from '../../../../../src/common/constants/regex';
-import fixture from '../../../../fixtures/fixture';
+import fixture from '../../../../fixtures';
 import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
 

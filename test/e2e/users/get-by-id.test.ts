@@ -3,7 +3,7 @@ import request from 'supertest';
 import { Application } from 'express';
 import { Types } from 'mongoose';
 import { generateRandomEmail } from '../../fixtures/defaults';
-import fixture from '../../fixtures/fixture';
+import fixture from '../../fixtures';
 import { User } from '../../../src/users/users.interface';
 import {
   DEFAULT_ADMIN_TOKEN,

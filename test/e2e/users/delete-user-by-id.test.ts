@@ -1,7 +1,7 @@
 import { Application } from 'express';
 import { getTestAppInstance } from '../../utils/app';
 import request from 'supertest';
-import fixture from '../../fixtures/fixture';
+import fixture from '../../fixtures';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import { User } from '../../../src/users/users.interface';
 import {

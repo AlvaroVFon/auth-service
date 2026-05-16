@@ -2,7 +2,7 @@ import { UsersService } from '../../../../src/users/users.service';
 import { User } from '../../../../src/users/users.schema';
 import { User as UserInterface } from '../../../../src/users/users.interface';
 import { generateRandomEmail } from '../../../fixtures/defaults/users.default';
-import fixture from '../../../fixtures/fixture';
+import fixture from '../../../fixtures';
 import {
   EntityAlreadyExistsError,
   EntityNotFoundError,

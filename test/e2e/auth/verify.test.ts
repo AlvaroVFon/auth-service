@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
-import fixture from '../../fixtures/fixture';
+import fixture from '../../fixtures';
 import { Code, CodeType } from '../../../src/auth/codes/code.interface';
 import { Holder } from '../../../src/holders/holders.interface';
 
