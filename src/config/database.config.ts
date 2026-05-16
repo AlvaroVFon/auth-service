@@ -2,9 +2,9 @@ import mongoose from 'mongoose';
 import { LoggerInterface } from '../libs/logger/logger.interface';
 import { InfraError } from '../common/exceptions/infra.exceptions';
 
-let db: mongoose.Connection | null = null;
-
 export class Database {
+  private connection: mongoose.Connection | null = null;
+
   constructor(
     private readonly connectionString: string,
     private readonly logger: LoggerInterface,
@@ -13,7 +13,7 @@ export class Database {
   async connect(): Promise<void> {
     try {
       const connection = await mongoose.connect(this.connectionString);
-      db = connection.connection;
+      this.connection = connection.connection;
       this.logger.info('Database connected successfully');
     } catch {
       throw new InfraError('Database connection failed');
@@ -21,9 +21,9 @@ export class Database {
   }
 
   async close(): Promise<void> {
-    if (db) {
+    if (this.connection) {
       await mongoose.disconnect();
-      db = null;
+      this.connection = null;
       this.logger.info('Database connection closed');
     } else {
       this.logger.warn('No database connection to close');
@@ -31,10 +31,10 @@ export class Database {
   }
 
   async flush(): Promise<void> {
-    if (db) {
-      const collections = Object.keys(db.collections);
+    if (this.connection) {
+      const collections = Object.keys(this.connection.collections);
       for (const collectionName of collections) {
-        const collection = db.collections[collectionName];
+        const collection = this.connection.collections[collectionName];
         if (!collection) continue;
         await collection.deleteMany({});
       }
@@ -45,18 +45,20 @@ export class Database {
   }
 
   getConnection(): mongoose.Connection | null {
-    if (!db) {
+    if (!this.connection) {
       this.logger.warn('Database not connected yet');
     }
-    return db;
+    return this.connection;
   }
 
-  async drop(dbName: string): Promise<void> {
-    if (db && db.name === dbName) {
-      await db.dropDatabase();
-      this.logger.info('Database dropped successfully');
-    } else {
-      this.logger.warn('No database connection to drop');
+  async drop(): Promise<void> {
+    if (this.connection && this.connection.readyState === 1) {
+      try {
+        await this.connection.dropDatabase();
+        this.logger.info('Database dropped successfully');
+      } catch {
+        this.logger.error('Failed to drop database');
+      }
     }
   }
 }

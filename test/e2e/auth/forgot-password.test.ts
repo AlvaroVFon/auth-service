@@ -2,7 +2,7 @@ import request from 'supertest';
 import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
 import { DEFAULT_USER } from '../../fixtures/defaults';
-import fixture from '../../fixtures/fixture';
+import fixture from '../../fixtures';
 import { User } from '../../../src/users/users.interface';
 
 describe('Password Reset E2E Tests', () => {

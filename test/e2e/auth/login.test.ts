@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { getTestAppInstance } from '../../utils/app';
-import fixture from '../../fixtures/fixture';
+import fixture from '../../fixtures';
 import { Application } from 'express';
 import {
   DEFAULT_USER_PLAIN_PASSWORD,

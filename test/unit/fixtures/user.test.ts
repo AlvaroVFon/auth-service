@@ -1,4 +1,4 @@
-import fixture from '../../fixtures/fixture';
+import fixture from '../../fixtures';
 import { User as UserInterface } from '../../../src/users/users.interface';
 
 describe('User Fixture', () => {

@@ -1,11 +1,13 @@
 import { DEFAULT_USER } from './users.default';
 import { DEFAULT_CODE } from './codes.default';
 import { DEFAULT_HOLDER } from './holders.default';
+import { DEFAULT_CONFIG_ENTRIES } from './config.default';
 
 const DefaultModels = {
   USER: 'User',
   CODE: 'Code',
   HOLDER: 'Holder',
+  CONFIG_ENTRY: 'ConfigEntry',
 };
 
 //eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -13,4 +15,5 @@ export const defaultsRegistry: Record<string, any> = {
   [DefaultModels.USER]: DEFAULT_USER,
   [DefaultModels.CODE]: DEFAULT_CODE,
   [DefaultModels.HOLDER]: DEFAULT_HOLDER,
+  [DefaultModels.CONFIG_ENTRY]: DEFAULT_CONFIG_ENTRIES[0],
 };

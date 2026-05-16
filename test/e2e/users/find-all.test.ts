@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { Application } from 'express';
 import { getTestAppInstance } from '../../utils/app';
-import fixture from '../../fixtures/fixture';
+import fixture from '../../fixtures';
 import {
   DEFAULT_ADMIN_TOKEN,
   DEFAULT_USER_TOKEN,

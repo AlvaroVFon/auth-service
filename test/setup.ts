@@ -48,7 +48,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database.drop(`auth_db_test_${process.pid}`);
+  await database.drop();
 });
 
 after(async () => {

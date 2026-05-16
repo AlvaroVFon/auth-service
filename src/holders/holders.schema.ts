@@ -15,6 +15,7 @@ const HoldersSchema = new Schema<Holder>(
     },
   },
   {
+    timestamps: true,
     toJSON: {
       transform: (_doc, ret) => {
         const { password, __v, ...rest } = ret;
