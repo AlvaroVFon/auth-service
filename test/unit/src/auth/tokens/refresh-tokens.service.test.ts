@@ -4,6 +4,12 @@ import { RefreshTokenModel } from '../../../../../src/auth/tokens/refresh-token.
 import { RefreshToken } from '../../../../../src/auth/tokens/refresh-token.interface';
 import fixture from '../../../../fixtures';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
+import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../../../../../src/common/exceptions/base.exception';
+import { RefreshTokenFactory } from '../../../../helpers/factories/refresh-token.factory';
+import { MotherFactory } from '../../../../helpers/factories/mother.factory';
 
 describe('RefreshTokenService', () => {
   let refreshTokenService: RefreshTokenService;
@@ -14,58 +20,65 @@ describe('RefreshTokenService', () => {
 
   describe('create', () => {
     test('should throw an error when userId is invalid', async () => {
+      const refreshTokenData = RefreshTokenFactory.generate({
+        userId: 'invalid' as unknown as Types.ObjectId,
+      });
+
       await assert.rejects(
-        () =>
-          refreshTokenService.create(
-            'invalid',
-            '550e8400-e29b-41d4-a716-446655440000',
-            new Date(),
-          ),
-        {
-          name: 'InvalidArgumentError',
-          message: 'userId is not a valid ObjectId',
-        },
+        refreshTokenService.create(
+          refreshTokenData.userId.toString(),
+          refreshTokenData.jti,
+          refreshTokenData.expiresAt,
+        ),
+        new InvalidArgumentError('userId is not a valid ObjectId'),
       );
     });
 
     test('should throw an error when jti is invalid', async () => {
+      const refreshTokenData = RefreshTokenFactory.generate({
+        jti: 'not-a-uuid',
+      });
+
       await assert.rejects(
-        () =>
-          refreshTokenService.create(
-            new Types.ObjectId().toString(),
-            'not-a-uuid',
-            new Date(),
-          ),
-        {
-          name: 'InvalidArgumentError',
-          message: 'jti is not a valid UUID',
-        },
+        refreshTokenService.create(
+          String(refreshTokenData.userId),
+          refreshTokenData.jti,
+          refreshTokenData.expiresAt,
+        ),
+        new InvalidArgumentError('jti is not a valid UUID'),
       );
     });
 
     test('should create a refresh token successfully', async () => {
-      const userId = new Types.ObjectId();
-      const jti = '550e8400-e29b-41d4-a716-446655440001';
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+      const refreshTokenData = RefreshTokenFactory.generate();
 
       const refreshToken = await refreshTokenService.create(
-        userId.toString(),
-        jti,
-        expiresAt,
+        String(refreshTokenData.userId),
+        refreshTokenData.jti,
+        refreshTokenData.expiresAt,
       );
 
-      assert.strictEqual(refreshToken.userId.toString(), userId.toString());
-      assert.strictEqual(refreshToken.jti, jti);
-      assert.strictEqual(refreshToken.expiresAt.getTime(), expiresAt.getTime());
+      assert.strictEqual(
+        refreshToken.userId.toString(),
+        String(refreshTokenData.userId),
+      );
+      assert.strictEqual(refreshToken.jti, refreshTokenData.jti);
+      assert.strictEqual(
+        refreshToken.expiresAt.getTime(),
+        refreshTokenData.expiresAt.getTime(),
+      );
       assert.strictEqual(refreshToken.revokedAt, null);
 
       const dbToken = await fixture.findOne<RefreshToken>(
         RefreshTokenModel.modelName,
-        { jti },
+        { jti: refreshTokenData.jti },
       );
 
-      assert.strictEqual(dbToken?.jti, jti);
-      assert.strictEqual(dbToken?.userId.toString(), userId.toString());
+      assert.strictEqual(dbToken?.jti, refreshTokenData.jti);
+      assert.strictEqual(
+        dbToken?.userId.toString(),
+        String(refreshTokenData.userId),
+      );
     });
   });
 
@@ -85,24 +98,25 @@ describe('RefreshTokenService', () => {
     });
 
     test('should find token by jti', async () => {
-      const userId = new Types.ObjectId();
-      const jti = '550e8400-e29b-41d4-a716-446655440002';
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+      const refreshTokenData = RefreshTokenFactory.generate();
 
       await fixture.create<RefreshToken>(RefreshTokenModel.modelName, {
-        userId,
-        jti,
-        expiresAt,
+        userId: refreshTokenData.userId,
+        jti: refreshTokenData.jti,
+        expiresAt: refreshTokenData.expiresAt,
         revokedAt: null,
         replacedByJti: null,
         type: TokenTypes.REFRESH,
       });
 
-      const found = await refreshTokenService.findByJti(jti);
+      const found = await refreshTokenService.findByJti(refreshTokenData.jti);
 
       assert.ok(found);
-      assert.strictEqual(found?.jti, jti);
-      assert.strictEqual(found?.userId.toString(), userId.toString());
+      assert.strictEqual(found?.jti, refreshTokenData.jti);
+      assert.strictEqual(
+        found?.userId.toString(),
+        String(refreshTokenData.userId),
+      );
     });
   });
 
@@ -110,10 +124,7 @@ describe('RefreshTokenService', () => {
     test('should throw an error when userId is invalid', async () => {
       await assert.rejects(
         () => refreshTokenService.findAllActiveByUserId('invalid'),
-        {
-          name: 'InvalidArgumentError',
-          message: 'userId is not a valid ObjectId',
-        },
+        new InvalidArgumentError('userId is not a valid ObjectId'),
       );
     });
 
@@ -126,36 +137,31 @@ describe('RefreshTokenService', () => {
     });
 
     test('should return only active tokens', async () => {
-      const userId = new Types.ObjectId();
-      const futureDate = new Date(Date.now() + 1000 * 60 * 60);
-      const pastDate = new Date(Date.now() - 1000 * 60 * 60);
+      const userId = MotherFactory.objectId();
 
-      await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
-        {
+      const tokensData = [
+        RefreshTokenFactory.generate({
           userId,
           jti: '550e8400-e29b-41d4-a716-446655440003',
-          expiresAt: futureDate,
-          revokedAt: null,
-          replacedByJti: null,
-          type: TokenTypes.REFRESH,
-        },
-        {
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+        }),
+        RefreshTokenFactory.generate({
           userId,
           jti: '550e8400-e29b-41d4-a716-446655440004',
-          expiresAt: pastDate,
-          revokedAt: null,
-          replacedByJti: null,
-          type: TokenTypes.REFRESH,
-        },
-        {
+          expiresAt: new Date(Date.now() - 1000 * 60 * 60),
+        }),
+        RefreshTokenFactory.generate({
           userId,
           jti: '550e8400-e29b-41d4-a716-446655440005',
-          expiresAt: futureDate,
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
           revokedAt: new Date(),
-          replacedByJti: null,
-          type: TokenTypes.REFRESH,
-        },
-      ]);
+        }),
+      ];
+
+      await fixture.createMany<RefreshToken>(
+        RefreshTokenModel.modelName,
+        tokensData,
+      );
 
       const tokens = await refreshTokenService.findAllActiveByUserId(
         userId.toString(),
@@ -173,10 +179,7 @@ describe('RefreshTokenService', () => {
     test('should throw an error when jti is invalid', async () => {
       await assert.rejects(
         () => refreshTokenService.revokeByJti('not-a-uuid'),
-        {
-          name: 'InvalidArgumentError',
-          message: 'jti is not a valid UUID',
-        },
+        new InvalidArgumentError('jti is not a valid UUID'),
       );
     });
 
@@ -186,33 +189,28 @@ describe('RefreshTokenService', () => {
           refreshTokenService.revokeByJti(
             '550e8400-e29b-41d4-a716-446655440099',
           ),
-        {
-          name: 'EntityNotFoundError',
-          message: 'Refresh token not found',
-        },
+        new EntityNotFoundError('Refresh token not found'),
       );
     });
 
     test('should set revokedAt and replacedByJti when revoking', async () => {
-      const userId = new Types.ObjectId();
-      const jti = '550e8400-e29b-41d4-a716-446655440006';
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+      const refreshTokenData = RefreshTokenFactory.generate();
 
       await fixture.create<RefreshToken>(RefreshTokenModel.modelName, {
-        userId,
-        jti,
-        expiresAt,
+        userId: refreshTokenData.userId,
+        jti: refreshTokenData.jti,
+        expiresAt: refreshTokenData.expiresAt,
         revokedAt: null,
         replacedByJti: null,
         type: TokenTypes.REFRESH,
       });
 
       const newJti = '550e8400-e29b-41d4-a716-446655440007';
-      await refreshTokenService.revokeByJti(jti, newJti);
+      await refreshTokenService.revokeByJti(refreshTokenData.jti, newJti);
 
       const updated = await fixture.findOne<RefreshToken>(
         RefreshTokenModel.modelName,
-        { jti },
+        { jti: refreshTokenData.jti },
       );
 
       assert.ok(updated?.revokedAt instanceof Date);
@@ -220,24 +218,22 @@ describe('RefreshTokenService', () => {
     });
 
     test('should set only revokedAt when revoking without replacement', async () => {
-      const userId = new Types.ObjectId();
-      const jti = '550e8400-e29b-41d4-a716-446655440008';
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+      const refreshTokenData = RefreshTokenFactory.generate();
 
       await fixture.create<RefreshToken>(RefreshTokenModel.modelName, {
-        userId,
-        jti,
-        expiresAt,
+        userId: refreshTokenData.userId,
+        jti: refreshTokenData.jti,
+        expiresAt: refreshTokenData.expiresAt,
         revokedAt: null,
         replacedByJti: null,
         type: TokenTypes.REFRESH,
       });
 
-      await refreshTokenService.revokeByJti(jti);
+      await refreshTokenService.revokeByJti(refreshTokenData.jti);
 
       const updated = await fixture.findOne<RefreshToken>(
         RefreshTokenModel.modelName,
-        { jti },
+        { jti: refreshTokenData.jti },
       );
 
       assert.ok(updated?.revokedAt instanceof Date);
@@ -249,10 +245,7 @@ describe('RefreshTokenService', () => {
     test('should throw an error when userId is invalid', async () => {
       await assert.rejects(
         () => refreshTokenService.revokeAllByUserId('invalid'),
-        {
-          name: 'InvalidArgumentError',
-          message: 'userId is not a valid ObjectId',
-        },
+        new InvalidArgumentError('userId is not a valid ObjectId'),
       );
     });
 
@@ -260,25 +253,23 @@ describe('RefreshTokenService', () => {
       const userId = new Types.ObjectId();
       const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
 
-      await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
-        {
+      const tokensData = [
+        RefreshTokenFactory.generate({
           userId,
-          jti: '550e8400-e29b-41d4-a716-446655440010',
+          jti: '550e8400-e29b-41d4-a716-446655440008',
           expiresAt,
-          revokedAt: null,
-          replacedByJti: null,
-          type: TokenTypes.REFRESH,
-        },
-        {
+        }),
+        RefreshTokenFactory.generate({
           userId,
-          jti: '550e8400-e29b-41d4-a716-446655440011',
+          jti: '550e8400-e29b-41d4-a716-446655440009',
           expiresAt,
-          revokedAt: null,
-          replacedByJti: null,
-          type: TokenTypes.REFRESH,
-        },
-      ]);
+        }),
+      ];
 
+      await fixture.createMany<RefreshToken>(
+        RefreshTokenModel.modelName,
+        tokensData,
+      );
       await refreshTokenService.revokeAllByUserId(userId.toString());
 
       const activeTokens = await refreshTokenService.findAllActiveByUserId(

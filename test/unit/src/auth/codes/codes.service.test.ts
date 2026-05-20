@@ -4,6 +4,12 @@ import { CODE_REGEX } from '../../../../../src/common/constants/regex';
 import fixture from '../../../../fixtures';
 import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
+import { CodesFactory } from '../../../../helpers/factories/codes.factory';
+import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
+import {
+  AlreadyGeneratedCodeError,
+  InvalidCodeError,
+} from '../../../../../src/common/exceptions/codes.exceptions';
 
 describe('Codes Service', () => {
   let codesService: CodesService;
@@ -22,63 +28,47 @@ describe('Codes Service', () => {
 
   describe('create()', () => {
     test('should create a code with specified holderId, expiresAt, and used status', async () => {
-      const holderId = new Types.ObjectId().toString();
-      const code = await codesService.create(holderId, CodeType.SIGNUP);
+      const codeData = CodesFactory.generate();
+      const code = await codesService.create(
+        String(codeData.holderId),
+        codeData.type,
+      );
 
       assert.strictEqual(code.code.length, 6);
       assert.ok(CODE_REGEX.test(code.code));
-      assert.strictEqual(code.holderId.toString(), holderId);
+      assert.strictEqual(code.holderId.toString(), String(codeData.holderId));
       assert.ok(code.expiresAt instanceof Date);
       assert.strictEqual(code.used, false);
     });
 
     test('should throw an error if holderId is invalid', async () => {
-      await assert.rejects(
-        async () => {
-          await codesService.create('invalidHolderId', CodeType.SIGNUP);
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'Invalid holderId',
-        },
-      );
+      const codeData = CodesFactory.generate({
+        holderId: 'invalid' as unknown as Types.ObjectId,
+      });
+      await assert.rejects(async () => {
+        await codesService.create(String(codeData.holderId), codeData.type);
+      }, new InvalidArgumentError('Invalid holderId'));
     });
 
     test('should throw an error if holderId is missing', async () => {
-      await assert.rejects(
-        async () => {
-          await (codesService as any).create();
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'holderId is required',
-        },
-      );
+      await assert.rejects(async () => {
+        await (codesService as any).create();
+      }, new InvalidArgumentError('holderId is required'));
     });
 
     test('should throw an error if codeType is missing', async () => {
       const holderId = new Types.ObjectId().toString();
       await assert.rejects(
-        async () => {
-          await (codesService as any).create(holderId);
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'codeType is required',
-        },
+        codesService.create(holderId, undefined as unknown as CodeType),
+        new InvalidArgumentError('codeType is required'),
       );
     });
 
     test('should throw an error if codeType is invalid', async () => {
       const holderId = new Types.ObjectId().toString();
       await assert.rejects(
-        async () => {
-          await (codesService as any).create(holderId, 'INVALID_TYPE');
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'Invalid codeType',
-        },
+        codesService.create(holderId, 'INVALID_TYPE' as CodeType),
+        new InvalidArgumentError('Invalid codeType'),
       );
     });
 
@@ -135,14 +125,10 @@ describe('Codes Service', () => {
       const holderId = new Types.ObjectId().toString();
       await codesService.create(holderId, CodeType.SIGNUP);
       await assert.rejects(
-        async () => {
-          await codesService.create(holderId, CodeType.SIGNUP);
-        },
-        {
-          name: 'AlreadyGeneratedCodeError',
-          message:
-            'A valid code has already been generated for this user and type',
-        },
+        codesService.create(holderId, CodeType.SIGNUP),
+        new AlreadyGeneratedCodeError(
+          'A valid code has already been generated for this user and type',
+        ),
       );
     });
   });
@@ -172,21 +158,16 @@ describe('Codes Service', () => {
     });
 
     test('should throw for an invalid code', async () => {
-      const holderId = new Types.ObjectId().toString();
-      await codesService.create(holderId, CodeType.SIGNUP);
+      const codeData = CodesFactory.generate();
+      await codesService.create(String(codeData.holderId), codeData.type);
 
       await assert.rejects(
-        async () => {
-          await codesService.validateCode(
-            holderId,
-            'WRONGCODE',
-            CodeType.SIGNUP,
-          );
-        },
-        {
-          name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used or expired',
-        },
+        codesService.validateCode(
+          String(codeData.holderId),
+          'WRONGCODE',
+          codeData.type,
+        ),
+        new InvalidCodeError('The provided code is invalid, used or expired'),
       );
     });
 
@@ -199,13 +180,8 @@ describe('Codes Service', () => {
       });
 
       await assert.rejects(
-        async () => {
-          await codesService.validateCode(holderId, code.code, CodeType.SIGNUP);
-        },
-        {
-          name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used or expired',
-        },
+        codesService.validateCode(holderId, code.code, CodeType.SIGNUP),
+        new InvalidCodeError('The provided code is invalid, used or expired'),
       );
     });
 
@@ -221,13 +197,8 @@ describe('Codes Service', () => {
       );
 
       await assert.rejects(
-        async () => {
-          await codesService.validateCode(holderId, code.code, CodeType.SIGNUP);
-        },
-        {
-          name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used or expired',
-        },
+        codesService.validateCode(holderId, code.code, CodeType.SIGNUP),
+        new InvalidCodeError('The provided code is invalid, used or expired'),
       );
     });
 
@@ -236,95 +207,62 @@ describe('Codes Service', () => {
       const code = await codesService.create(holderId, CodeType.SIGNUP);
 
       await assert.rejects(
-        async () => {
-          await codesService.validateCode(
-            holderId,
-            code.code,
-            CodeType.RESET_PASSWORD,
-          );
-        },
-        {
-          name: 'InvalidCodeError',
-          message: 'The provided code is invalid, used or expired',
-        },
+        codesService.validateCode(holderId, code.code, CodeType.RESET_PASSWORD),
+        new InvalidCodeError('The provided code is invalid, used or expired'),
       );
     });
 
     test('should throw an error if holderId is invalid', async () => {
       await assert.rejects(
-        async () => {
-          await codesService.validateCode(
-            'invalidHolderId',
-            'ABC123',
-            CodeType.SIGNUP,
-          );
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'Invalid holderId',
-        },
+        codesService.validateCode('invalidHolderId', 'ABC123', CodeType.SIGNUP),
+        new InvalidArgumentError('Invalid holderId'),
       );
     });
+
     test('should throw an error if holderId is missing', async () => {
       await assert.rejects(
-        async () => {
-          await (codesService as any).validateCode(
-            undefined,
-            'ABC123',
-            CodeType.SIGNUP,
-          );
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'holderId is required',
-        },
+        codesService.validateCode(
+          undefined as unknown as string,
+          'ABC123',
+          CodeType.SIGNUP,
+        ),
+        new InvalidArgumentError('holderId is required'),
       );
     });
 
     test('should throw an error if codeType is missing', async () => {
       const holderId = new Types.ObjectId().toString();
       await assert.rejects(
-        async () => {
-          await (codesService as any).validateCode(holderId, 'ABC123');
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'codeType is required',
-        },
+        codesService.validateCode(
+          holderId,
+          'ABC123',
+          undefined as unknown as CodeType,
+        ),
+        new InvalidArgumentError('codeType is required'),
       );
     });
 
     test('should throw an error if codeType is invalid', async () => {
       const holderId = new Types.ObjectId().toString();
       await assert.rejects(
-        async () => {
-          await (codesService as any).validateCode(
-            holderId,
-            'ABC123',
-            'INVALID_TYPE',
-          );
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'Invalid codeType',
-        },
+        codesService.validateCode(
+          holderId,
+          'ABC123',
+          'INVALID_TYPE' as CodeType,
+        ),
+        new InvalidArgumentError('Invalid codeType'),
       );
     });
 
     test('should throw an error if code is missing', async () => {
       const holderId = new Types.ObjectId().toString();
       await assert.rejects(
-        async () => {
-          await (codesService as any).validateCode(
-            holderId,
-            undefined,
-            CodeType.SIGNUP,
-          );
-        },
-        {
-          name: 'InvalidArgumentError',
-          message: 'code is required',
-        },
+        codesService.validateCode(
+          holderId,
+          undefined as unknown as string,
+          CodeType.SIGNUP,
+        ),
+        new InvalidArgumentError('code is required'),
       );
     });
   });
