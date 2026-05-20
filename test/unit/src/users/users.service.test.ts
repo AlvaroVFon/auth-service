@@ -10,6 +10,7 @@ import {
 } from '../../../../src/common/exceptions/base.exception';
 import { DEFAULT_USER } from '../../../fixtures/defaults/index';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
+import { UserFactory } from '../../../helpers/factories/user.factory';
 
 describe('UsersService', () => {
   let usersService: UsersService;
@@ -30,12 +31,7 @@ describe('UsersService', () => {
       test('should create a new user', async () => {
         const plainPassword = 'securepassword123';
 
-        const userData: Partial<UserInterface> = {
-          email: generateRandomEmail('testuser+'),
-          username: 'testuser',
-          password: plainPassword,
-        };
-
+        const userData: Partial<UserInterface> = UserFactory.generate();
         const newUser = await usersService.create(userData);
         assert.ok(newUser);
         assert.strictEqual(newUser.email, userData.email);
@@ -46,6 +42,7 @@ describe('UsersService', () => {
           // @ts-expect-error newUser._id exists
           newUser._id,
         );
+
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, userData.email);
         assert.strictEqual(foundUser!.username, userData.username);
@@ -54,11 +51,9 @@ describe('UsersService', () => {
       });
 
       test('should throw an error when creating a user with missing required fields', async () => {
-        const userData: Partial<UserInterface> = {
-          username: 'incompleteuser',
-          password: 'hashedpassword123',
-        };
-
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: undefined as unknown as string,
+        });
         await assert.rejects(
           async () => {
             await usersService.create(userData);
@@ -80,12 +75,10 @@ describe('UsersService', () => {
 
       test('should throw an error when creating a user with invalid email format', async () => {
         const plainPassword = 'securepassword123';
-        const userData: Partial<UserInterface> = {
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: 'invalid-email-format',
-          username: 'invalidemailuser',
           password: plainPassword,
-        };
-
+        });
         await assert.rejects(
           async () => {
             await usersService.create(userData);
@@ -108,16 +101,16 @@ describe('UsersService', () => {
       test('should return an error if user with the same email already exists', async () => {
         const email = generateRandomEmail('duplicate+');
 
-        const userData1: Partial<UserInterface> = {
-          email: email,
+        const userData1: Partial<UserInterface> = UserFactory.generate({
+          email,
           username: 'firstuser',
           password: 'hashedpassword123',
-        };
-        const userData2: Partial<UserInterface> = {
-          email: email,
+        });
+        const userData2: Partial<UserInterface> = UserFactory.generate({
+          email,
           username: 'seconduser',
           password: 'hashedpassword123',
-        };
+        });
 
         const firstUser = await usersService.create(userData1);
         assert.ok(firstUser);
@@ -144,10 +137,10 @@ describe('UsersService', () => {
       });
 
       test('should create a user with only required fields', async () => {
-        const userData: Partial<UserInterface> = {
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('requiredonly+'),
           password: 'hashedpassword123',
-        };
+        });
 
         const newUser = await usersService.create(userData);
         assert.ok(newUser);
@@ -163,11 +156,11 @@ describe('UsersService', () => {
       });
 
       test('should create a user with all fields provided', async () => {
-        const userData: Partial<UserInterface> = {
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('allfields+'),
           username: 'allfieldsuser',
           password: 'hashedpassword123',
-        };
+        });
 
         const newUser = await usersService.create(userData);
         assert.ok(newUser);
@@ -290,11 +283,12 @@ describe('UsersService', () => {
       });
 
       test('should find a user by id', async () => {
-        const newUser = await usersService.create({
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('findbyid+'),
           username: 'findbyiduser',
           password: 'hashedpassword123',
         });
+        const newUser = await usersService.create(userData);
 
         const foundUser = await usersService.findById(newUser._id.toString());
         assert.ok(foundUser);
@@ -382,11 +376,12 @@ describe('UsersService', () => {
       });
 
       test('should update a user by id', async () => {
-        const newUser = await usersService.create({
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('updateone+'),
           username: 'updateoneuser',
           password: 'hashedpassword123',
         });
+        const newUser = await usersService.create(userData);
 
         const updatedData: Partial<UserInterface> = {
           username: 'updatedusername',
@@ -420,11 +415,12 @@ describe('UsersService', () => {
       });
 
       test('should update only provided fields', async () => {
-        const newUser = await usersService.create({
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('partialupdate+'),
           username: 'partialupdateuser',
           password: 'hashedpassword123',
         });
+        const newUser = await usersService.create(userData);
         const updatedData: Partial<UserInterface> = {
           username: 'partiallyupdatedusername',
         };
@@ -441,11 +437,12 @@ describe('UsersService', () => {
 
       test('should hash password when updating it', async () => {
         const plainPassword = 'securepassword123';
-        const newUser = await usersService.create({
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('updatepassword+'),
           username: 'updatepassworduser',
           password: plainPassword,
         });
+        const newUser = await usersService.create(userData);
 
         const updatedPlainPassword = 'newplainpassword456';
         const updatedData: Partial<UserInterface> = {
@@ -510,10 +507,12 @@ describe('UsersService', () => {
       });
 
       test('should delete a user by id', async () => {
-        const newUser = await fixture.create<UserInterface>('User', {
+        const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('deleteone+'),
+          username: 'deleteoneuser',
           password: 'hashedpassword123',
         });
+        const newUser = await usersService.create(userData);
 
         const deletedUser = await usersService.deleteOneById(
           newUser._id.toString(),
