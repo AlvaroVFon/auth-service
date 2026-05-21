@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 
-export const DEFAULT_HOLDER_ID = new Types.ObjectId('000000000000000000000003');
+export const DEFAULT_HOLDER_ID = new Types.ObjectId();
 
 export const DEFAULT_HOLDER = {
   _id: DEFAULT_HOLDER_ID,

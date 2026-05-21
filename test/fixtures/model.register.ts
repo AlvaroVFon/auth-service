@@ -7,6 +7,7 @@ import { Holder } from '../../src/holders/holders.interface';
 import { HoldersModel } from '../../src/holders/holders.schema';
 import { ConfigEntry } from '../../src/libs/config-service/config-service.interface';
 import { ConfigEntryModel } from '../../src/libs/config-service/adapters/mongo-config-entry.schema';
+import { TenantsModel } from '../../src/tenants/tenants.schema';
 
 export const registerModels = async (): Promise<void> => {
   await fixture.registerModel<UserInterface>(User.modelName, User.schema);
@@ -25,6 +26,8 @@ export const registerModels = async (): Promise<void> => {
     ConfigEntryModel.modelName,
     ConfigEntryModel.schema,
   );
+
+  await fixture.registerModel(TenantsModel.modelName, TenantsModel.schema);
 };
 
 export default fixture;
