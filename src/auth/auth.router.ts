@@ -1,10 +1,12 @@
 import { Application } from 'express';
-import { AuthController } from './auth.controller';
+import { AuthController } from './controllers/auth.controller';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
+import { AuthTenantController } from './controllers/auth.tenant.controller';
 
 export class AuthRouter {
   constructor(
     private readonly authController: AuthController,
+    private readonly authTenantController: AuthTenantController,
     private readonly app: Application,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
   ) {
@@ -47,6 +49,11 @@ export class AuthRouter {
       '/auth/logout',
       this.authenticationMiddleware.authenticate,
       this.authController.logout.bind(this.authController),
+    );
+
+    this.app.post(
+      '/auth/tenant/login',
+      this.authTenantController.login.bind(this.authTenantController),
     );
   }
 }

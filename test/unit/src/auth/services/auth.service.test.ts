@@ -1,30 +1,30 @@
-import { AuthService } from '../../../../src/auth/auth.service';
-import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
-import { JwtService } from '../../../../src/libs/jwt/jwt.service';
-import { UsersService } from '../../../../src/users/users.service';
+import { AuthService } from '../../../../../src/auth/services/auth.service';
+import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
+import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
+import { UsersService } from '../../../../../src/users/users.service';
 import {
   DEFAULT_USER,
   DEFAULT_USER_ID,
   generateRandomEmail,
-} from '../../../fixtures/defaults';
-import fixture from '../../../fixtures';
-import { User } from '../../../../src/users/users.schema';
-import { User as UserInterface } from '../../../../src/users/users.interface';
+} from '../../../../fixtures/defaults';
+import fixture from '../../../../fixtures';
+import { User } from '../../../../../src/users/users.schema';
+import { User as UserInterface } from '../../../../../src/users/users.interface';
 import { Types } from 'mongoose';
-import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
-import { CodesService } from '../../../../src/auth/codes/codes.service';
-import { CodesModel } from '../../../../src/auth/codes/codes.schema';
-import { Code, CodeType } from '../../../../src/auth/codes/code.interface';
-import { RefreshTokenService } from '../../../../src/auth/tokens/refresh-token.service';
-import { RefreshTokenModel } from '../../../../src/auth/tokens/refresh-token.schema';
-import { RefreshToken } from '../../../../src/auth/tokens/refresh-token.interface';
-import { JWT_REGEX } from '../../../../src/common/constants/regex';
-import { HoldersService } from '../../../../src/holders/holders.service';
-import { HoldersModel } from '../../../../src/holders/holders.schema';
-import { Holder } from '../../../../src/holders/holders.interface';
-import { DEFAULT_HOLDER } from '../../../fixtures/defaults/holders.default';
-import { TokenTypes } from '../../../../src/libs/jwt/token-types.enum';
-import { Roles } from '../../../../src/common/enums/roles.enum';
+import { MailerInterface } from '../../../../../src/libs/mailer/mailer.interface';
+import { CodesService } from '../../../../../src/auth/codes/codes.service';
+import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
+import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
+import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-token.service';
+import { RefreshTokenModel } from '../../../../../src/auth/tokens/refresh-token.schema';
+import { RefreshToken } from '../../../../../src/auth/tokens/refresh-token.interface';
+import { JWT_REGEX } from '../../../../../src/common/constants/regex';
+import { HoldersService } from '../../../../../src/holders/holders.service';
+import { HoldersModel } from '../../../../../src/holders/holders.schema';
+import { Holder } from '../../../../../src/holders/holders.interface';
+import { DEFAULT_HOLDER } from '../../../../fixtures/defaults/holders.default';
+import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
+import { Roles } from '../../../../../src/common/enums/roles.enum';
 
 describe('Auth Service', () => {
   let authService: AuthService;

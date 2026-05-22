@@ -17,6 +17,9 @@ import { RefreshTokenService } from '../../src/auth/tokens/refresh-token.service
 import { RefreshTokenModel } from '../../src/auth/tokens/refresh-token.schema';
 import { HoldersModel } from '../../src/holders/holders.schema';
 import { HoldersService } from '../../src/holders/holders.service';
+import { TenantsService } from '../../src/tenants/tenants.service';
+import { TenantsModel } from '../../src/tenants/tenants.schema';
+import { AuthTenantService } from '../../src/auth/services/auth-tenant.service';
 
 let app: Application;
 
@@ -46,6 +49,8 @@ const mailService = {
 const codeService = new CodesService(CodesModel);
 const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
 const holdersService = new HoldersService(HoldersModel, cryptoService);
+const tenantsService = new TenantsService(TenantsModel);
+const authTenantService = new AuthTenantService(tenantsService, jwtService);
 
 const usersModule = new UsersModule(
   cryptoService,
@@ -64,6 +69,7 @@ const authModule = new AuthModule(
   authenticationMiddleware,
   refreshTokenService,
   holdersService,
+  authTenantService,
 );
 
 export const createAppTestInstance = async () => {

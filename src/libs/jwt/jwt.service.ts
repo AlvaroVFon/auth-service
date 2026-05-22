@@ -1,6 +1,6 @@
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { Types } from 'mongoose';
-import { Payload } from './jwt.interfaces';
+import { Payload, TenantPayload } from './jwt.interfaces';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { InvalidTokenError } from './jwt.errors';
 import { randomUUID } from 'node:crypto';
@@ -13,6 +13,7 @@ export class JwtService {
     private readonly secret: string,
     private readonly expiresIn: number,
     private readonly refreshTokenExpiresIn: number,
+    private readonly tenantTokenExpiresIn: number = expiresIn,
   ) {
     assertDependencies(
       {
@@ -63,6 +64,17 @@ export class JwtService {
   generateRefreshToken(userId: string, role: Roles): string {
     const payload: Payload = { userId, role, type: TokenTypes.REFRESH };
     return this.generateToken(payload, this.refreshTokenExpiresIn);
+  }
+
+  generateTenantToken(tenantId: string): string {
+    if (!Types.ObjectId.isValid(tenantId)) {
+      throw new InvalidArgumentError('Invalid tenant ID');
+    }
+    const payload: TenantPayload = { tenantId, type: TokenTypes.ACCESS };
+
+    return jwt.sign(payload, this.secret, {
+      expiresIn: this.tenantTokenExpiresIn,
+    });
   }
 
   generateTokens(

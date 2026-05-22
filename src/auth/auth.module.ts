@@ -1,6 +1,6 @@
 import { Application } from 'express';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
+import { AuthService } from './services/auth.service';
+import { AuthController } from './controllers/auth.controller';
 import { AuthRouter } from './auth.router';
 import { UsersService } from '../users/users.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
@@ -12,10 +12,13 @@ import { AuthenticationMiddleware } from '../common/middlewares/authentication.m
 import { assertDependencies } from '../common/depencencies-validator';
 import { RefreshTokenService } from './tokens/refresh-token.service';
 import { HoldersService } from '../holders/holders.service';
+import { AuthTenantController } from './controllers/auth.tenant.controller';
+import { AuthTenantService } from './services/auth-tenant.service';
 
 export class AuthModule {
   public readonly service: AuthService;
   public readonly controller: AuthController;
+  public readonly tenantsController: AuthTenantController;
 
   constructor(
     private readonly usersService: UsersService,
@@ -27,6 +30,7 @@ export class AuthModule {
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly holdersService: HoldersService,
+    private readonly authTenantService: AuthTenantService,
   ) {
     assertDependencies(
       {
@@ -39,6 +43,7 @@ export class AuthModule {
         authenticationMiddleware,
         refreshTokenService,
         holdersService,
+        authTenantService,
       },
       this.constructor.name,
     );
@@ -53,10 +58,16 @@ export class AuthModule {
       this.holdersService,
     );
     this.controller = new AuthController(this.service);
+    this.tenantsController = new AuthTenantController(this.authTenantService);
   }
 
   initialize(app: Application): void {
-    new AuthRouter(this.controller, app, this.authenticationMiddleware);
+    new AuthRouter(
+      this.controller,
+      this.tenantsController,
+      app,
+      this.authenticationMiddleware,
+    );
     this.logger.info('Init Module - Auth - OK');
   }
 }

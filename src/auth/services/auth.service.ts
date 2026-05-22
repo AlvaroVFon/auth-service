@@ -1,27 +1,27 @@
 import { JwtPayload } from 'jsonwebtoken';
-import { CryptoService } from '../libs/crypto/crypto.service';
-import { JwtService } from '../libs/jwt/jwt.service';
-import { UsersService } from '../users/users.service';
+import { CryptoService } from '../../libs/crypto/crypto.service';
+import { JwtService } from '../../libs/jwt/jwt.service';
+import { UsersService } from '../../users/users.service';
 import {
   InvalidCredentialsError,
   UnauthorizedError,
-} from '../common/exceptions/auth.exceptions';
-import { Credentials, SignupCredentials } from './auth.interface';
+} from '../../common/exceptions/auth.exceptions';
+import { Credentials, SignupCredentials } from '../auth.interface';
 import {
   EMAIL_REGEX,
   OBJECTID_REGEX,
   PASSWORD_REGEX,
-} from '../common/constants/regex';
+} from '../../common/constants/regex';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
-} from '../common/exceptions/base.exception';
-import { MailerInterface } from '../libs/mailer/mailer.interface';
-import { CodesService } from './codes/codes.service';
-import { CodeType } from './codes/code.interface';
-import { RefreshTokenService } from './tokens/refresh-token.service';
-import { HoldersService } from '../holders/holders.service';
-import { Holder } from '../holders/holders.interface';
+} from '../../common/exceptions/base.exception';
+import { MailerInterface } from '../../libs/mailer/mailer.interface';
+import { CodesService } from '../codes/codes.service';
+import { CodeType } from '../codes/code.interface';
+import { RefreshTokenService } from '../tokens/refresh-token.service';
+import { HoldersService } from '../../holders/holders.service';
+import { Holder } from '../../holders/holders.interface';
 
 export class AuthService {
   constructor(

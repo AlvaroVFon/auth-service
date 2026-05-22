@@ -22,6 +22,9 @@ import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
 import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
+import { AuthTenantService } from '../auth/services/auth-tenant.service';
+import { TenantsService } from '../tenants/tenants.service';
+import { TenantsModel } from '../tenants/tenants.schema';
 
 const app: Application = express();
 
@@ -52,6 +55,8 @@ const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
 const codeService = new CodesService(CodesModel);
 const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
 const holdersService = new HoldersService(HoldersModel, cryptoService);
+const tenantsService = new TenantsService(TenantsModel);
+const authTenantService = new AuthTenantService(tenantsService, jwtService);
 
 // Modules
 const usersModule = new UsersModule(
@@ -71,6 +76,7 @@ const authModule = new AuthModule(
   authenticationMiddleware,
   refreshTokenService,
   holdersService,
+  authTenantService,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

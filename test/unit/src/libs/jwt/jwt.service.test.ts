@@ -1,6 +1,10 @@
+import { Types } from 'mongoose';
 import { Roles } from '../../../../../src/common/enums/roles.enum';
 import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
-import { Payload } from '../../../../../src/libs/jwt/jwt.interfaces';
+import {
+  Payload,
+  TenantPayload,
+} from '../../../../../src/libs/jwt/jwt.interfaces';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
 
@@ -102,19 +106,19 @@ describe('JwtService', () => {
 
   describe('generateAccessToken', () => {
     test('should generate a valid access token', () => {
-      const userId = '0'.repeat(24);
-      const token = jwtService.generateAccessToken(userId, Roles.USER);
+      const tenantId = new Types.ObjectId();
+      const token = jwtService.generateTenantToken(String(tenantId));
+
       assert.ok(token);
       assert.strictEqual(typeof token, 'string');
 
-      const decoded = jwtService.verifyToken(token) as Payload & {
+      const decoded = jwtService.verifyToken(token) as TenantPayload & {
         iat: number;
         exp: number;
       };
 
-      assert.strictEqual(decoded.userId, userId);
+      assert.strictEqual(decoded.tenantId, String(tenantId));
       assert.strictEqual(decoded.type, TokenTypes.ACCESS);
-      assert.strictEqual(decoded.role, Roles.USER);
     });
   });
 });
