@@ -23,3 +23,11 @@ export class ForbiddenError extends BaseError {
     this.statusCode = 403;
   }
 }
+
+export class AccountLockedError extends BaseError {
+  constructor(message: string) {
+    super(message);
+    this.code = 'ACCOUNT_LOCKED';
+    this.statusCode = 423;
+  }
+}

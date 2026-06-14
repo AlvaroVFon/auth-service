@@ -3,6 +3,7 @@ import { CryptoService } from '../../libs/crypto/crypto.service';
 import { JwtService } from '../../libs/jwt/jwt.service';
 import { UsersService } from '../../users/users.service';
 import {
+  AccountLockedError,
   InvalidCredentialsError,
   UnauthorizedError,
 } from '../../common/exceptions/auth.exceptions';
@@ -22,6 +23,7 @@ import { CodeType } from '../codes/code.interface';
 import { RefreshTokenService } from '../tokens/refresh-token.service';
 import { HoldersService } from '../../holders/holders.service';
 import { Holder } from '../../holders/holders.interface';
+import { User as UserInterface } from '../../users/users.interface';
 
 export class AuthService {
   constructor(
@@ -32,6 +34,8 @@ export class AuthService {
     private readonly codeService: CodesService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly holdersService: HoldersService,
+    private readonly maxLoginAttempts: number,
+    private readonly lockoutDurationMs: number,
   ) {}
 
   async login(
@@ -50,14 +54,23 @@ export class AuthService {
       throw new InvalidCredentialsError('Invalid email or password');
     }
 
+    if (this.isAccountLocked(user)) {
+      throw new AccountLockedError(
+        'Account is temporarily locked. Please try again later.',
+      );
+    }
+
     const isPasswordValid = await this.cryptoService.compareString(
       credentials.password,
       user.password,
     );
 
     if (!isPasswordValid) {
+      await this.handleFailedLogin(user);
       throw new InvalidCredentialsError('Invalid email or password');
     }
+
+    await this.handleSuccessfulLogin(user);
 
     const { accessToken, refreshToken } = this.jwtService.generateTokens(
       user._id.toString(),
@@ -75,6 +88,25 @@ export class AuthService {
     );
 
     return { accessToken, refreshToken };
+  }
+
+  private isAccountLocked(user: UserInterface): boolean {
+    return !!user.lockoutUntil && user.lockoutUntil.getTime() > Date.now();
+  }
+
+  private async handleFailedLogin(user: UserInterface): Promise<void> {
+    await this.usersService.incrementLoginAttempts(
+      user._id.toString(),
+      this.maxLoginAttempts,
+      this.lockoutDurationMs,
+    );
+  }
+
+  private async handleSuccessfulLogin(user: UserInterface): Promise<void> {
+    await this.usersService.updateOneById(user._id.toString(), {
+      loginAttempts: 0,
+      lockoutUntil: null,
+    });
   }
 
   async signup(credentials: SignupCredentials): Promise<Holder> {

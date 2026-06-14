@@ -31,6 +31,8 @@ export class AuthModule {
     private readonly refreshTokenService: RefreshTokenService,
     private readonly holdersService: HoldersService,
     private readonly authTenantService: AuthTenantService,
+    private readonly maxLoginAttempts: number,
+    private readonly lockoutDurationMs: number,
   ) {
     assertDependencies(
       {
@@ -56,6 +58,8 @@ export class AuthModule {
       this.codeService,
       this.refreshTokenService,
       this.holdersService,
+      this.maxLoginAttempts,
+      this.lockoutDurationMs,
     );
     this.controller = new AuthController(this.service);
     this.tenantsController = new AuthTenantController(this.authTenantService);

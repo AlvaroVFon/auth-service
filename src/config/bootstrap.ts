@@ -1,5 +1,5 @@
 process.loadEnvFile();
-import { getStringEnvVariable } from './env.config';
+import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { Database } from './database.config';
 import { startServer } from './app.config';
 import { GlobalMiddlewares } from './middlewares.config';
@@ -38,6 +38,8 @@ const JWT_REFRESH_EXPIRES_IN = parseInt(
   getStringEnvVariable('JWT_REFRESH_EXPIRATION', '86400'),
   10,
 );
+const MAX_LOGIN_ATTEMPTS = getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5);
+const LOCKOUT_DURATION_MS = getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000);
 
 // Shared instances
 const winstonLogger = new WinstonLogger();
@@ -77,6 +79,8 @@ const authModule = new AuthModule(
   refreshTokenService,
   holdersService,
   authTenantService,
+  MAX_LOGIN_ATTEMPTS,
+  LOCKOUT_DURATION_MS,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

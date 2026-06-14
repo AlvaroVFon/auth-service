@@ -8,4 +8,6 @@ export interface User {
   password: string;
   role: Roles;
   verified: boolean;
+  loginAttempts?: number;
+  lockoutUntil?: Date | null;
 }
