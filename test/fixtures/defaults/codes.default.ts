@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { Code, CodeType } from '../../../src/auth/codes/code.interface';
 import { DEFAULT_HOLDER_ID } from './holders.default';
 
-const DEFAULT_CODE_ID = new Types.ObjectId('64b7f8f4c2a1f2e5d6b8c9a0');
+const DEFAULT_CODE_ID = new Types.ObjectId();
 
 export const DEFAULT_CODE: Code = {
   _id: DEFAULT_CODE_ID,

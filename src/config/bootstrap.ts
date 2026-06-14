@@ -1,5 +1,5 @@
 process.loadEnvFile();
-import { getStringEnvVariable } from './env.config';
+import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { Database } from './database.config';
 import { startServer } from './app.config';
 import { GlobalMiddlewares } from './middlewares.config';
@@ -22,6 +22,9 @@ import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
 import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
+import { AuthTenantService } from '../auth/services/auth-tenant.service';
+import { TenantsService } from '../tenants/tenants.service';
+import { TenantsModel } from '../tenants/tenants.schema';
 
 const app: Application = express();
 
@@ -35,6 +38,8 @@ const JWT_REFRESH_EXPIRES_IN = parseInt(
   getStringEnvVariable('JWT_REFRESH_EXPIRATION', '86400'),
   10,
 );
+const MAX_LOGIN_ATTEMPTS = getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5);
+const LOCKOUT_DURATION_MS = getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000);
 
 // Shared instances
 const winstonLogger = new WinstonLogger();
@@ -52,6 +57,8 @@ const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
 const codeService = new CodesService(CodesModel);
 const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
 const holdersService = new HoldersService(HoldersModel, cryptoService);
+const tenantsService = new TenantsService(TenantsModel);
+const authTenantService = new AuthTenantService(tenantsService, jwtService);
 
 // Modules
 const usersModule = new UsersModule(
@@ -71,6 +78,9 @@ const authModule = new AuthModule(
   authenticationMiddleware,
   refreshTokenService,
   holdersService,
+  authTenantService,
+  MAX_LOGIN_ATTEMPTS,
+  LOCKOUT_DURATION_MS,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

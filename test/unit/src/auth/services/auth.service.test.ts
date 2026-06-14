@@ -1,30 +1,30 @@
-import { AuthService } from '../../../../src/auth/auth.service';
-import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
-import { JwtService } from '../../../../src/libs/jwt/jwt.service';
-import { UsersService } from '../../../../src/users/users.service';
+import { AuthService } from '../../../../../src/auth/services/auth.service';
+import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
+import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
+import { UsersService } from '../../../../../src/users/users.service';
 import {
   DEFAULT_USER,
   DEFAULT_USER_ID,
   generateRandomEmail,
-} from '../../../fixtures/defaults';
-import fixture from '../../../fixtures';
-import { User } from '../../../../src/users/users.schema';
-import { User as UserInterface } from '../../../../src/users/users.interface';
+} from '../../../../fixtures/defaults';
+import fixture from '../../../../fixtures';
+import { User } from '../../../../../src/users/users.schema';
+import { User as UserInterface } from '../../../../../src/users/users.interface';
 import { Types } from 'mongoose';
-import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
-import { CodesService } from '../../../../src/auth/codes/codes.service';
-import { CodesModel } from '../../../../src/auth/codes/codes.schema';
-import { Code, CodeType } from '../../../../src/auth/codes/code.interface';
-import { RefreshTokenService } from '../../../../src/auth/tokens/refresh-token.service';
-import { RefreshTokenModel } from '../../../../src/auth/tokens/refresh-token.schema';
-import { RefreshToken } from '../../../../src/auth/tokens/refresh-token.interface';
-import { JWT_REGEX } from '../../../../src/common/constants/regex';
-import { HoldersService } from '../../../../src/holders/holders.service';
-import { HoldersModel } from '../../../../src/holders/holders.schema';
-import { Holder } from '../../../../src/holders/holders.interface';
-import { DEFAULT_HOLDER } from '../../../fixtures/defaults/holders.default';
-import { TokenTypes } from '../../../../src/libs/jwt/token-types.enum';
-import { Roles } from '../../../../src/common/enums/roles.enum';
+import { MailerInterface } from '../../../../../src/libs/mailer/mailer.interface';
+import { CodesService } from '../../../../../src/auth/codes/codes.service';
+import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
+import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
+import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-token.service';
+import { RefreshTokenModel } from '../../../../../src/auth/tokens/refresh-token.schema';
+import { RefreshToken } from '../../../../../src/auth/tokens/refresh-token.interface';
+import { JWT_REGEX } from '../../../../../src/common/constants/regex';
+import { HoldersService } from '../../../../../src/holders/holders.service';
+import { HoldersModel } from '../../../../../src/holders/holders.schema';
+import { Holder } from '../../../../../src/holders/holders.interface';
+import { DEFAULT_HOLDER } from '../../../../fixtures/defaults/holders.default';
+import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
+import { Roles } from '../../../../../src/common/enums/roles.enum';
 
 describe('Auth Service', () => {
   let authService: AuthService;
@@ -79,6 +79,8 @@ describe('Auth Service', () => {
       codeService,
       refreshTokenService,
       holdersService,
+      5,
+      900000,
     );
   });
 
@@ -144,6 +146,204 @@ describe('Auth Service', () => {
           code: 'INVALID_CREDENTIALS',
         },
       );
+    });
+  });
+
+  describe('Account Lockout', () => {
+    const MAX_LOGIN_ATTEMPTS = 5;
+    const LOCKOUT_DURATION_MS = 900000;
+
+    beforeEach(() => {
+      authService = new AuthService(
+        userService,
+        mockCryptoService as unknown as CryptoService,
+        jwtService,
+        mockMailerService as MailerInterface,
+        codeService,
+        refreshTokenService,
+        holdersService,
+        MAX_LOGIN_ATTEMPTS,
+        LOCKOUT_DURATION_MS,
+      );
+    });
+
+    test('should increment loginAttempts on failed login', async () => {
+      const email = generateRandomEmail('lockout+');
+      const user = await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: 0,
+        lockoutUntil: null,
+      });
+
+      (mockCryptoService as any).compareString = mock.fn(async () => false);
+
+      await assert.rejects(
+        async () =>
+          await authService.login({ email, password: 'wrongpassword' }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+
+      const updatedUser = await fixture.findById<UserInterface>(
+        'User',
+        user._id.toString(),
+      );
+      assert.ok(updatedUser);
+      assert.strictEqual(updatedUser!.loginAttempts, 1);
+      assert.strictEqual(updatedUser!.lockoutUntil, null);
+    });
+
+    test('should reset loginAttempts and lockoutUntil on successful login', async () => {
+      const email = generateRandomEmail('lockout+');
+      await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: 3,
+        lockoutUntil: new Date(Date.now() - 1000),
+      });
+
+      (mockCryptoService as any).compareString = mock.fn(async () => true);
+
+      const result = await authService.login({
+        email,
+        password: 'password123',
+      });
+
+      assert.ok(result);
+      assert.strictEqual(typeof result.accessToken, 'string');
+      assert.strictEqual(typeof result.refreshToken, 'string');
+
+      const updatedUser = await fixture.findOne<UserInterface>('User', {
+        email,
+      });
+      assert.ok(updatedUser);
+      assert.strictEqual(updatedUser!.loginAttempts, 0);
+      assert.strictEqual(updatedUser!.lockoutUntil, null);
+    });
+
+    test('should set lockoutUntil when loginAttempts reaches MAX_LOGIN_ATTEMPTS', async () => {
+      const email = generateRandomEmail('lockout+');
+      await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: MAX_LOGIN_ATTEMPTS - 1,
+        lockoutUntil: null,
+      });
+
+      (mockCryptoService as any).compareString = mock.fn(async () => false);
+
+      const beforeLogin = Date.now();
+
+      await assert.rejects(
+        async () =>
+          await authService.login({ email, password: 'wrongpassword' }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+
+      const afterLogin = Date.now();
+
+      const updatedUser = await fixture.findOne<UserInterface>('User', {
+        email,
+      });
+      assert.ok(updatedUser);
+      assert.strictEqual(updatedUser!.loginAttempts, MAX_LOGIN_ATTEMPTS);
+      assert.ok(updatedUser!.lockoutUntil);
+      const lockoutUntilTime = updatedUser!.lockoutUntil!.getTime();
+      assert.ok(lockoutUntilTime >= beforeLogin + LOCKOUT_DURATION_MS - 1000);
+      assert.ok(lockoutUntilTime <= afterLogin + LOCKOUT_DURATION_MS + 1000);
+    });
+
+    test('should throw AccountLockedError when account is locked', async () => {
+      const email = generateRandomEmail('lockout+');
+      await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: MAX_LOGIN_ATTEMPTS,
+        lockoutUntil: new Date(Date.now() + 60000),
+      });
+
+      (mockCryptoService as any).compareString = mock.fn(async () => true);
+
+      await assert.rejects(
+        async () => await authService.login({ email, password: 'password123' }),
+        {
+          name: 'AccountLockedError',
+          message: 'Account is temporarily locked. Please try again later.',
+          code: 'ACCOUNT_LOCKED',
+          statusCode: 423,
+        },
+      );
+    });
+
+    test('should allow login when lockout has expired', async () => {
+      const email = generateRandomEmail('lockout+');
+      await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: MAX_LOGIN_ATTEMPTS,
+        lockoutUntil: new Date(Date.now() - 1000),
+      });
+
+      (mockCryptoService as any).compareString = mock.fn(async () => true);
+
+      const result = await authService.login({
+        email,
+        password: 'password123',
+      });
+
+      assert.ok(result);
+      assert.strictEqual(typeof result.accessToken, 'string');
+      assert.strictEqual(typeof result.refreshToken, 'string');
+    });
+
+    test('should check lockout before comparing password', async () => {
+      const email = generateRandomEmail('lockout+');
+      await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: MAX_LOGIN_ATTEMPTS,
+        lockoutUntil: new Date(Date.now() + 60000),
+      });
+
+      const compareStringMock = mock.fn(async () => true);
+      (mockCryptoService as any).compareString = compareStringMock;
+
+      await assert.rejects(
+        async () => await authService.login({ email, password: 'password123' }),
+        {
+          name: 'AccountLockedError',
+          message: 'Account is temporarily locked. Please try again later.',
+          code: 'ACCOUNT_LOCKED',
+          statusCode: 423,
+        },
+      );
+
+      // Password comparison must NOT have been called
+      assert.strictEqual(compareStringMock.mock.calls.length, 0);
+    });
+
+    test('should exclude loginAttempts and lockoutUntil from JSON serialization', async () => {
+      const email = generateRandomEmail('lockout+');
+      const user = await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: 3,
+        lockoutUntil: new Date(),
+      });
+
+      const userDoc = await fixture.findById<UserInterface>(
+        'User',
+        user._id.toString(),
+      );
+      assert.ok(userDoc);
+
+      const json = (userDoc as any).toJSON();
+
+      assert.strictEqual('loginAttempts' in json, false);
+      assert.strictEqual('lockoutUntil' in json, false);
+      // password is already excluded - confirm it stays excluded
+      assert.strictEqual('password' in json, false);
     });
   });
 

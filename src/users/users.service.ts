@@ -111,6 +111,36 @@ export class UsersService {
     return user;
   }
 
+  async incrementLoginAttempts(
+    id: string,
+    maxAttempts: number,
+    lockoutDurationMs: number,
+  ): Promise<UserInterface | null> {
+    if (!id) {
+      throw new InvalidArgumentError('ID is required');
+    }
+    if (!OBJECTID_REGEX.test(id)) {
+      throw new InvalidArgumentError('Invalid ID format');
+    }
+
+    const user = await this.usersModel.findById(id);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    const loginAttempts = (user.loginAttempts ?? 0) + 1;
+    const lockoutUntil =
+      loginAttempts >= maxAttempts
+        ? new Date(Date.now() + lockoutDurationMs)
+        : null;
+
+    return this.usersModel.findByIdAndUpdate(
+      id,
+      { loginAttempts, lockoutUntil },
+      { new: true },
+    );
+  }
+
   async deleteOneById(id: string): Promise<UserInterface | null> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');

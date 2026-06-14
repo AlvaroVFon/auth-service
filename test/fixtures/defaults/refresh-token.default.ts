@@ -3,9 +3,7 @@ import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
 import { DEFAULT_USER_ID } from './users.default';
 import { TokenTypes } from '../../../src/libs/jwt/token-types.enum';
 
-export const DEFAULT_REFRESH_TOKEN_ID = new Types.ObjectId(
-  '64b7f8f4c2a1f2e5d6b8c9a1',
-);
+export const DEFAULT_REFRESH_TOKEN_ID = new Types.ObjectId();
 
 export const DEFAULT_REFRESH_TOKEN_JTI = '550e8400-e29b-41d4-a716-446655440000';
 

@@ -4,75 +4,79 @@ Este documento detalla el plan para fortalecer el servicio de autenticación act
 
 ---
 
-## Fase 1: Sesiones y Gestión de Tokens (Robustez) - 80% Completada
+## Fase 1: Sesiones y Gestión de Tokens (Robustez) — ~60% Completada
 
 El objetivo es permitir sesiones largas y seguras sin comprometer la seguridad.
 
 - [x] **Implementación de Refresh Tokens:**
-  - [x] Crear una colección `RefreshToken` para persistir tokens de larga duración.
-  - [x] Implementar rotación de tokens (un uso por token) para prevenir ataques de reutilización.
-  - [x] Endpoint `POST /auth/refresh` para generar nuevos Access Tokens (lógica implementada en servicio, pendiente exponer en router).
-- [ ] **Mecanismo de Logout / Revocación:**
-  - [x] Endpoint `POST /auth/logout` que invalide el refresh token actual (lógica implementada en servicio, pendiente exponer en router).
-  - [ ] Implementar una "Blacklist" para invalidar Access Tokens si es necesario.
-- [ ] **Información de Sesión:**
-  - [ ] Registrar IP y User-Agent en cada login para control de dispositivos.
+  - [x] Colección `RefreshToken` para persistir tokens de larga duración.
+  - [x] Rotación de tokens (un uso por token, reemplazo vía `replacedByJti`).
+  - [x] Endpoint `POST /auth/refresh` expuesto y funcional (requiere auth).
+- [x] **Logout / Revocación:**
+  - [x] Endpoint `POST /auth/logout` expuesto y funcional — revoca todos los refresh tokens activos del usuario.
+- [ ] **Blacklist de Access Tokens:** No implementada. Dependencia actual en tokens de corta duración (1h).
+- [ ] **Información de Sesión:** No se registra IP ni User-Agent en login ni en refresh tokens.
 
-## Fase 2: Recuperación y Experiencia de Usuario - 100% Completada
+## Fase 2: Recuperación y Experiencia de Usuario — 100% Completada
 
-Completar los flujos esenciales de autoservicio de cuenta.
+- [x] **Flujo "Forgot Password":**
+  - [x] Endpoint `POST /auth/forgot-password` (envío de código por email).
+  - [x] `sendPasswordResetEmail()` en `MailerInterface`.
+  - [x] Template `reset_password.hbs`.
+  - [x] Endpoint `POST /auth/reset-password` (público, validación por `userId` + `code`).
+- [x] **Verificación de Email:**
+  - [x] Flujo Holder → User al verificar email.
 
-- [x] **Flujo Completo de "Forgot Password":**
-  - [x] Endpoint público `POST /auth/forgot-password` (envío de código por email).
-  - [x] Agregar `sendPasswordResetEmail()` al `MailerInterface` y adaptadores.
-  - [x] Crear template `reset_password.hbs` en `src/mail/templates/`.
-  - [x] Endpoint `POST /auth/reset-password` que valide el código y cambie la contraseña (ahora es público, acepta `userId` + `code`).
-- [x] **Verificación de Email (Hardening):**
-  - [x] Asegurar que el flujo de `verify` sea consistente y obligatorio para activar la cuenta.
+## Fase 3: Blindaje de Seguridad (Hardening) — ~15% Completada
 
-## Fase 3: Blindaje de Seguridad (Hardening) - 0% Completada
-
-Proteger el servicio contra abusos y ataques automatizados.
-
-- [ ] **Rate Limiting:**
-  - [x] Implementar límites de peticiones por IP (`express-rate-limit`).
-  - [ ] Aplicar políticas estrictas en `/auth/login`, `/auth/signup` y recuperación de contraseña.
+- [x] **Rate Limiting:**
+  - [x] `express-rate-limit` instalado.
+  - [x] Middleware global aplicado (100 req / 15 min).
+  - [ ] Políticas estrictas diferenciadas por ruta (`/auth/login`, `/auth/signup`, `/auth/forgot-password`).
 - [ ] **Bloqueo de Cuentas (Account Lockout):**
-  - [ ] Implementar contador de intentos fallidos en `User` schema.
-  - [ ] Bloquear temporalmente cuentas tras X intentos fallidos.
+  - [ ] Campos `loginAttempts` / `lockoutUntil` en el schema `User`.
+  - [ ] Contador de intentos fallidos en `auth.service.ts`.
+  - [ ] Bloqueo temporal tras X intentos fallidos consecutivos.
 
-## Fase 4: Autenticación Social (OAuth2) - 0% Completada
+## Fase 4: Autenticación Social (OAuth2) — 0% Completada
 
-Reducir la fricción para nuevos usuarios.
+- [ ] **Login con Google:** No implementado.
+- [ ] **Login con GitHub:** No implementado.
 
-- [ ] **Integración con Proveedores:**
-  - [ ] Implementar "Login with Google".
-  - [ ] Implementar "Login with GitHub".
+## Fase 5: Transición a Multi-Tenancy — ~20% Completada
 
-## Fase 5: Transición a Multi-Tenancy - 0% Completada
+- [x] **Cimientos de Tenants:**
+  - [x] Módulo `Tenants` con schema (`name`, `active`, `description`, `secret`).
+  - [x] Servicio con `findById()`.
+  - [x] Autenticación tenant (`POST /auth/tenant/login` + JWT + middleware).
+- [ ] **CRUD completo de Tenants:** No implementado (create, update, delete, list).
+- [ ] **Aislamiento Físico (Database-per-tenant):** `ConnectionManager` no implementado.
+- [ ] **Seguridad Multi-tenant:** `tenantId` ausente en JWT, User y queries.
 
-Una vez el servicio sea robusto, escalar hacia múltiples proyectos.
+---
 
-- [ ] **Cimientos de Tenants:**
-  - [ ] Crear el módulo de `Tenants` para gestionar proyectos.
-- [ ] **Aislamiento Físico (Database-per-tenant):**
-  - [ ] Implementar el `ConnectionManager` para gestionar múltiples dbs de Mongoose dinámicamente.
-- [ ] **Seguridad Multi-tenant:**
-  - [ ] Incluir y validar `tenantId` en los JWT y filtrado de datos.
+## Cobertura de Tests
+
+- **Unitarios:** Auth service, auth-tenant service, refresh tokens, JWT, crypto, users, holders, codes, tenants, config, env.
+- **E2E:** Login, signup, logout, refresh, verify email, forgot-password, reset-password, tenant-login, CRUD users.
+- Los tests usan `node --test` con `tsx` y base de datos aislada por proceso (`auth_db_test_${pid}`).
 
 ---
 
 ## Próximos Pasos Inmediatos
 
-1. Exponer endpoints `POST /auth/refresh` y `POST /auth/logout` en `auth.router.ts`.
-2. Agregar tracking de IP/User-Agent en login (Fase 1).
-3. Implementar Rate Limiting (Fase 3).
-4. Implementar Account Lockout (Fase 3).
+1. Añadir políticas de rate limiting estrictas en `/auth/login`, `/auth/signup`, `/auth/forgot-password`.
+2. Implementar Account Lockout (campos en User schema + contador en login).
+3. Tracking de IP / User-Agent en login y refresh tokens.
+4. Blacklist de Access Tokens.
+5. OAuth2 (Google, GitHub).
 
 ---
 
 ## Consideraciones Técnicas
 
-- **Estrategia de Datos:** Mantener el uso de Mongoose, moviéndose hacia una arquitectura de modelos dinámicos en la Fase 5.
-- **Prioridad:** Primero robustez y funcionalidad core, luego escalabilidad multi-proyecto.
-- **Estado Actual:** Core user CRUD y auth scaffolding en lugar, refresh tokens lógica completa pero endpoints faltantes, verificación de email funcional, flujo completo de forgot/reset password implementado.
+- **Stack:** Express 5 + Mongoose (MongoDB) + TypeScript (ESM via `tsx`).
+- **Tokens:** JWT con `jti` (UUID). Access: 1h. Refresh: configurable (JWT_REFRESH_EXPIRATION). Rotación completa.
+- **Rate Limiting:** `express-rate-limit` v8 global. Pendiente granularidad por endpoint.
+- **Multi-tenancy:** Base construida (schema + auth), sin aislamiento físico ni `tenantId` en datos.
+- **Prioridad:** Primero robustez y funcionalidad core (Fases 1-3), luego OAuth2, luego escalabilidad multi-proyecto.

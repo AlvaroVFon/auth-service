@@ -29,6 +29,14 @@ const userSchema = new Schema<UserInterface>(
       type: Boolean,
       default: false,
     },
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockoutUntil: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -36,6 +44,8 @@ const userSchema = new Schema<UserInterface>(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transform: (_doc, ret: any) => {
         delete ret.password;
+        delete ret.loginAttempts;
+        delete ret.lockoutUntil;
         delete ret.__v;
         return ret;
       },

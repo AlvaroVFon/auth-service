@@ -141,4 +141,48 @@ describe('E2E Auth Login', () => {
     assert.ok(secondToken);
     assert.notStrictEqual(firstToken, secondToken);
   });
+
+  test('should return 423 when account is locked', async () => {
+    const user = await fixture.create<User>('User', {
+      loginAttempts: 5,
+      lockoutUntil: new Date(Date.now() + 60000),
+    });
+
+    const loginCredentials = {
+      email: user.email,
+      password: DEFAULT_USER_PLAIN_PASSWORD,
+    };
+
+    const response = await request(app)
+      .post('/auth/login')
+      .send(loginCredentials)
+      .expect(423);
+
+    assert.strictEqual(
+      response.body.message,
+      'Account is temporarily locked. Please try again later.',
+    );
+    assert.strictEqual(response.body.code, 'ACCOUNT_LOCKED');
+  });
+
+  test('should login successfully after lockout expiry', async () => {
+    const user = await fixture.create<User>('User', {
+      loginAttempts: 5,
+      lockoutUntil: new Date(Date.now() - 1000),
+    });
+
+    const loginCredentials = {
+      email: user.email,
+      password: DEFAULT_USER_PLAIN_PASSWORD,
+    };
+
+    const response = await request(app)
+      .post('/auth/login')
+      .send(loginCredentials)
+      .expect(200);
+
+    assert.ok(response.body.accessToken);
+    assert.strictEqual(typeof response.body.accessToken, 'string');
+    assert.ok(JWT_REGEX.test(response.body.accessToken));
+  });
 });
