@@ -5,7 +5,10 @@ import { HttpInterceptor } from '../../src/common/interceptors/exception.interce
 import { HttpLoggerInterceptor } from '../../src/common/interceptors/httplogger.interceptor';
 import { WinstonLogger } from '../../src/libs/logger/adapters/winston.logger';
 import { CryptoService } from '../../src/libs/crypto/crypto.service';
-import { getStringEnvVariable } from '../../src/config/env.config';
+import {
+  getNumberEnvVariable,
+  getStringEnvVariable,
+} from '../../src/config/env.config';
 import { JwtService } from '../../src/libs/jwt/jwt.service';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
@@ -31,6 +34,25 @@ const JWT_EXPIRES_IN = parseInt(
 const JWT_REFRESH_EXPIRES_IN = parseInt(
   getStringEnvVariable('JWT_REFRESH_EXPIRES_IN', '86400'),
   10,
+);
+
+const RATE_LIMIT_LOGIN_WINDOW_MS = getNumberEnvVariable(
+  'RATE_LIMIT_LOGIN_WINDOW_MS',
+  5000,
+);
+const RATE_LIMIT_LOGIN_MAX = getNumberEnvVariable('RATE_LIMIT_LOGIN_MAX', 2);
+const RATE_LIMIT_SIGNUP_WINDOW_MS = getNumberEnvVariable(
+  'RATE_LIMIT_SIGNUP_WINDOW_MS',
+  5000,
+);
+const RATE_LIMIT_SIGNUP_MAX = getNumberEnvVariable('RATE_LIMIT_SIGNUP_MAX', 2);
+const RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS = getNumberEnvVariable(
+  'RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS',
+  5000,
+);
+const RATE_LIMIT_FORGOT_PASSWORD_MAX = getNumberEnvVariable(
+  'RATE_LIMIT_FORGOT_PASSWORD_MAX',
+  2,
 );
 
 const winstonLogger = new WinstonLogger();
@@ -70,6 +92,22 @@ const authModule = new AuthModule(
   refreshTokenService,
   holdersService,
   authTenantService,
+  5,
+  900000,
+  {
+    login: {
+      windowMs: RATE_LIMIT_LOGIN_WINDOW_MS,
+      max: RATE_LIMIT_LOGIN_MAX,
+    },
+    signup: {
+      windowMs: RATE_LIMIT_SIGNUP_WINDOW_MS,
+      max: RATE_LIMIT_SIGNUP_MAX,
+    },
+    forgotPassword: {
+      windowMs: RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS,
+      max: RATE_LIMIT_FORGOT_PASSWORD_MAX,
+    },
+  },
 );
 
 export const createAppTestInstance = async () => {
