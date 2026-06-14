@@ -25,6 +25,7 @@ import { HoldersService } from '../holders/holders.service';
 import { AuthTenantService } from '../auth/services/auth-tenant.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { TenantsModel } from '../tenants/tenants.schema';
+import { AuthRateLimitConfig } from '../auth/auth.router';
 
 const app: Application = express();
 
@@ -40,6 +41,40 @@ const JWT_REFRESH_EXPIRES_IN = parseInt(
 );
 const MAX_LOGIN_ATTEMPTS = getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5);
 const LOCKOUT_DURATION_MS = getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000);
+
+const RATE_LIMIT_LOGIN_WINDOW_MS = getNumberEnvVariable(
+  'RATE_LIMIT_LOGIN_WINDOW_MS',
+  900000,
+);
+const RATE_LIMIT_LOGIN_MAX = getNumberEnvVariable('RATE_LIMIT_LOGIN_MAX', 5);
+const RATE_LIMIT_SIGNUP_WINDOW_MS = getNumberEnvVariable(
+  'RATE_LIMIT_SIGNUP_WINDOW_MS',
+  3600000,
+);
+const RATE_LIMIT_SIGNUP_MAX = getNumberEnvVariable('RATE_LIMIT_SIGNUP_MAX', 3);
+const RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS = getNumberEnvVariable(
+  'RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS',
+  3600000,
+);
+const RATE_LIMIT_FORGOT_PASSWORD_MAX = getNumberEnvVariable(
+  'RATE_LIMIT_FORGOT_PASSWORD_MAX',
+  3,
+);
+
+const rateLimitConfig: AuthRateLimitConfig = {
+  login: {
+    windowMs: RATE_LIMIT_LOGIN_WINDOW_MS,
+    max: RATE_LIMIT_LOGIN_MAX,
+  },
+  signup: {
+    windowMs: RATE_LIMIT_SIGNUP_WINDOW_MS,
+    max: RATE_LIMIT_SIGNUP_MAX,
+  },
+  forgotPassword: {
+    windowMs: RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS,
+    max: RATE_LIMIT_FORGOT_PASSWORD_MAX,
+  },
+};
 
 // Shared instances
 const winstonLogger = new WinstonLogger();
@@ -81,6 +116,7 @@ const authModule = new AuthModule(
   authTenantService,
   MAX_LOGIN_ATTEMPTS,
   LOCKOUT_DURATION_MS,
+  rateLimitConfig,
 );
 
 export const bootstrap = async (logger: LoggerInterface) => {

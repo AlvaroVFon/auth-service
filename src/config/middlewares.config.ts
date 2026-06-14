@@ -6,7 +6,7 @@ export class GlobalMiddlewares {
   static initialize(app: Application) {
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-    app.use(RequiredBodyMiddleware.initialize);
     app.use(rateLimiter);
+    app.use(RequiredBodyMiddleware.initialize);
   }
 }

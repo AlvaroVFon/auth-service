@@ -1,7 +1,7 @@
 import { Application } from 'express';
 import { AuthService } from './services/auth.service';
 import { AuthController } from './controllers/auth.controller';
-import { AuthRouter } from './auth.router';
+import { AuthRouter, AuthRateLimitConfig } from './auth.router';
 import { UsersService } from '../users/users.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { JwtService } from '../libs/jwt/jwt.service';
@@ -33,6 +33,7 @@ export class AuthModule {
     private readonly authTenantService: AuthTenantService,
     private readonly maxLoginAttempts: number,
     private readonly lockoutDurationMs: number,
+    private readonly rateLimitConfig: AuthRateLimitConfig,
   ) {
     assertDependencies(
       {
@@ -71,6 +72,7 @@ export class AuthModule {
       this.tenantsController,
       app,
       this.authenticationMiddleware,
+      this.rateLimitConfig,
     );
     this.logger.info('Init Module - Auth - OK');
   }
