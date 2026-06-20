@@ -1,4 +1,4 @@
 export interface RequestContext {
-  ipAddress?: string;
-  userAgent?: string;
+  ipAddress: string | undefined;
+  userAgent: string | undefined;
 }

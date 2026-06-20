@@ -1,14 +1,12 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { Catch } from '../../common/decorators/catch.decorator';
+import { RequestContext } from '../tokens/request-context.type';
 
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  private buildRequestContext(req: Request): {
-    ipAddress?: string;
-    userAgent?: string;
-  } {
+  private buildRequestContext(req: Request): RequestContext {
     return {
       ipAddress: req.ip ?? undefined,
       userAgent: req.get('User-Agent') ?? undefined,
