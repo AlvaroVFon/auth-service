@@ -9,9 +9,16 @@ import { ConfigEntry } from '../../src/libs/config-service/config-service.interf
 import { ConfigEntryModel } from '../../src/libs/config-service/adapters/mongo-config-entry.schema';
 import { TenantsModel } from '../../src/tenants/tenants.schema';
 import { Tenant } from '../../src/tenants/tentants.interface';
+import { BlacklistedToken } from '../../src/auth/tokens/blacklisted-token.interface';
+import { BlacklistedTokenModel } from '../../src/auth/tokens/blacklisted-token.schema';
 
 export const registerModels = async (): Promise<void> => {
   await fixture.registerModel<UserInterface>(User.modelName, User.schema);
+
+  await fixture.registerModel<BlacklistedToken>(
+    BlacklistedTokenModel.modelName,
+    BlacklistedTokenModel.schema,
+  );
 
   await fixture.registerModel<CodeInterface>(
     CodesModel.modelName,

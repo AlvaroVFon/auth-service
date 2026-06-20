@@ -64,7 +64,9 @@ export class AuthController {
   @Catch()
   async logout(req: Request, res: Response): Promise<void> {
     const userId = req.user?.id as string;
-    await this.authService.logout(userId);
+    const jti = req.user?.jti;
+    const expiresAt = req.user?.expiresAt;
+    await this.authService.logout(userId, jti, expiresAt);
 
     res.status(204).send();
   }

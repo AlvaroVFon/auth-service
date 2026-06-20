@@ -6,6 +6,8 @@ declare global {
       user?: {
         id: string;
         role: Roles;
+        jti?: string;
+        expiresAt?: Date;
       };
       tenantId?: string;
     }
