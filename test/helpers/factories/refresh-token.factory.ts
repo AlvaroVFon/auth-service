@@ -10,6 +10,8 @@ export class RefreshTokenFactory {
       expiresAt: MotherFactory.date(),
       revokedAt: null,
       replacedByJti: null,
+      ipAddress: null,
+      userAgent: null,
       jti: MotherFactory.uuid(),
       userId: MotherFactory.objectId(),
       ...overrides,

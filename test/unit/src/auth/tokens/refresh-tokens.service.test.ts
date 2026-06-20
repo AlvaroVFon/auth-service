@@ -80,6 +80,70 @@ describe('RefreshTokenService', () => {
         String(refreshTokenData.userId),
       );
     });
+
+    test('should persist ipAddress and userAgent when ctx is provided', async () => {
+      const refreshTokenData = RefreshTokenFactory.generate();
+      const ctx = {
+        ipAddress: '203.0.113.1',
+        userAgent: 'Mozilla/5.0',
+      };
+
+      const refreshToken = await refreshTokenService.create(
+        String(refreshTokenData.userId),
+        refreshTokenData.jti,
+        refreshTokenData.expiresAt,
+        ctx,
+      );
+
+      assert.strictEqual(refreshToken.ipAddress, '203.0.113.1');
+      assert.strictEqual(refreshToken.userAgent, 'Mozilla/5.0');
+
+      const dbToken = await fixture.findOne<RefreshToken>(
+        RefreshTokenModel.modelName,
+        { jti: refreshTokenData.jti },
+      );
+
+      assert.strictEqual(dbToken?.ipAddress, '203.0.113.1');
+      assert.strictEqual(dbToken?.userAgent, 'Mozilla/5.0');
+    });
+
+    test('should set ipAddress and userAgent to null when ctx is omitted', async () => {
+      const refreshTokenData = RefreshTokenFactory.generate();
+
+      const refreshToken = await refreshTokenService.create(
+        String(refreshTokenData.userId),
+        refreshTokenData.jti,
+        refreshTokenData.expiresAt,
+      );
+
+      assert.strictEqual(refreshToken.ipAddress, null);
+      assert.strictEqual(refreshToken.userAgent, null);
+
+      const dbToken = await fixture.findOne<RefreshToken>(
+        RefreshTokenModel.modelName,
+        { jti: refreshTokenData.jti },
+      );
+
+      assert.strictEqual(dbToken?.ipAddress, null);
+      assert.strictEqual(dbToken?.userAgent, null);
+    });
+
+    test('should throw an error when userId is invalid even with ctx', async () => {
+      const ctx = {
+        ipAddress: '198.51.100.1',
+        userAgent: 'curl/7.0',
+      };
+
+      await assert.rejects(
+        refreshTokenService.create(
+          'invalid',
+          '550e8400-e29b-41d4-a716-446655440099',
+          new Date(),
+          ctx,
+        ),
+        new InvalidArgumentError('userId is not a valid ObjectId'),
+      );
+    });
   });
 
   describe('findByJti', () => {

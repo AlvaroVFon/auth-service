@@ -5,10 +5,23 @@ import { Catch } from '../../common/decorators/catch.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  private buildRequestContext(req: Request): {
+    ipAddress?: string;
+    userAgent?: string;
+  } {
+    return {
+      ipAddress: req.ip ?? undefined,
+      userAgent: req.get('User-Agent') ?? undefined,
+    };
+  }
+
   @Catch()
   async login(req: Request, res: Response): Promise<void> {
     const credentials = req.body;
-    const tokens = await this.authService.login(credentials);
+    const tokens = await this.authService.login(
+      credentials,
+      this.buildRequestContext(req),
+    );
 
     res.status(200).json(tokens);
   }
@@ -25,7 +38,11 @@ export class AuthController {
   async refreshToken(req: Request, res: Response): Promise<void> {
     const userId = req.user?.id as string;
     const refreshToken = req.body.refreshToken;
-    const tokens = await this.authService.refreshToken(userId, refreshToken);
+    const tokens = await this.authService.refreshToken(
+      userId,
+      refreshToken,
+      this.buildRequestContext(req),
+    );
 
     res.status(200).json(tokens);
   }

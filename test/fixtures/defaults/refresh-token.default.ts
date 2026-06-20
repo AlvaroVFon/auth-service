@@ -14,5 +14,7 @@ export const DEFAULT_REFRESH_TOKEN: RefreshToken = {
   expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
   revokedAt: null,
   replacedByJti: null,
+  ipAddress: null,
+  userAgent: null,
   type: TokenTypes.REFRESH,
 };

@@ -1,5 +1,6 @@
 import { Model } from 'mongoose';
 import { RefreshToken } from './refresh-token.interface';
+import { RequestContext } from './request-context.type';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -13,6 +14,7 @@ export class RefreshTokenService {
     userId: string,
     jti: string,
     expiresAt: Date,
+    ctx?: RequestContext,
   ): Promise<RefreshToken> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
@@ -27,6 +29,8 @@ export class RefreshTokenService {
       expiresAt,
       revokedAt: null,
       replacedByJti: null,
+      ipAddress: ctx?.ipAddress ?? null,
+      userAgent: ctx?.userAgent ?? null,
     });
   }
 

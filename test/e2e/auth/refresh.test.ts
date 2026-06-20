@@ -1,4 +1,5 @@
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
 import fixture from '../../fixtures';
@@ -6,6 +7,7 @@ import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
+import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
 import { JWT_REGEX } from '../../../src/common/constants/regex';
 
 describe('E2E Auth Refresh Token', () => {
@@ -166,5 +168,54 @@ describe('E2E Auth Refresh Token', () => {
       secondRefresh.body.accessToken,
       firstRefresh.body.accessToken,
     );
+  });
+
+  test('should store new IP and User-Agent on rotated refresh token', async () => {
+    const { accessToken, refreshToken } = await signupAndLogin();
+
+    const refreshResponse = await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Forwarded-For', '198.51.100.1')
+      .set('User-Agent', 'curl/7.0')
+      .send({ refreshToken })
+      .expect(200);
+
+    const decoded = jwt.decode(refreshResponse.body.refreshToken) as {
+      jti: string;
+    };
+    assert.ok(decoded?.jti);
+
+    const storedToken = await fixture.findOne<RefreshToken>('RefreshToken', {
+      jti: decoded.jti,
+    });
+
+    assert.ok(storedToken);
+    assert.strictEqual(storedToken?.ipAddress, '198.51.100.1');
+    assert.strictEqual(storedToken?.userAgent, 'curl/7.0');
+  });
+
+  test('should set userAgent to null when header is missing on refresh', async () => {
+    const { accessToken, refreshToken } = await signupAndLogin();
+
+    const refreshResponse = await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Forwarded-For', '100.200.0.1')
+      .send({ refreshToken })
+      .expect(200);
+
+    const decoded = jwt.decode(refreshResponse.body.refreshToken) as {
+      jti: string;
+    };
+    assert.ok(decoded?.jti);
+
+    const storedToken = await fixture.findOne<RefreshToken>('RefreshToken', {
+      jti: decoded.jti,
+    });
+
+    assert.ok(storedToken);
+    assert.strictEqual(storedToken?.ipAddress, '100.200.0.1');
+    assert.strictEqual(storedToken?.userAgent, null);
   });
 });
