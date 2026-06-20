@@ -9,6 +9,8 @@ const RefreshTokenSchema = new Schema<RefreshToken>(
     expiresAt: { type: Date, required: true },
     revokedAt: { type: Date, default: null },
     replacedByJti: { type: String, default: null },
+    ipAddress: { type: String, default: null },
+    userAgent: { type: String, default: null },
     type: {
       type: String,
       enum: [TokenTypes.REFRESH],

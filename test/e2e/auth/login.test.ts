@@ -1,4 +1,5 @@
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { getTestAppInstance } from '../../utils/app';
 import fixture from '../../fixtures';
 import { Application } from 'express';
@@ -7,6 +8,7 @@ import {
   generateRandomEmail,
 } from '../../fixtures/defaults';
 import { User } from '../../../src/users/users.interface';
+import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
 import { JWT_REGEX } from '../../../src/common/constants/regex';
 
 describe('E2E Auth Login', () => {
@@ -184,5 +186,32 @@ describe('E2E Auth Login', () => {
     assert.ok(response.body.accessToken);
     assert.strictEqual(typeof response.body.accessToken, 'string');
     assert.ok(JWT_REGEX.test(response.body.accessToken));
+  });
+
+  test('should store IP and User-Agent from request headers in the refresh token', async () => {
+    const user = await fixture.create<User>('User');
+
+    const loginCredentials = {
+      email: user.email,
+      password: DEFAULT_USER_PLAIN_PASSWORD,
+    };
+
+    const response = await request(app)
+      .post('/auth/login')
+      .set('X-Forwarded-For', '203.0.113.1')
+      .set('User-Agent', 'Mozilla/5.0')
+      .send(loginCredentials)
+      .expect(200);
+
+    const decoded = jwt.decode(response.body.refreshToken) as { jti: string };
+    assert.ok(decoded?.jti);
+
+    const storedToken = await fixture.findOne<RefreshToken>('RefreshToken', {
+      jti: decoded.jti,
+    });
+
+    assert.ok(storedToken);
+    assert.strictEqual(storedToken?.ipAddress, '203.0.113.1');
+    assert.strictEqual(storedToken?.userAgent, 'Mozilla/5.0');
   });
 });

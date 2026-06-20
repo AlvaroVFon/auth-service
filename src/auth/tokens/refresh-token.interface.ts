@@ -8,5 +8,7 @@ export interface RefreshToken {
   expiresAt: Date;
   revokedAt: Date | null;
   replacedByJti: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
   type: TokenTypes.REFRESH;
 }

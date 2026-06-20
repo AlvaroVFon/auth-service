@@ -112,6 +112,7 @@ const authModule = new AuthModule(
 
 export const createAppTestInstance = async () => {
   app = express();
+  app.set('trust proxy', true);
 
   HttpLoggerInterceptor.initialize(app, winstonLogger);
   GlobalMiddlewares.initialize(app);
