@@ -22,6 +22,7 @@ import { CodesService } from '../codes/codes.service';
 import { CodeType } from '../codes/code.interface';
 import { RefreshTokenService } from '../tokens/refresh-token.service';
 import { RequestContext } from '../tokens/request-context.type';
+import { BlacklistService } from '../tokens/blacklist.service';
 import { HoldersService } from '../../holders/holders.service';
 import { Holder } from '../../holders/holders.interface';
 import { User as UserInterface } from '../../users/users.interface';
@@ -34,6 +35,7 @@ export class AuthService {
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
     private readonly refreshTokenService: RefreshTokenService,
+    private readonly blacklistService: BlacklistService,
     private readonly holdersService: HoldersService,
     private readonly maxLoginAttempts: number,
     private readonly lockoutDurationMs: number,
@@ -292,12 +294,20 @@ export class AuthService {
     return { accessToken, refreshToken: newRefreshToken };
   }
 
-  async logout(userId: string): Promise<void> {
+  async logout(
+    userId: string,
+    accessJti?: string,
+    accessExpiresAt?: Date,
+  ): Promise<void> {
     if (!userId) {
       throw new InvalidArgumentError('userId is required');
     }
     if (OBJECTID_REGEX.test(userId) === false) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+
+    if (accessJti && accessExpiresAt) {
+      await this.blacklistService.blacklist(accessJti, accessExpiresAt);
     }
 
     await this.refreshTokenService.revokeAllByUserId(userId);

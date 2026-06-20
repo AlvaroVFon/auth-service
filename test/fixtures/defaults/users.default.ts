@@ -16,6 +16,7 @@ const defaultUserPayload: Payload = {
   userId: DEFAULT_USER_ID.toString(),
   role: Roles.USER,
   type: TokenTypes.ACCESS,
+  jti: '11111111-1111-4111-a111-111111111111',
 };
 
 export const DEFAULT_USER_TOKEN = jwt.sign(
@@ -36,6 +37,7 @@ const defaultAdminPayload: Payload = {
   userId: DEFAULT_ADMIN_ID.toString(),
   role: Roles.ADMIN,
   type: TokenTypes.ACCESS,
+  jti: '22222222-2222-4222-a222-222222222222',
 };
 
 export const DEFAULT_ADMIN_TOKEN = jwt.sign(

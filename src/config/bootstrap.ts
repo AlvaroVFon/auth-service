@@ -20,6 +20,8 @@ import { CodesService } from '../auth/codes/codes.service';
 import { CodesModel } from '../auth/codes/codes.schema';
 import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
 import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
+import { BlacklistService } from '../auth/tokens/blacklist.service';
+import { BlacklistedTokenModel } from '../auth/tokens/blacklisted-token.schema';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 import { AuthTenantService } from '../auth/services/auth-tenant.service';
@@ -85,7 +87,11 @@ const jwtService = new JwtService(
   JWT_EXPIRES_IN,
   JWT_REFRESH_EXPIRES_IN,
 );
-const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
+const blacklistService = new BlacklistService(BlacklistedTokenModel);
+const authenticationMiddleware = new AuthenticationMiddleware(
+  jwtService,
+  blacklistService,
+);
 const authorizationMiddleware = new AuthorizationMiddleware();
 const templateRenderer = new HandlebarsEngine();
 const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
@@ -112,6 +118,7 @@ const authModule = new AuthModule(
   codeService,
   authenticationMiddleware,
   refreshTokenService,
+  blacklistService,
   holdersService,
   authTenantService,
   MAX_LOGIN_ATTEMPTS,

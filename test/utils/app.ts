@@ -18,6 +18,8 @@ import { CodesService } from '../../src/auth/codes/codes.service';
 import { CodesModel } from '../../src/auth/codes/codes.schema';
 import { RefreshTokenService } from '../../src/auth/tokens/refresh-token.service';
 import { RefreshTokenModel } from '../../src/auth/tokens/refresh-token.schema';
+import { BlacklistService } from '../../src/auth/tokens/blacklist.service';
+import { BlacklistedTokenModel } from '../../src/auth/tokens/blacklisted-token.schema';
 import { HoldersModel } from '../../src/holders/holders.schema';
 import { HoldersService } from '../../src/holders/holders.service';
 import { TenantsService } from '../../src/tenants/tenants.service';
@@ -62,7 +64,11 @@ const jwtService = new JwtService(
   JWT_EXPIRES_IN,
   JWT_REFRESH_EXPIRES_IN,
 );
-const authenticationMiddleware = new AuthenticationMiddleware(jwtService);
+const blacklistService = new BlacklistService(BlacklistedTokenModel);
+const authenticationMiddleware = new AuthenticationMiddleware(
+  jwtService,
+  blacklistService,
+);
 const authorizationMiddleware = new AuthorizationMiddleware();
 const mailService = {
   sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
@@ -90,6 +96,7 @@ const authModule = new AuthModule(
   codeService,
   authenticationMiddleware,
   refreshTokenService,
+  blacklistService,
   holdersService,
   authTenantService,
   5,
