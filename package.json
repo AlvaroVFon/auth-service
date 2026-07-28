@@ -55,7 +55,7 @@
     "express-rate-limit": "^8.5.1",
     "handlebars": "4.7.9",
     "jsonwebtoken": "9.0.3",
-    "mongoose": "9.1.6",
+    "mongoose": "9.7.2",
     "nodemailer": "8.0.5",
     "winston": "3.19.0"
   },
