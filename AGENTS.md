@@ -3,6 +3,10 @@
 ## Commands
 
 - **Dev server**: `pnpm dev` (uses `tsx watch`)
+- **Unit tests**: `pnpm test:unit` (fast, no MongoDB required)
+- **Integration tests**: `pnpm test:integration` (requires MongoDB)
+- **E2E tests**: `pnpm test:e2e` (requires MongoDB)
+- **All tests**: `pnpm test` (runs unit -> integration -> e2e)
 - **Tests**: `pnpm test` (Node native test runner, not Jest)
 - **TDD watch**: `pnpm tdd`
 - **Lint**: `pnpm lint` (oxlint) — `pnpm lint:fix` to apply fixes
@@ -22,13 +26,14 @@
 
 ## Testing
 
-- **Runner**: `node --test` with `tsx` loader and `test/setup.ts`
+- **Runner**: `node --test` with `tsx` and the global setup `test/setup.ts` (env + globals)
+- **DB lifecycle**: `test/setup.db.ts` adds the MongoDB hooks (`before` connect+register, `beforeEach` flush, `after` drop+close). Only integration/e2e scripts load it.
 - **Fixtures**: `test/fixtures/` for model registration; `test/mocks/` for stubs
 - **Test env**: `process.loadEnvFile('.env.test')` in setup — not dotenv
-- **DB isolation**: each test process gets its own database named `auth_db_test_${pid}`; `beforeEach` flushes, `afterEach` drops
-- **MongoDB must be running** for tests to pass (use `docker-compose up -d mongo-auth`)
+- **DB isolation**: each test process gets its own database named `auth_db_test_${pid}`
+- **MongoDB must be running** for integration/e2e only (use `docker-compose up -d mongo-auth`)
 - **Globals**: `describe`, `test`, `assert`, `mock`, `before`, `beforeEach`, `after`, `afterEach` are attached to `global` in setup — do not import them in test files
-- **E2E tests** live in `test/e2e/`, unit tests in `test/unit/src/`
+- **Layout**: pure unit tests in `test/unit/` (no DB), DB-backed service tests in `test/integration/`, HTTP flows in `test/e2e/`
 
 ## Linting / Formatting
 

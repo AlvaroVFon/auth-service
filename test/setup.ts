@@ -10,26 +10,6 @@ import {
   beforeEach,
 } from 'node:test';
 
-import { Database } from '../src/config/database.config';
-import { getStringEnvVariable } from '../src/config/env.config';
-import { LoggerInterface } from '../src/libs/logger/logger.interface';
-import { registerModels } from './fixtures/model.register';
-
-const baseUri = getStringEnvVariable(
-  'MONGO_URI',
-  'mongodb://localhost:27017/auth_db_test',
-);
-const TEST_DB_URI = `${baseUri}_${process.pid}`;
-
-const logger: LoggerInterface = {
-  info: () => {},
-  error: () => {},
-  warn: () => {},
-  debug: () => {},
-};
-
-const database = new Database(TEST_DB_URI, logger);
-
 global.describe = describe;
 global.test = test;
 global.assert = assert;
@@ -38,20 +18,3 @@ global.before = before;
 global.beforeEach = beforeEach;
 global.after = after;
 global.afterEach = afterEach;
-
-before(async () => {
-  await database.connect();
-  await registerModels();
-});
-
-beforeEach(async () => {
-  await database.flush();
-});
-
-afterEach(async () => {
-  await database.drop();
-});
-
-after(async () => {
-  await database.close();
-});

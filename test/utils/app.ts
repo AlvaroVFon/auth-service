@@ -21,11 +21,11 @@ import { HoldersModel } from '../../src/holders/holders.schema';
 import { HoldersService } from '../../src/holders/holders.service';
 import { CryptoService } from '../../src/libs/crypto/crypto.service';
 import { JwtService } from '../../src/libs/jwt/jwt.service';
-import { WinstonLogger } from '../../src/libs/logger/adapters/winston.logger';
 import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
 import { TenantsModel } from '../../src/tenants/tenants.schema';
 import { TenantsService } from '../../src/tenants/tenants.service';
 import { UsersModule } from '../../src/users/users.module';
+import { silentLogger } from '../mocks/logger.mock';
 
 let app: Application;
 
@@ -58,7 +58,7 @@ const RATE_LIMIT_FORGOT_PASSWORD_MAX = getNumberEnvVariable(
   2,
 );
 
-const winstonLogger = new WinstonLogger();
+const logger = silentLogger;
 const cryptoService = new CryptoService();
 const jwtService = new JwtService(
   JWT_SECRET,
@@ -85,14 +85,14 @@ const usersModule = new UsersModule(
   cryptoService,
   authenticationMiddleware,
   authorizationMiddleware,
-  winstonLogger,
+  logger,
 );
 
 const authModule = new AuthModule(
   usersModule.service,
   cryptoService,
   jwtService,
-  winstonLogger,
+  logger,
   mailService,
   codeService,
   authenticationMiddleware,
@@ -120,15 +120,15 @@ const authModule = new AuthModule(
 
 export const createAppTestInstance = async () => {
   app = express();
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 
-  HttpLoggerInterceptor.initialize(app, winstonLogger);
+  HttpLoggerInterceptor.initialize(app, logger);
   GlobalMiddlewares.initialize(app);
 
   usersModule.initialize(app);
   authModule.initialize(app);
 
-  HttpInterceptor.initialize(app, winstonLogger);
+  HttpInterceptor.initialize(app, logger);
 
   return app;
 };
