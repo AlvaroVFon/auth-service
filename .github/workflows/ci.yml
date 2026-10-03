@@ -19,7 +19,7 @@ env:
   CODE_EXPIRATION: 300000
 
 jobs:
-  quality:
+  lint-format:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,9 +28,20 @@ jobs:
         with:
           cache: true
       - run: pnpm lint
+      - run: pnpm format:check
       - run: pnpm build
 
-  tests:
+  unit-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v3
+        with:
+          cache: true
+      - run: pnpm test:unit
+
+  integration-e2e-tests:
     runs-on: ubuntu-latest
 
     services:
@@ -49,5 +60,5 @@ jobs:
       - uses: pnpm/setup@v3
         with:
           cache: true
-      - run: pnpm test:unit
+      - run: pnpm test:integration
       - run: pnpm test:e2e
