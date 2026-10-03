@@ -1,4 +1,5 @@
-process.loadEnvFile();
+import fs from 'node:fs';
+
 import express, { Application } from 'express';
 
 import { AuthModule } from '../auth/auth.module';
@@ -19,18 +20,22 @@ import { HoldersService } from '../holders/holders.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
-import { LoggerInterface } from '../libs/logger/logger.interface';
 import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
 import { TenantsModel } from '../tenants/tenants.schema';
 import { TenantsService } from '../tenants/tenants.service';
 import { UsersModule } from '../users/users.module';
 import { startServer } from './app.config';
+import { BootstrapOverrides } from './bootstrap.interface';
 import { Database } from './database.config';
 import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { GlobalMiddlewares } from './middlewares.config';
 
 const app: Application = express();
+
+if (fs.existsSync('.env')) {
+  process.loadEnvFile('.env');
+}
 
 const DB_CONNECTION_STRING = getStringEnvVariable('MONGO_URI');
 const JWT_SECRET = getStringEnvVariable('JWT_SECRET');
@@ -101,7 +106,6 @@ const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
 const holdersService = new HoldersService(HoldersModel, cryptoService);
 const tenantsService = new TenantsService(TenantsModel);
 const authTenantService = new AuthTenantService(tenantsService, jwtService);
-
 // Modules
 const usersModule = new UsersModule(
   cryptoService,
@@ -127,19 +131,24 @@ const authModule = new AuthModule(
   rateLimitConfig,
 );
 
-export const bootstrap = async (logger: LoggerInterface) => {
+export const bootstrap = async (overrides: BootstrapOverrides = {}) => {
+  const logger = overrides.logger ?? winstonLogger;
+  const db = overrides.database ?? database;
+  const expressApp = overrides.app ?? app;
+  const listen = overrides.startServer ?? startServer;
+
   try {
-    await database.connect();
+    await db.connect();
 
-    HttpLoggerInterceptor.initialize(app, winstonLogger);
-    GlobalMiddlewares.initialize(app);
+    HttpLoggerInterceptor.initialize(expressApp, logger);
+    GlobalMiddlewares.initialize(expressApp);
 
-    usersModule.initialize(app);
-    authModule.initialize(app);
+    usersModule.initialize(expressApp);
+    authModule.initialize(expressApp);
 
-    HttpInterceptor.initialize(app, winstonLogger);
+    HttpInterceptor.initialize(expressApp, logger);
 
-    startServer(app, winstonLogger);
+    return listen(expressApp, logger);
   } catch (error) {
     logger.error('Application bootstrap failed', error);
     process.exit(1);
