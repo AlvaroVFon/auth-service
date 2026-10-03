@@ -30,7 +30,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
 
-  unit-tests:
+  tests:
     runs-on: ubuntu-latest
 
     services:
@@ -50,24 +50,4 @@ jobs:
         with:
           cache: true
       - run: pnpm test:unit
-
-  e2e-tests:
-    runs-on: ubuntu-latest
-
-    services:
-      mongo:
-        image: mongo:latest
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/setup@v3
-        with:
-          cache: true
       - run: pnpm test:e2e
