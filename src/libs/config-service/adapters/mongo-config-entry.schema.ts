@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+
 import { ConfigEntry } from '../config-service.interface';
 
 export const ConfigEntrySchema = new Schema<ConfigEntry>(

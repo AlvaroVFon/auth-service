@@ -1,4 +1,5 @@
 import { Model } from 'mongoose';
+
 import { BlacklistedToken } from './blacklisted-token.interface';
 
 export class BlacklistService {

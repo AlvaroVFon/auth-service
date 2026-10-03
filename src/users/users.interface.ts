@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+
 import { Roles } from '../common/enums/roles.enum';
 
 export interface User {

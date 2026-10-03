@@ -1,13 +1,14 @@
 import { Application } from 'express';
-import { getTestAppInstance } from '../../utils/app';
 import request from 'supertest';
+
+import { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import { generateRandomEmail } from '../../fixtures/defaults';
-import { User } from '../../../src/users/users.interface';
 import {
   DEFAULT_ADMIN_TOKEN,
   DEFAULT_USER_TOKEN,
 } from '../../fixtures/defaults';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('Delete User By ID E2E Test', () => {
   let app: Application;

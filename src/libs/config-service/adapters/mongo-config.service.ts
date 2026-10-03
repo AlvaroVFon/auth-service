@@ -1,4 +1,5 @@
 import { Model } from 'mongoose';
+
 import type { ConfigEntry, ConfigService } from '../config-service.interface';
 
 export class MongoConfigService implements ConfigService {

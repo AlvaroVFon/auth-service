@@ -1,15 +1,15 @@
-import { UsersService } from '../../../../src/users/users.service';
-import { User } from '../../../../src/users/users.schema';
-import { User as UserInterface } from '../../../../src/users/users.interface';
-import { generateRandomEmail } from '../../../fixtures/defaults/users.default';
-import fixture from '../../../fixtures';
 import {
   EntityAlreadyExistsError,
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
-import { DEFAULT_USER } from '../../../fixtures/defaults/index';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
+import { User as UserInterface } from '../../../../src/users/users.interface';
+import { User } from '../../../../src/users/users.schema';
+import { UsersService } from '../../../../src/users/users.service';
+import fixture from '../../../fixtures';
+import { DEFAULT_USER } from '../../../fixtures/defaults/index';
+import { generateRandomEmail } from '../../../fixtures/defaults/users.default';
 import { UserFactory } from '../../../helpers/factories/user.factory';
 
 describe('UsersService', () => {

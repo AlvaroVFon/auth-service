@@ -1,8 +1,9 @@
 import { Types } from 'mongoose';
-import { TenantsService } from '../../tenants/tenants.service';
+
+import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { JwtService } from '../../libs/jwt/jwt.service';
-import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
+import { TenantsService } from '../../tenants/tenants.service';
 
 export interface AuthTenantCredentials {
   tenantId: string;

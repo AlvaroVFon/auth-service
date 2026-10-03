@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { AuthService } from '../services/auth.service';
+
 import { Catch } from '../../common/decorators/catch.decorator';
+import { AuthService } from '../services/auth.service';
 import { RequestContext } from '../tokens/request-context.type';
 
 export class AuthController {

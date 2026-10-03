@@ -1,12 +1,13 @@
-import request from 'supertest';
-import { generateRandomEmail } from '../../fixtures/defaults';
-import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
 import { Types } from 'mongoose';
+import request from 'supertest';
+
+import { generateRandomEmail } from '../../fixtures/defaults';
 import {
   DEFAULT_ADMIN_TOKEN,
   DEFAULT_USER_TOKEN,
 } from '../../fixtures/defaults';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('Create User E2E Test', () => {
   let app: Application;

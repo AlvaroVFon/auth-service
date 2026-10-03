@@ -1,9 +1,10 @@
-import request from 'supertest';
-import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
-import { DEFAULT_USER } from '../../fixtures/defaults';
-import fixture from '../../fixtures';
+import request from 'supertest';
+
 import { User } from '../../../src/users/users.interface';
+import fixture from '../../fixtures';
+import { DEFAULT_USER } from '../../fixtures/defaults';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('Password Reset E2E Tests', () => {
   let app: Application;

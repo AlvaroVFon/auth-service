@@ -1,5 +1,5 @@
-import fixture from '../../fixtures';
 import { User as UserInterface } from '../../../src/users/users.interface';
+import fixture from '../../fixtures';
 
 describe('User Fixture', () => {
   test('should create a test user with valid properties', async () => {

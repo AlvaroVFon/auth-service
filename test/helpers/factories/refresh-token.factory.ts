@@ -1,6 +1,6 @@
-import { MotherFactory } from './mother.factory';
 import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
 import { TokenTypes } from '../../../src/libs/jwt/token-types.enum';
+import { MotherFactory } from './mother.factory';
 
 export class RefreshTokenFactory {
   static generate(overrides?: Partial<RefreshToken>): RefreshToken {

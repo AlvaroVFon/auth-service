@@ -1,3 +1,4 @@
+import assert from 'node:assert';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   describe,
@@ -8,7 +9,6 @@ import {
   before,
   beforeEach,
 } from 'node:test';
-import assert from 'node:assert';
 
 declare global {
   var describe: typeof describe;

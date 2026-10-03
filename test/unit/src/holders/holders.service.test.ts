@@ -1,9 +1,9 @@
-import { HoldersService } from '../../../../src/holders/holders.service';
-import { HoldersModel } from '../../../../src/holders/holders.schema';
 import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
+import { Holder } from '../../../../src/holders/holders.interface';
+import { HoldersModel } from '../../../../src/holders/holders.schema';
+import { HoldersService } from '../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import fixture from '../../../fixtures';
-import { Holder } from '../../../../src/holders/holders.interface';
 import { HolderFactory } from '../../../helpers/factories/holder.factory';
 
 describe('HoldersService', () => {

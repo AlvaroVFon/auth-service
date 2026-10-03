@@ -1,15 +1,16 @@
 import { Model } from 'mongoose';
-import { Holder } from './holders.interface';
-import {
-  EntityNotFoundError,
-  InvalidArgumentError,
-} from '../common/exceptions/base.exception';
+
 import {
   EMAIL_REGEX,
   OBJECTID_REGEX,
   PASSWORD_REGEX,
 } from '../common/constants/regex';
+import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto/crypto.service';
+import { Holder } from './holders.interface';
 
 export class HoldersService {
   constructor(

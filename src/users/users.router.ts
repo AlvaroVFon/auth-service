@@ -1,8 +1,9 @@
 import { Application } from 'express';
-import { UsersController } from './users.controller';
+
+import { Roles } from '../common/enums/roles.enum';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
-import { Roles } from '../common/enums/roles.enum';
+import { UsersController } from './users.controller';
 
 export class UsersRouter {
   constructor(

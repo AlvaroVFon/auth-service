@@ -1,12 +1,13 @@
 import { Model, Types } from 'mongoose';
-import { Code, CodeType } from './code.interface';
-import { getNumberEnvVariable } from '../../config/env.config';
+
 import { OBJECTID_REGEX } from '../../common/constants/regex';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import {
   AlreadyGeneratedCodeError,
   InvalidCodeError,
 } from '../../common/exceptions/codes.exceptions';
+import { getNumberEnvVariable } from '../../config/env.config';
+import { Code, CodeType } from './code.interface';
 
 export class CodesService {
   private readonly ALPHANUMERIC: string =

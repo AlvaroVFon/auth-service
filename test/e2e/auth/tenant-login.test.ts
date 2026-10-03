@@ -1,10 +1,11 @@
 import { Application } from 'express';
 import request from 'supertest';
-import { getTestAppInstance } from '../../utils/app';
-import fixture from '../../fixtures/model.register';
-import { Tenant } from '../../../src/tenants/tentants.interface';
+
 import { JWT_REGEX } from '../../../src/common/constants/regex';
+import { Tenant } from '../../../src/tenants/tentants.interface';
+import fixture from '../../fixtures/model.register';
 import { MotherFactory } from '../../helpers/factories/mother.factory';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Tenant Login', () => {
   let app: Application;

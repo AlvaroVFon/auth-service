@@ -1,5 +1,5 @@
-import fixture from '../../fixtures';
 import { User as UserInterface } from '../../../src/users/users.interface';
+import fixture from '../../fixtures';
 
 describe('Fixture Methods', () => {
   describe('create method', () => {

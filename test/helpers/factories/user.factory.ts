@@ -1,6 +1,6 @@
+import { Roles } from '../../../src/common/enums/roles.enum';
 import { User } from '../../../src/users/users.interface';
 import { MotherFactory } from './mother.factory';
-import { Roles } from '../../../src/common/enums/roles.enum';
 
 export class UserFactory {
   static generate(overrides?: Partial<User>): User {

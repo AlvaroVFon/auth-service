@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+
 import { TokenTypes } from '../../libs/jwt/token-types.enum';
 import { RefreshToken } from './refresh-token.interface';
 

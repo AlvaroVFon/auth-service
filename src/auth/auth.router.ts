@@ -1,8 +1,9 @@
 import { Application } from 'express';
-import { AuthController } from './controllers/auth.controller';
+
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
-import { AuthTenantController } from './controllers/auth.tenant.controller';
 import { createRateLimiter } from '../common/middlewares/rate-limiter.middleware';
+import { AuthController } from './controllers/auth.controller';
+import { AuthTenantController } from './controllers/auth.tenant.controller';
 
 export interface AuthRateLimitConfig {
   login: {

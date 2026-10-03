@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
-import { JwtService } from '../../libs/jwt/jwt.service';
+
 import { TenantPayload } from '../../libs/jwt/jwt.interfaces';
+import { JwtService } from '../../libs/jwt/jwt.service';
 import { InvalidCredentialsError } from '../exceptions/auth.exceptions';
 
 export class TenantAuthenticationMiddleware {

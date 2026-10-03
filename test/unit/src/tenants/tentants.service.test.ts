@@ -1,8 +1,8 @@
-import { TenantsService } from '../../../../src/tenants/tenants.service';
-import { TenantsModel } from '../../../../src/tenants/tenants.schema';
 import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
-import fixture from '../../../fixtures/model.register';
+import { TenantsModel } from '../../../../src/tenants/tenants.schema';
+import { TenantsService } from '../../../../src/tenants/tenants.service';
 import { DEFAULT_TENANT_ID } from '../../../fixtures/defaults/tenant.default';
+import fixture from '../../../fixtures/model.register';
 
 describe('TenantsService', () => {
   let tenantsService: TenantsService;

@@ -1,11 +1,12 @@
 import { Model } from 'mongoose';
-import { RefreshToken } from './refresh-token.interface';
-import { RequestContext } from './request-context.type';
+
+import { OBJECTID_REGEX, UUID_REGEX } from '../../common/constants/regex';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
-import { OBJECTID_REGEX, UUID_REGEX } from '../../common/constants/regex';
+import { RefreshToken } from './refresh-token.interface';
+import { RequestContext } from './request-context.type';
 
 export class RefreshTokenService {
   constructor(private refreshTokenModel: Model<RefreshToken>) {}

@@ -1,20 +1,21 @@
 import { Application } from 'express';
-import { AuthService } from './services/auth.service';
-import { AuthController } from './controllers/auth.controller';
-import { AuthRouter, AuthRateLimitConfig } from './auth.router';
-import { UsersService } from '../users/users.service';
+
+import { assertDependencies } from '../common/depencencies-validator';
+import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
+import { HoldersService } from '../holders/holders.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { LoggerInterface } from '../libs/logger/logger.interface';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
+import { UsersService } from '../users/users.service';
+import { AuthRouter, AuthRateLimitConfig } from './auth.router';
 import { CodesService } from './codes/codes.service';
-import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
-import { assertDependencies } from '../common/depencencies-validator';
-import { RefreshTokenService } from './tokens/refresh-token.service';
-import { BlacklistService } from './tokens/blacklist.service';
-import { HoldersService } from '../holders/holders.service';
+import { AuthController } from './controllers/auth.controller';
 import { AuthTenantController } from './controllers/auth.tenant.controller';
 import { AuthTenantService } from './services/auth-tenant.service';
+import { AuthService } from './services/auth.service';
+import { BlacklistService } from './tokens/blacklist.service';
+import { RefreshTokenService } from './tokens/refresh-token.service';
 
 export class AuthModule {
   public readonly service: AuthService;

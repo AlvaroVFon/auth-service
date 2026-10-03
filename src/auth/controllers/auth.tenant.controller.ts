@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+
 import { AuthTenantService } from '../services/auth-tenant.service';
 
 export class AuthTenantController {

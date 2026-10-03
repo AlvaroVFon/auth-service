@@ -1,13 +1,14 @@
-import { User } from './users.schema';
-import { CryptoService } from '../libs/crypto/crypto.service';
-import { UsersService } from './users.service';
-import { UsersController } from './users.controller';
-import { UsersRouter } from './users.router';
 import { Application } from 'express';
+
+import { assertDependencies } from '../common/depencencies-validator';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
+import { CryptoService } from '../libs/crypto/crypto.service';
 import { LoggerInterface } from '../libs/logger/logger.interface';
-import { assertDependencies } from '../common/depencencies-validator';
+import { UsersController } from './users.controller';
+import { UsersRouter } from './users.router';
+import { User } from './users.schema';
+import { UsersService } from './users.service';
 
 export class UsersModule {
   public readonly service: UsersService;

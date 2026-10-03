@@ -1,5 +1,6 @@
 import { QueryFilter } from 'mongoose';
 import mongoose from 'mongoose';
+
 import { defaultsRegistry } from './defaults/defaults.registry';
 
 export class Fixture {
