@@ -4,8 +4,33 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  MONGO_URI: mongodb://localhost:27017/auth_db_test
+  JWT_SECRET: Y3iT6r0WLkRDklcdOaCdiNQJoAn604nJSWaPi2ICQNY=
+  JWT_EXPIRATION: 3600
+  JWT_REFRESH_EXPIRATION: 86400
+  SMTP_HOST: localhost
+  SMTP_PORT: 1025
+  SMTP_USER: test
+  SMTP_PASS: test
+  MAIL_FROM: no-reply@auth-service.com
+  TEMPLATES_PATH: ./src/mail/templates
+  CODE_LENGTH: 6
+  CODE_EXPIRATION: 300000
+
 jobs:
-  ci:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v3
+        with:
+          cache: true
+      - run: pnpm lint
+      - run: pnpm build
+
+  unit-tests:
     runs-on: ubuntu-latest
 
     services:
@@ -13,24 +38,36 @@ jobs:
         image: mongo:latest
         ports:
           - 27017:27017
-
-    env:
-      MONGO_URI: mongodb://localhost:27017/auth_db_test
-      JWT_SECRET: Y3iT6r0WLkRDklcdOaCdiNQJoAn604nJSWaPi2ICQNY=
-      JWT_EXPIRATION: 3600
-      JWT_REFRESH_EXPIRES_IN: 86400
-      SMTP_HOST: localhost
-      SMTP_PORT: 1025
-      SMTP_USER: test
-      SMTP_PASS: test
-      MAIL_FROM: no-reply@auth-service.com
-      TEMPLATES_PATH: ./src/mail/templates
-      CODE_LENGTH: 6
-      CODE_EXPIRATION: 300000
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/setup@v3
-      - run: pnpm lint
-      - run: pnpm test
-      - run: pnpm build
+        with:
+          cache: true
+      - run: pnpm test:unit
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v3
+        with:
+          cache: true
+      - run: pnpm test:e2e
