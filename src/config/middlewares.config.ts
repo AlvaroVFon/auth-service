@@ -1,6 +1,7 @@
 import express, { Application } from 'express';
-import { RequiredBodyMiddleware } from '../common/middlewares/required-body.middleware';
+
 import { rateLimiter } from '../common/middlewares/rate-limiter.middleware';
+import { RequiredBodyMiddleware } from '../common/middlewares/required-body.middleware';
 
 export class GlobalMiddlewares {
   static initialize(app: Application) {

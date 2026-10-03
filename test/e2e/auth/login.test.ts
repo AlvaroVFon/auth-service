@@ -1,15 +1,16 @@
-import request from 'supertest';
-import jwt from 'jsonwebtoken';
-import { getTestAppInstance } from '../../utils/app';
-import fixture from '../../fixtures';
 import { Application } from 'express';
+import jwt from 'jsonwebtoken';
+import request from 'supertest';
+
+import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
+import { JWT_REGEX } from '../../../src/common/constants/regex';
+import { User } from '../../../src/users/users.interface';
+import fixture from '../../fixtures';
 import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
-import { User } from '../../../src/users/users.interface';
-import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
-import { JWT_REGEX } from '../../../src/common/constants/regex';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Login', () => {
   let app: Application;

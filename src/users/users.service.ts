@@ -1,13 +1,14 @@
 import { Model } from 'mongoose';
-import { User as UserInterface } from '../users/users.interface';
+
+import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
 import {
   EntityAlreadyExistsError,
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
-import { CryptoService } from '../libs/crypto/crypto.service';
-import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
 import { Holder } from '../holders/holders.interface';
+import { CryptoService } from '../libs/crypto/crypto.service';
+import { User as UserInterface } from '../users/users.interface';
 
 export class UsersService {
   constructor(
@@ -101,7 +102,7 @@ export class UsersService {
     }
 
     const user = await this.usersModel.findByIdAndUpdate(id, updateData, {
-      new: true,
+      returnDocument: 'after',
     });
 
     if (!user) {
@@ -137,7 +138,7 @@ export class UsersService {
     return this.usersModel.findByIdAndUpdate(
       id,
       { loginAttempts, lockoutUntil },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

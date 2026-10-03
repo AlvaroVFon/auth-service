@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
-import { AuthenticationMiddleware } from '../../../../src/common/middlewares/authentication.middleware';
-import { InvalidCredentialsError } from '../../../../src/common/exceptions/auth.exceptions';
-import { TokenTypes } from '../../../../src/libs/jwt/token-types.enum';
+
 import { Roles } from '../../../../src/common/enums/roles.enum';
+import { InvalidCredentialsError } from '../../../../src/common/exceptions/auth.exceptions';
+import { AuthenticationMiddleware } from '../../../../src/common/middlewares/authentication.middleware';
+import { TokenTypes } from '../../../../src/libs/jwt/token-types.enum';
 
 describe('AuthenticationMiddleware', () => {
   let verifyTokenFn: (token: string) => unknown;

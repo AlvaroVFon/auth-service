@@ -1,6 +1,7 @@
 import { Schema, model } from 'mongoose';
-import { Holder } from './holders.interface';
+
 import { getNumberEnvVariable } from '../config/env.config';
+import { Holder } from './holders.interface';
 
 const holderExpiration = getNumberEnvVariable('CODE_EXPIRATION_MS');
 

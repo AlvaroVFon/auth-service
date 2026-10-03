@@ -1,5 +1,6 @@
-import { LoggerInterface } from '../logger.interface';
 import winston, { Logger } from 'winston';
+
+import { LoggerInterface } from '../logger.interface';
 
 export class WinstonLogger implements LoggerInterface {
   logger: Logger;

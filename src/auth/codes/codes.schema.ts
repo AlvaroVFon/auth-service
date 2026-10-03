@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+
 import { Code, CodeType } from './code.interface';
 
 export const CodesSchema = new Schema<Code>(

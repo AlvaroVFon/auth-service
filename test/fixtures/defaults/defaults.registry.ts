@@ -1,9 +1,9 @@
-import { DEFAULT_USER } from './users.default';
-import { DEFAULT_CODE } from './codes.default';
-import { DEFAULT_HOLDER } from './holders.default';
-import { DEFAULT_CONFIG_ENTRIES } from './config.default';
-import { DEFAULT_TENANT } from './tenant.default';
 import { DEFAULT_BLACKLISTED_TOKEN } from './blacklisted-token.default';
+import { DEFAULT_CODE } from './codes.default';
+import { DEFAULT_CONFIG_ENTRIES } from './config.default';
+import { DEFAULT_HOLDER } from './holders.default';
+import { DEFAULT_TENANT } from './tenant.default';
+import { DEFAULT_USER } from './users.default';
 
 const DefaultModels = {
   USER: 'User',

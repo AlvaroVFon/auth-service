@@ -1,4 +1,5 @@
 process.loadEnvFile('.env.test');
+import assert from 'node:assert';
 import {
   describe,
   test,
@@ -8,11 +9,11 @@ import {
   before,
   beforeEach,
 } from 'node:test';
-import assert from 'node:assert';
+
 import { Database } from '../src/config/database.config';
 import { getStringEnvVariable } from '../src/config/env.config';
-import { registerModels } from './fixtures/model.register';
 import { LoggerInterface } from '../src/libs/logger/logger.interface';
+import { registerModels } from './fixtures/model.register';
 
 const baseUri = getStringEnvVariable(
   'MONGO_URI',

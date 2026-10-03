@@ -1,7 +1,8 @@
-import request from 'supertest';
-import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
+import request from 'supertest';
+
 import { generateRandomEmail } from '../../fixtures/defaults';
+import { getTestAppInstance } from '../../utils/app';
 
 // Per-route rate limit values, read from .env.test
 // Defaults match the production defaults from the spec

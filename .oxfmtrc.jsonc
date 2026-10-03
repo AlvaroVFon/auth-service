@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "tabWidth": 2,
+  "singleAttributePerLine": true,
+  "sortPackageJson": true,
+  "ignorePatterns": [
+    "node_modules/**",
+    "dist/**",
+    ".env",
+    ".vscode/**",
+    ".DS_Store",
+    "coverage/**",
+    "build/**",
+    "logs/**",
+    "pnpm-lock.yaml",
+  ],
+  "sortImports": {
+    "groups": [
+      ["type-builtin", "value-builtin"],
+      ["type-external", "value-external"],
+      [
+        "type-parent",
+        "type-sibling",
+        "type-index",
+        "value-parent",
+        "value-sibling",
+        "value-index",
+      ],
+      "unknown",
+    ],
+  },
+}

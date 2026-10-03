@@ -1,6 +1,7 @@
 import { Application, Request, Response, NextFunction } from 'express';
-import { BaseError } from '../exceptions/base.exception';
+
 import { LoggerInterface } from '../../libs/logger/logger.interface';
+import { BaseError } from '../exceptions/base.exception';
 
 export class HttpInterceptor {
   constructor(private readonly app: Application) {

@@ -1,15 +1,16 @@
 import { Types } from 'mongoose';
-import { CodesService } from '../../../../../src/auth/codes/codes.service';
-import { CODE_REGEX } from '../../../../../src/common/constants/regex';
-import fixture from '../../../../fixtures';
+
 import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
-import { CodesFactory } from '../../../../helpers/factories/codes.factory';
+import { CodesService } from '../../../../../src/auth/codes/codes.service';
+import { CODE_REGEX } from '../../../../../src/common/constants/regex';
 import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
 import {
   AlreadyGeneratedCodeError,
   InvalidCodeError,
 } from '../../../../../src/common/exceptions/codes.exceptions';
+import fixture from '../../../../fixtures';
+import { CodesFactory } from '../../../../helpers/factories/codes.factory';
 
 describe('Codes Service', () => {
   let codesService: CodesService;

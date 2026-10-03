@@ -1,6 +1,7 @@
 import { Application } from 'express';
-import { getStringEnvVariable } from './env.config';
+
 import { LoggerInterface } from '../libs/logger/logger.interface';
+import { getStringEnvVariable } from './env.config';
 
 const HOST = getStringEnvVariable('HOST', 'localhost');
 const PORT = Number(getStringEnvVariable('PORT', '3000'));

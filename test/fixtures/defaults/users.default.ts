@@ -1,11 +1,12 @@
 process.loadEnvFile('.env.test');
-import { Types } from 'mongoose';
 import jwt from 'jsonwebtoken';
-import { getStringEnvVariable } from '../../../src/config/env.config';
-import { User } from '../../../src/users/users.interface';
+import { Types } from 'mongoose';
+
 import { Roles } from '../../../src/common/enums/roles.enum';
+import { getStringEnvVariable } from '../../../src/config/env.config';
 import { Payload } from '../../../src/libs/jwt/jwt.interfaces';
 import { TokenTypes } from '../../../src/libs/jwt/token-types.enum';
+import { User } from '../../../src/users/users.interface';
 
 export const DEFAULT_USER_ID = new Types.ObjectId();
 export const DEFAULT_ADMIN_ID = new Types.ObjectId();

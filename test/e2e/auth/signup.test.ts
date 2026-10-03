@@ -1,10 +1,11 @@
-import request from 'supertest';
-import { getTestAppInstance } from '../../utils/app';
-import fixture from '../../fixtures';
 import { Application } from 'express';
-import { generateRandomEmail } from '../../fixtures/defaults';
-import { User } from '../../../src/users/users.interface';
+import request from 'supertest';
+
 import { Holder } from '../../../src/holders/holders.interface';
+import { User } from '../../../src/users/users.interface';
+import fixture from '../../fixtures';
+import { generateRandomEmail } from '../../fixtures/defaults';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Signup', () => {
   let app: Application;

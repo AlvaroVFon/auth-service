@@ -1,7 +1,9 @@
-import handlebars from 'handlebars';
-import { getStringEnvVariable } from '../../../config/env.config';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+
+import handlebars from 'handlebars';
+
+import { getStringEnvVariable } from '../../../config/env.config';
 import { TemplateRenderer } from '../template-renderer.interface';
 
 export class HandlebarsEngine implements TemplateRenderer {

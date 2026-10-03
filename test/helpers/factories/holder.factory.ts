@@ -1,5 +1,5 @@
-import { MotherFactory } from './mother.factory';
 import { Holder } from '../../../src/holders/holders.interface';
+import { MotherFactory } from './mother.factory';
 
 export class HolderFactory {
   static generate(overrides?: Partial<Holder>): Holder {

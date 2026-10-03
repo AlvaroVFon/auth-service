@@ -1,11 +1,12 @@
-import request from 'supertest';
 import { Application } from 'express';
-import { getTestAppInstance } from '../../utils/app';
+import request from 'supertest';
+
 import fixture from '../../fixtures';
 import {
   DEFAULT_ADMIN_TOKEN,
   DEFAULT_USER_TOKEN,
 } from '../../fixtures/defaults';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Test: Find All Users', () => {
   let app: Application;

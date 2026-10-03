@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+
 import { Tenant } from './tentants.interface';
 
 const tenantSchema = new Schema<Tenant>({

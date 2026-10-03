@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+
 import { TokenTypes } from '../../libs/jwt/token-types.enum';
 
 export interface RefreshToken {

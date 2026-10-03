@@ -5,8 +5,8 @@
 - **Dev server**: `pnpm dev` (uses `tsx watch`)
 - **Tests**: `pnpm test` (Node native test runner, not Jest)
 - **TDD watch**: `pnpm tdd`
-- **Lint**: `pnpm lint` (eslint flat config)
-- **Format**: `pnpm format`
+- **Lint**: `pnpm lint` (oxlint) — `pnpm lint:fix` to apply fixes
+- **Format**: `pnpm format` (oxfmt) — `pnpm format:check` to verify only
 - **Commit**: `pnpm commit` (Commitizen conventional-changelog)
 - **Preferred order**: `lint -> test`
 
@@ -32,10 +32,10 @@
 
 ## Linting / Formatting
 
-- **ESLint**: flat config (`eslint.config.mjs`), `typescript-eslint` with strict rules:
-  - `no-floating-promises`, `await-thenable`, `no-misused-promises` are **errors** (not warnings)
-- **Prettier**: single quotes, trailing commas, 80-char width, 2-space tabs
-- **Pre-commit**: Husky runs `pnpm lint-staged` — TS files get eslint --fix + prettier; JSON/MD/YML get prettier
+- **oxlint**: config in `.oxlintrc.json`, with type-aware rules via `oxlint-tsgolint` (`options.typeAware`):
+  - `typescript/no-floating-promises`, `typescript/await-thenable`, `typescript/no-misused-promises` are **errors**
+- **oxfmt**: config in `.oxfmtrc.jsonc` — single quotes, trailing commas, 80-char width, 2-space tabs
+- **Pre-commit**: Husky runs `pnpm lint-staged` — TS files get `oxlint --fix` + `oxfmt`; JSON/MD/YML get `oxfmt`
 
 ## Environment
 

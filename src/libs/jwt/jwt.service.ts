@@ -1,12 +1,14 @@
+import { randomUUID } from 'node:crypto';
+
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { Types } from 'mongoose';
-import { Payload, TenantPayload } from './jwt.interfaces';
+
+import { assertDependencies } from '../../common/depencencies-validator';
+import { Roles } from '../../common/enums/roles.enum';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { InvalidTokenError } from './jwt.errors';
-import { randomUUID } from 'node:crypto';
-import { Roles } from '../../common/enums/roles.enum';
+import { Payload, TenantPayload } from './jwt.interfaces';
 import { TokenTypes } from './token-types.enum';
-import { assertDependencies } from '../../common/depencencies-validator';
 
 export class JwtService {
   constructor(

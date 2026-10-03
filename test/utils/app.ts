@@ -1,30 +1,31 @@
 import express, { Application } from 'express';
-import { GlobalMiddlewares } from '../../src/config/middlewares.config';
-import { UsersModule } from '../../src/users/users.module';
+
+import { AuthModule } from '../../src/auth/auth.module';
+import { CodesModel } from '../../src/auth/codes/codes.schema';
+import { CodesService } from '../../src/auth/codes/codes.service';
+import { AuthTenantService } from '../../src/auth/services/auth-tenant.service';
+import { BlacklistService } from '../../src/auth/tokens/blacklist.service';
+import { BlacklistedTokenModel } from '../../src/auth/tokens/blacklisted-token.schema';
+import { RefreshTokenModel } from '../../src/auth/tokens/refresh-token.schema';
+import { RefreshTokenService } from '../../src/auth/tokens/refresh-token.service';
 import { HttpInterceptor } from '../../src/common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../../src/common/interceptors/httplogger.interceptor';
-import { WinstonLogger } from '../../src/libs/logger/adapters/winston.logger';
-import { CryptoService } from '../../src/libs/crypto/crypto.service';
+import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
+import { AuthorizationMiddleware } from '../../src/common/middlewares/authorization.middleware';
 import {
   getNumberEnvVariable,
   getStringEnvVariable,
 } from '../../src/config/env.config';
-import { JwtService } from '../../src/libs/jwt/jwt.service';
-import { AuthModule } from '../../src/auth/auth.module';
-import { AuthenticationMiddleware } from '../../src/common/middlewares/authentication.middleware';
-import { AuthorizationMiddleware } from '../../src/common/middlewares/authorization.middleware';
-import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
-import { CodesService } from '../../src/auth/codes/codes.service';
-import { CodesModel } from '../../src/auth/codes/codes.schema';
-import { RefreshTokenService } from '../../src/auth/tokens/refresh-token.service';
-import { RefreshTokenModel } from '../../src/auth/tokens/refresh-token.schema';
-import { BlacklistService } from '../../src/auth/tokens/blacklist.service';
-import { BlacklistedTokenModel } from '../../src/auth/tokens/blacklisted-token.schema';
+import { GlobalMiddlewares } from '../../src/config/middlewares.config';
 import { HoldersModel } from '../../src/holders/holders.schema';
 import { HoldersService } from '../../src/holders/holders.service';
-import { TenantsService } from '../../src/tenants/tenants.service';
+import { CryptoService } from '../../src/libs/crypto/crypto.service';
+import { JwtService } from '../../src/libs/jwt/jwt.service';
+import { WinstonLogger } from '../../src/libs/logger/adapters/winston.logger';
+import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
 import { TenantsModel } from '../../src/tenants/tenants.schema';
-import { AuthTenantService } from '../../src/auth/services/auth-tenant.service';
+import { TenantsService } from '../../src/tenants/tenants.service';
+import { UsersModule } from '../../src/users/users.module';
 
 let app: Application;
 

@@ -1,10 +1,11 @@
-import request from 'supertest';
-import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
-import fixture from '../../fixtures';
-import { User } from '../../../src/users/users.interface';
-import { Code, CodeType } from '../../../src/auth/codes/code.interface';
 import { Types } from 'mongoose';
+import request from 'supertest';
+
+import { Code, CodeType } from '../../../src/auth/codes/code.interface';
+import { User } from '../../../src/users/users.interface';
+import fixture from '../../fixtures';
+import { getTestAppInstance } from '../../utils/app';
 
 const createResetCode = async (userId: Types.ObjectId) => {
   return fixture.create<Code>('Code', {

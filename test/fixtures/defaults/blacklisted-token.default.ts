@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+
 import { BlacklistedToken } from '../../../src/auth/tokens/blacklisted-token.interface';
 
 export const DEFAULT_BLACKLISTED_TOKEN_ID = new Types.ObjectId();

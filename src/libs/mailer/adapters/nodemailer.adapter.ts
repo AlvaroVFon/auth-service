@@ -1,12 +1,13 @@
-import { TemplateRenderer } from '../../templates-engine/template-renderer.interface';
-import { MailerInterface as Mailer } from '../mailer.interface';
 import nodemailer, { Transporter } from 'nodemailer';
+
 import {
   getStringEnvVariable,
   getNumberEnvVariable,
 } from '../../../config/env.config';
-import { LoggerInterface } from '../../logger/logger.interface';
 import { MailTemplate } from '../../../mail/mail.enum';
+import { LoggerInterface } from '../../logger/logger.interface';
+import { TemplateRenderer } from '../../templates-engine/template-renderer.interface';
+import { MailerInterface as Mailer } from '../mailer.interface';
 
 export class NodeMailerAdapter implements Mailer {
   private readonly transporter: Transporter;

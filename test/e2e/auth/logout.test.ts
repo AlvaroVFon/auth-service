@@ -1,13 +1,14 @@
-import request from 'supertest';
-import { getTestAppInstance } from '../../utils/app';
 import { Application } from 'express';
+import request from 'supertest';
+
+import { BlacklistedToken } from '../../../src/auth/tokens/blacklisted-token.interface';
+import { JWT_REGEX } from '../../../src/common/constants/regex';
 import fixture from '../../fixtures';
 import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
-import { JWT_REGEX } from '../../../src/common/constants/regex';
-import { BlacklistedToken } from '../../../src/auth/tokens/blacklisted-token.interface';
+import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Logout', () => {
   let app: Application;

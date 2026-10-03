@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { InvalidCredentialsError } from '../exceptions/auth.exceptions';
-import { JwtService } from '../../libs/jwt/jwt.service';
+
 import { BlacklistService } from '../../auth/tokens/blacklist.service';
 import { Payload } from '../../libs/jwt/jwt.interfaces';
+import { JwtService } from '../../libs/jwt/jwt.service';
 import { TokenTypes } from '../../libs/jwt/token-types.enum';
+import { InvalidCredentialsError } from '../exceptions/auth.exceptions';
 
 export class AuthenticationMiddleware {
   constructor(

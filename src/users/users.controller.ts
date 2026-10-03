@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-import { UsersService } from './users.service';
+
 import { Catch } from '../common/decorators/catch.decorator';
+import { UsersService } from './users.service';
 
 export class UsersController {
   constructor(private readonly userService: UsersService) {}

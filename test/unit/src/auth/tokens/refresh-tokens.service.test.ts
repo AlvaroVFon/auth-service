@@ -1,15 +1,16 @@
 import { Types } from 'mongoose';
-import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-token.service';
-import { RefreshTokenModel } from '../../../../../src/auth/tokens/refresh-token.schema';
+
 import { RefreshToken } from '../../../../../src/auth/tokens/refresh-token.interface';
-import fixture from '../../../../fixtures';
-import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
+import { RefreshTokenModel } from '../../../../../src/auth/tokens/refresh-token.schema';
+import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-token.service';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../../src/common/exceptions/base.exception';
-import { RefreshTokenFactory } from '../../../../helpers/factories/refresh-token.factory';
+import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
+import fixture from '../../../../fixtures';
 import { MotherFactory } from '../../../../helpers/factories/mother.factory';
+import { RefreshTokenFactory } from '../../../../helpers/factories/refresh-token.factory';
 
 describe('RefreshTokenService', () => {
   let refreshTokenService: RefreshTokenService;

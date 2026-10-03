@@ -1,7 +1,8 @@
 import { Types } from 'mongoose';
+
 import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
-import { DEFAULT_USER_ID } from './users.default';
 import { TokenTypes } from '../../../src/libs/jwt/token-types.enum';
+import { DEFAULT_USER_ID } from './users.default';
 
 export const DEFAULT_REFRESH_TOKEN_ID = new Types.ObjectId();
 
