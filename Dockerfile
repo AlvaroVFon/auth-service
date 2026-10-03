@@ -2,9 +2,9 @@ FROM node:24-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-RUN npm install -g pnpm@10.28.2 && pnpm install
+RUN npm install -g pnpm@12.8.0 && pnpm ci --silent
 
 COPY . .
 

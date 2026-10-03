@@ -1,0 +1,6 @@
+allowBuilds:
+  bcrypt: true
+  esbuild: true
+minimumReleaseAgeExclude:
+  - mongoose@9.10.4
+  - supertest@7.3.1
