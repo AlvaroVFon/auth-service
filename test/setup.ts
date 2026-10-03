@@ -12,8 +12,8 @@ import {
 
 import { Database } from '../src/config/database.config';
 import { getStringEnvVariable } from '../src/config/env.config';
-import { LoggerInterface } from '../src/libs/logger/logger.interface';
 import { registerModels } from './fixtures/model.register';
+import { silentLogger } from './mocks/logger.mock';
 
 const baseUri = getStringEnvVariable(
   'MONGO_URI',
@@ -21,14 +21,7 @@ const baseUri = getStringEnvVariable(
 );
 const TEST_DB_URI = `${baseUri}_${process.pid}`;
 
-const logger: LoggerInterface = {
-  info: () => {},
-  error: () => {},
-  warn: () => {},
-  debug: () => {},
-};
-
-const database = new Database(TEST_DB_URI, logger);
+const database = new Database(TEST_DB_URI, silentLogger);
 
 global.describe = describe;
 global.test = test;
@@ -48,10 +41,7 @@ beforeEach(async () => {
   await database.flush();
 });
 
-afterEach(async () => {
-  await database.drop();
-});
-
 after(async () => {
+  await database.drop();
   await database.close();
 });
