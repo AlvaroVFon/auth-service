@@ -9,7 +9,6 @@ declare global {
         jti?: string;
         expiresAt?: Date;
       };
-      tenantId?: string;
     }
   }
 }
