@@ -16,7 +16,7 @@ env:
   MAIL_FROM: no-reply@auth-service.com
   TEMPLATES_PATH: ./src/mail/templates
   CODE_LENGTH: 6
-  CODE_EXPIRATION: 300000
+  CODE_EXPIRATION_MS: 300000
 
 jobs:
   lint-format:

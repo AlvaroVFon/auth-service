@@ -145,11 +145,19 @@ export class AuthService {
       newHolder._id.toString(),
     );
 
-    await this.mailService.sendSignupVerificationEmail(newHolder.email, {
-      userName: newHolder.email,
-      code: verificationCode.code,
-      link: `${this.publicAppUrl}/verify?holderId=${newHolder._id}&code=${verificationCode.code}`,
-    });
+    try {
+      await this.mailService.sendSignupVerificationEmail(newHolder.email, {
+        userName: newHolder.email,
+        code: verificationCode.code,
+        link: `${this.publicAppUrl}/verify?holderId=${newHolder._id}&code=${verificationCode.code}`,
+      });
+    } catch (error) {
+      await Promise.allSettled([
+        this.codeService.deleteById(verificationCode._id.toString()),
+        this.holdersService.deleteById(newHolder._id.toString()),
+      ]);
+      throw error;
+    }
 
     return newHolder;
   }
@@ -216,6 +224,7 @@ export class AuthService {
     await this.codeService.validateCode(userId, code, CodeType.RESET_PASSWORD);
 
     await this.usersService.updateOneById(userId, { password: newPassword });
+    await this.sessionService.revokeAll(userId);
   }
 
   async validateSignupVerificationCode(

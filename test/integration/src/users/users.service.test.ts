@@ -29,6 +29,26 @@ describe('UsersService', () => {
   });
 
   describe('UsersService Methods', () => {
+    test('should count concurrent login failures without lost updates', async () => {
+      const user = await fixture.create<UserInterface>('User', {
+        email: generateRandomEmail('attempts+'),
+        loginAttempts: 0,
+        lockoutUntil: null,
+      });
+
+      await Promise.all([
+        usersService.incrementLoginAttempts(user._id.toString(), 5, 900000),
+        usersService.incrementLoginAttempts(user._id.toString(), 5, 900000),
+      ]);
+
+      const updated = await fixture.findById<UserInterface>(
+        'User',
+        user._id.toString(),
+      );
+
+      assert.strictEqual(updated?.loginAttempts, 2);
+    });
+
     describe('Create()', () => {
       test('should create a new user', async () => {
         const plainPassword = 'securepassword123';

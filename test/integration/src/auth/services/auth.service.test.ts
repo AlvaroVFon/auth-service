@@ -51,7 +51,7 @@ describe('Auth Service', () => {
   } as MailerInterface;
 
   const jwtSecret = process.env.JWT_SECRET;
-  const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
+  const jwtExpiresIn = parseInt(process.env.JWT_EXPIRATION || '3600', 10);
   const refreshTokenExpiresIn = parseInt(
     process.env.JWT_REFRESH_EXPIRES_IN || '86400',
     10,
@@ -488,6 +488,28 @@ describe('Auth Service', () => {
         ],
       );
     });
+
+    test('should clean up holder and code when verification email fails', async () => {
+      const email = generateRandomEmail('mail-failure+');
+      // @ts-expect-error Node test mocks expose mock at runtime.
+      mockMailerService.sendSignupVerificationEmail.mock.mockImplementation(
+        async () => {
+          throw new Error('SMTP down');
+        },
+      );
+
+      await assert.rejects(
+        authService.signup({
+          email,
+          password: 'Password123!',
+          passwordConfirmation: 'Password123!',
+        }),
+        new Error('SMTP down'),
+      );
+
+      assert.strictEqual(await fixture.findOne('Holder', { email }), null);
+      assert.strictEqual((await fixture.find<Code>('Code', {})).length, 0);
+    });
   });
 
   describe('validateSignupVerificationCode()', () => {
@@ -728,6 +750,41 @@ describe('Auth Service', () => {
             'NewPass123!',
             'NewPass123!',
           ),
+      );
+    });
+
+    test('should revoke refresh tokens issued before a password reset', async () => {
+      const user = await fixture.create<UserInterface>('User');
+      const refreshToken = jwtService.generateRefreshToken(
+        user._id.toString(),
+        Roles.USER,
+      );
+      const decoded = jwtService.verifyToken(refreshToken) as any;
+      await fixture.create<RefreshToken>('RefreshToken', {
+        userId: user._id,
+        jti: decoded.jti,
+        expiresAt: new Date(decoded.exp * 1000),
+        revokedAt: null,
+        replacedByJti: null,
+        type: TokenTypes.REFRESH,
+      });
+      const code = await fixture.create<Code>('Code', {
+        holderId: user._id,
+        type: CodeType.RESET_PASSWORD,
+        used: false,
+        expiresAt: new Date(Date.now() + 3600000),
+      });
+
+      await authService.resetPassword(
+        user._id.toString(),
+        code.code,
+        'NewPass123!',
+        'NewPass123!',
+      );
+
+      await assert.rejects(
+        authService.refreshToken(user._id.toString(), refreshToken),
+        { name: 'UnauthorizedError' },
       );
     });
 
@@ -985,6 +1042,37 @@ describe('Auth Service', () => {
           message: 'Refresh token has been revoked',
           code: 'UNAUTHORIZED',
         },
+      );
+    });
+
+    test('should allow only one concurrent refresh rotation', async () => {
+      const user = await fixture.create<UserInterface>('User');
+      const refreshToken = jwtService.generateRefreshToken(
+        user._id.toString(),
+        Roles.USER,
+      );
+      const decoded = jwtService.verifyToken(refreshToken) as any;
+      await fixture.create<RefreshToken>('RefreshToken', {
+        userId: user._id,
+        jti: decoded.jti,
+        expiresAt: new Date(decoded.exp * 1000),
+        revokedAt: null,
+        replacedByJti: null,
+        type: TokenTypes.REFRESH,
+      });
+
+      const results = await Promise.allSettled([
+        authService.refreshToken(user._id.toString(), refreshToken),
+        authService.refreshToken(user._id.toString(), refreshToken),
+      ]);
+
+      assert.strictEqual(
+        results.filter((result) => result.status === 'fulfilled').length,
+        1,
+      );
+      assert.strictEqual(
+        results.filter((result) => result.status === 'rejected').length,
+        1,
       );
     });
   });

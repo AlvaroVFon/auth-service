@@ -127,13 +127,16 @@ describe('NodeMailerAdapter', () => {
       });
     });
 
-    test('should log and swallow transporter failures', async () => {
+    test('should log and propagate transporter failures', async () => {
       const transporter = (adapter as any).transporter;
       mock.method(transporter, 'sendMail', async () => {
         throw new Error('smtp down');
       });
 
-      await adapter.sendEmail('to@example.com', 'Subject', '<b>hello</b>');
+      await assert.rejects(
+        adapter.sendEmail('to@example.com', 'Subject', '<b>hello</b>'),
+        new Error('smtp down'),
+      );
 
       assert.strictEqual(logger.error.mock.callCount(), 1);
       assert.match(
@@ -165,16 +168,14 @@ describe('NodeMailerAdapter', () => {
       ]);
     });
 
-    test('should log and swallow render failures', async () => {
+    test('should log and propagate render failures', async () => {
       renderer.render.mock.mockImplementation(() => {
         throw new Error('missing template');
       });
 
-      await adapter.sendMailWithTemplate(
-        'to@example.com',
-        'Subject',
-        'bad',
-        {},
+      await assert.rejects(
+        adapter.sendMailWithTemplate('to@example.com', 'Subject', 'bad', {}),
+        new Error('missing template'),
       );
 
       assert.strictEqual(logger.error.mock.callCount(), 1);

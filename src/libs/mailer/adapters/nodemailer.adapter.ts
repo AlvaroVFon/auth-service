@@ -60,6 +60,7 @@ export class NodeMailerAdapter implements Mailer {
       });
     } catch (error) {
       this.logger.error(`Error sending email to ${to}: ${error}`);
+      throw error;
     }
   }
 
@@ -74,6 +75,7 @@ export class NodeMailerAdapter implements Mailer {
       return await this.sendEmail(to, subject, body);
     } catch (error) {
       this.logger.error(`Error rendering or sending template email: ${error}`);
+      throw error;
     }
   }
 

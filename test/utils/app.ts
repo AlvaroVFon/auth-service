@@ -19,7 +19,7 @@ const composition = createApplicationComposition({
   logger: silentLogger,
   mailer,
   jwtSecret: getStringEnvVariable('JWT_SECRET'),
-  jwtExpiresIn: parseInt(getStringEnvVariable('JWT_EXPIRES_IN', '3600'), 10),
+  jwtExpiresIn: parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10),
   refreshTokenExpiresIn: parseInt(
     getStringEnvVariable('JWT_REFRESH_EXPIRES_IN', '86400'),
     10,
