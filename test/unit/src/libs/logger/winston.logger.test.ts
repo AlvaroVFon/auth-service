@@ -15,7 +15,7 @@ describe('WinstonLogger', () => {
 
   describe('log levels', () => {
     test('info should delegate to the winston logger', () => {
-      const info = mock.method(logger.logger, 'info', () => {});
+      const info = mock.method((logger as any).logger, 'info', () => {});
 
       logger.info('hello');
 
@@ -24,7 +24,7 @@ describe('WinstonLogger', () => {
     });
 
     test('error should delegate the message when no error is given', () => {
-      const error = mock.method(logger.logger, 'error', () => {});
+      const error = mock.method((logger as any).logger, 'error', () => {});
 
       logger.error('failed');
 
@@ -32,7 +32,7 @@ describe('WinstonLogger', () => {
     });
 
     test('error should delegate the error argument when given', () => {
-      const error = mock.method(logger.logger, 'error', () => {});
+      const error = mock.method((logger as any).logger, 'error', () => {});
       const cause = new Error('boom');
 
       logger.error('failed', cause);
@@ -41,7 +41,7 @@ describe('WinstonLogger', () => {
     });
 
     test('warn should delegate with and without an error', () => {
-      const warn = mock.method(logger.logger, 'warn', () => {});
+      const warn = mock.method((logger as any).logger, 'warn', () => {});
       const cause = new Error('careful');
 
       logger.warn('heads up');
@@ -55,7 +55,7 @@ describe('WinstonLogger', () => {
     });
 
     test('debug should delegate with and without an error', () => {
-      const debug = mock.method(logger.logger, 'debug', () => {});
+      const debug = mock.method((logger as any).logger, 'debug', () => {});
       const cause = new Error('detail');
 
       logger.debug('trace');
@@ -68,7 +68,7 @@ describe('WinstonLogger', () => {
 
   describe('createLogger()', () => {
     test('should build an info-level logger with a single console transport', () => {
-      const created = logger.createLogger();
+      const created = (logger as any).logger;
 
       assert.strictEqual(created.level, 'info');
       assert.strictEqual(created.transports.length, 1);

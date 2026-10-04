@@ -3,7 +3,7 @@ import winston, { Logger } from 'winston';
 import { LoggerInterface } from '../logger.interface';
 
 export class WinstonLogger implements LoggerInterface {
-  logger: Logger;
+  private readonly logger: Logger;
 
   constructor() {
     this.logger = this.createLogger();
@@ -31,7 +31,7 @@ export class WinstonLogger implements LoggerInterface {
       : this.logger.debug(message);
   }
 
-  createLogger(): Logger {
+  private createLogger(): Logger {
     return winston.createLogger({
       level: 'info',
       format: winston.format.combine(

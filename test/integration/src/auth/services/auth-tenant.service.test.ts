@@ -3,9 +3,9 @@ import { JWT_REGEX } from '../../../../../src/common/constants/regex';
 import { UnauthorizedError } from '../../../../../src/common/exceptions/auth.exceptions';
 import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
+import { Tenant } from '../../../../../src/tenants/tenants.interface';
 import { TenantsModel } from '../../../../../src/tenants/tenants.schema';
 import { TenantsService } from '../../../../../src/tenants/tenants.service';
-import { Tenant } from '../../../../../src/tenants/tentants.interface';
 import fixture from '../../../../fixtures/model.register';
 import { MotherFactory } from '../../../../helpers/factories/mother.factory';
 

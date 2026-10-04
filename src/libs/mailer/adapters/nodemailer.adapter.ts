@@ -84,10 +84,18 @@ export class NodeMailerAdapter implements Mailer {
     context: Record<string, string>,
   ): Promise<void> {
     const subject = `Welcome to ${this.appName}`;
-    context.appName = this.appName;
-    context.year = this.year;
+    const enrichedContext = {
+      ...context,
+      appName: this.appName,
+      year: this.year,
+    };
 
-    await this.sendMailWithTemplate(to, subject, MailTemplate.WELCOME, context);
+    await this.sendMailWithTemplate(
+      to,
+      subject,
+      MailTemplate.WELCOME,
+      enrichedContext,
+    );
   }
 
   async sendSignupVerificationEmail(
@@ -95,14 +103,17 @@ export class NodeMailerAdapter implements Mailer {
     context: Record<string, string>,
   ): Promise<void> {
     const subject = `Verify your account`;
-    context.appName = this.appName;
-    context.year = this.year;
+    const enrichedContext = {
+      ...context,
+      appName: this.appName,
+      year: this.year,
+    };
 
     await this.sendMailWithTemplate(
       to,
       subject,
       MailTemplate.SIGNUP_VERIFICATION,
-      context,
+      enrichedContext,
     );
   }
 
@@ -111,15 +122,17 @@ export class NodeMailerAdapter implements Mailer {
     context: Record<string, string>,
   ): Promise<void> {
     const subject = 'Reset your password';
-
-    context.appName = this.appName;
-    context.year = this.year;
+    const enrichedContext = {
+      ...context,
+      appName: this.appName,
+      year: this.year,
+    };
 
     await this.sendMailWithTemplate(
       to,
       subject,
       MailTemplate.RESET_PASSWORD,
-      context,
+      enrichedContext,
     );
   }
 }

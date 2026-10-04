@@ -199,9 +199,11 @@ describe('NodeMailerAdapter', () => {
         assert.strictEqual(args[0], 'jane@example.com');
         assert.strictEqual(args[1], 'Welcome to Test App');
         assert.strictEqual(args[2], MailTemplate.WELCOME);
-        assert.strictEqual(args[3], context);
-        assert.strictEqual(context.appName, 'Test App');
-        assert.strictEqual(context.year, new Date().getFullYear().toString());
+        assert.strictEqual(args[3].userName, 'jane');
+        assert.strictEqual(args[3].appName, 'Test App');
+        assert.strictEqual(args[3].year, new Date().getFullYear().toString());
+        assert.notStrictEqual(args[3], context);
+        assert.strictEqual(context.appName, undefined);
       });
     });
 
@@ -216,8 +218,10 @@ describe('NodeMailerAdapter', () => {
         const args = send.mock.calls[0]?.arguments as any[];
         assert.strictEqual(args[1], 'Verify your account');
         assert.strictEqual(args[2], MailTemplate.SIGNUP_VERIFICATION);
-        assert.strictEqual(context.appName, 'Test App');
-        assert.strictEqual(context.year, new Date().getFullYear().toString());
+        assert.strictEqual(args[3].code, '123456');
+        assert.strictEqual(args[3].appName, 'Test App');
+        assert.strictEqual(args[3].year, new Date().getFullYear().toString());
+        assert.strictEqual(context.appName, undefined);
       });
     });
 
@@ -232,8 +236,10 @@ describe('NodeMailerAdapter', () => {
         const args = send.mock.calls[0]?.arguments as any[];
         assert.strictEqual(args[1], 'Reset your password');
         assert.strictEqual(args[2], MailTemplate.RESET_PASSWORD);
-        assert.strictEqual(context.appName, 'Test App');
-        assert.strictEqual(context.year, new Date().getFullYear().toString());
+        assert.strictEqual(args[3].email, 'jane@example.com');
+        assert.strictEqual(args[3].appName, 'Test App');
+        assert.strictEqual(args[3].year, new Date().getFullYear().toString());
+        assert.strictEqual(context.appName, undefined);
       });
     });
   });

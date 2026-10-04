@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 
-import { Tenant } from './tentants.interface';
+import { Tenant } from './tenants.interface';
 
 const tenantSchema = new Schema<Tenant>({
   name: { type: String, required: true, trim: true },

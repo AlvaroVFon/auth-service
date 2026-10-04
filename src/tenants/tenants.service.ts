@@ -2,7 +2,7 @@ import type { Model } from 'mongoose';
 
 import { OBJECTID_REGEX } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
-import { Tenant } from './tentants.interface';
+import { Tenant } from './tenants.interface';
 
 export class TenantsService {
   constructor(private readonly tenantsModel: Model<Tenant>) {}

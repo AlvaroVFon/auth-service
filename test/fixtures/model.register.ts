@@ -5,10 +5,8 @@ import { BlacklistedToken } from '../../src/auth/tokens/blacklisted-token.interf
 import { BlacklistedTokenModel } from '../../src/auth/tokens/blacklisted-token.schema';
 import { Holder } from '../../src/holders/holders.interface';
 import { HoldersModel } from '../../src/holders/holders.schema';
-import { ConfigEntryModel } from '../../src/libs/config-service/adapters/mongo-config-entry.schema';
-import { ConfigEntry } from '../../src/libs/config-service/config-service.interface';
+import { Tenant } from '../../src/tenants/tenants.interface';
 import { TenantsModel } from '../../src/tenants/tenants.schema';
-import { Tenant } from '../../src/tenants/tentants.interface';
 import { User as UserInterface } from '../../src/users/users.interface';
 import { User } from '../../src/users/users.schema';
 
@@ -28,11 +26,6 @@ export const registerModels = async (): Promise<void> => {
   await fixture.registerModel<Holder>(
     HoldersModel.modelName,
     HoldersModel.schema,
-  );
-
-  await fixture.registerModel<ConfigEntry>(
-    ConfigEntryModel.modelName,
-    ConfigEntryModel.schema,
   );
 
   await fixture.registerModel<Tenant>(

@@ -2,7 +2,7 @@ import { Application } from 'express';
 import request from 'supertest';
 
 import { JWT_REGEX } from '../../../src/common/constants/regex';
-import { Tenant } from '../../../src/tenants/tentants.interface';
+import { Tenant } from '../../../src/tenants/tenants.interface';
 import fixture from '../../fixtures/model.register';
 import { MotherFactory } from '../../helpers/factories/mother.factory';
 import { getTestAppInstance } from '../../utils/app';
