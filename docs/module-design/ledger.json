@@ -266,17 +266,19 @@
         "line": 35,
         "symbol": "JwtService.generateToken"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "22141be",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "rg shows generateAccessToken/generateRefreshToken/generateTokens used only in tests; signUserToken duplicates generateToken's validation."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 public surface reduced to issueSession + generateTenantToken + verifyToken"
+      ],
       "detail": "The public surface has generateToken, generateAccessToken, generateRefreshToken, generateTenantToken, generateTokens, issueSession and signUserToken. Production uses only issueSession and generateTenantToken; generateAccessToken/generateRefreshToken/generateTokens are test-only and their jti logic duplicates issueSession/signUserToken. The interface is nearly as broad as the implementation."
     },
     {
