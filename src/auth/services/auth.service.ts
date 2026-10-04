@@ -186,6 +186,10 @@ export class AuthService {
     holderId: string,
     code: string,
   ): Promise<void> {
+    if (!holderId) {
+      throw new InvalidArgumentError('holderId is required');
+    }
+
     await this.codeService.validateCode(holderId, code, CodeType.SIGNUP);
 
     const holder = await this.holdersService.findById(holderId);

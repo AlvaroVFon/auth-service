@@ -489,7 +489,7 @@ describe('Auth Service', () => {
         mockAuthMailer.sendSignupVerificationEmail.mock.calls.length === 1,
       );
       const code = await fixture.findOne<Code>('Code', {
-        holderId: holder._id,
+        subjectId: holder._id,
         type: CodeType.SIGNUP,
       });
 
@@ -527,7 +527,7 @@ describe('Auth Service', () => {
     test('should verify holder with valid code', async () => {
       const holder = await fixture.create<Holder>('Holder');
       const code = await fixture.create<Code>('Code', {
-        holderId: holder._id,
+        subjectId: holder._id,
         type: CodeType.SIGNUP,
       });
 
@@ -616,7 +616,7 @@ describe('Auth Service', () => {
       assert(mockAuthMailer.sendResetPasswordEmail.mock.calls.length === 1);
 
       const code = await fixture.findOne<Code>('Code', {
-        holderId: user._id.toString(),
+        subjectId: user._id.toString(),
         used: false,
       });
 
@@ -739,7 +739,7 @@ describe('Auth Service', () => {
     test('should succeed with valid inputs', async () => {
       const user = await fixture.create<UserInterface>('User');
       const code = await fixture.create<Code>('Code', {
-        holderId: user._id,
+        subjectId: user._id,
         type: CodeType.RESET_PASSWORD,
         used: false,
         expiresAt: new Date(Date.now() + 3600000),
@@ -772,7 +772,7 @@ describe('Auth Service', () => {
         type: TokenTypes.REFRESH,
       });
       const code = await fixture.create<Code>('Code', {
-        holderId: user._id,
+        subjectId: user._id,
         type: CodeType.RESET_PASSWORD,
         used: false,
         expiresAt: new Date(Date.now() + 3600000),
@@ -794,7 +794,7 @@ describe('Auth Service', () => {
     test('should hash the new password when resetting password', async () => {
       const user = await fixture.create<UserInterface>('User');
       const code = await fixture.create<Code>('Code', {
-        holderId: user._id,
+        subjectId: user._id,
         type: CodeType.RESET_PASSWORD,
         used: false,
         expiresAt: new Date(Date.now() + 3600000),
@@ -820,7 +820,7 @@ describe('Auth Service', () => {
     test('should delegate the password change to setPassword', async () => {
       const user = await fixture.create<UserInterface>('User');
       const code = await fixture.create<Code>('Code', {
-        holderId: user._id,
+        subjectId: user._id,
         type: CodeType.RESET_PASSWORD,
         used: false,
         expiresAt: new Date(Date.now() + 3600000),

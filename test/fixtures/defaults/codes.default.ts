@@ -10,6 +10,6 @@ export const DEFAULT_CODE: Code = {
   code: 'ABC123',
   expiresAt: new Date(Date.now() + 3600000), // 1 hour from now
   used: false,
-  holderId: DEFAULT_HOLDER_ID,
+  subjectId: DEFAULT_HOLDER_ID,
   type: CodeType.SIGNUP,
 };

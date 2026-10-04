@@ -52,7 +52,7 @@ describe('E2E Auth Login', () => {
       .expect(201);
 
     const holderId = signupResponse.body._id;
-    const codeDoc: any = await fixture.findOne('Code', { holderId });
+    const codeDoc: any = await fixture.findOne('Code', { subjectId: holderId });
 
     await request(app)
       .post('/auth/verify')
@@ -114,7 +114,7 @@ describe('E2E Auth Login', () => {
       .expect(201);
 
     const holderId = signupResponse.body._id;
-    const codeDoc: any = await fixture.findOne('Code', { holderId });
+    const codeDoc: any = await fixture.findOne('Code', { subjectId: holderId });
 
     await request(app)
       .post('/auth/verify')

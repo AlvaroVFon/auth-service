@@ -7,7 +7,7 @@ export class CodesFactory {
       _id: MotherFactory.objectId(),
       code: MotherFactory.string(6),
       expiresAt: MotherFactory.date(),
-      holderId: MotherFactory.objectId(),
+      subjectId: MotherFactory.objectId(),
       type: CodeType.SIGNUP,
       used: MotherFactory.boolean(),
       ...overrides,

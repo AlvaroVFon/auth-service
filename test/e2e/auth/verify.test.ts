@@ -17,7 +17,7 @@ describe('Auth E2E - Verify Email', () => {
     test('should verify user email with valid code', async () => {
       const holder = await fixture.create<Holder>('Holder');
       const code = await fixture.create<Code>('Code', {
-        holderId: holder._id,
+        subjectId: holder._id,
         type: CodeType.SIGNUP,
       });
 
@@ -47,7 +47,7 @@ describe('Auth E2E - Verify Email', () => {
     test('should return 400 for expired verification code', async () => {
       const holder = await fixture.create<Holder>('Holder');
       const code = await fixture.create<Code>('Code', {
-        holderId: holder._id,
+        subjectId: holder._id,
         type: CodeType.SIGNUP,
         expiresAt: new Date(Date.now() - 1000), // Expired 1 second ago
       });

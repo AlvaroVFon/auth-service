@@ -9,7 +9,7 @@ import { getTestAppInstance } from '../../utils/app';
 
 const createResetCode = async (userId: Types.ObjectId) => {
   return fixture.create<Code>('Code', {
-    holderId: userId,
+    subjectId: userId,
     type: CodeType.RESET_PASSWORD,
     used: false,
     expiresAt: new Date(Date.now() + 3600000),

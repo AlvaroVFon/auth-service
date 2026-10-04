@@ -18,12 +18,12 @@ export class CodesService {
     private readonly codeLength: number = 6,
   ) {}
 
-  async create(holderId: string, type: CodeType): Promise<Code> {
-    if (!holderId) {
-      throw new InvalidArgumentError('holderId is required');
+  async create(subjectId: string, type: CodeType): Promise<Code> {
+    if (!subjectId) {
+      throw new InvalidArgumentError('subjectId is required');
     }
-    if (!OBJECTID_REGEX.test(holderId)) {
-      throw new InvalidArgumentError('Invalid holderId');
+    if (!OBJECTID_REGEX.test(subjectId)) {
+      throw new InvalidArgumentError('Invalid subjectId');
     }
     if (!type) {
       throw new InvalidArgumentError('codeType is required');
@@ -33,7 +33,7 @@ export class CodesService {
     }
 
     const existingCode = await this.codeModel.findOne({
-      holderId: new Types.ObjectId(holderId),
+      subjectId: new Types.ObjectId(subjectId),
       type,
       used: false,
       expiresAt: { $gt: new Date() },
@@ -48,21 +48,21 @@ export class CodesService {
     return this.codeModel.create({
       code: this.generateCode(),
       expiresAt: new Date(Date.now() + this.codeExpirationMs),
-      holderId: new Types.ObjectId(holderId),
+      subjectId: new Types.ObjectId(subjectId),
       type,
     });
   }
 
   async validateCode(
-    holderId: string,
+    subjectId: string,
     code: string,
     type: CodeType,
   ): Promise<void> {
-    if (!holderId) {
-      throw new InvalidArgumentError('holderId is required');
+    if (!subjectId) {
+      throw new InvalidArgumentError('subjectId is required');
     }
-    if (!OBJECTID_REGEX.test(holderId)) {
-      throw new InvalidArgumentError('Invalid holderId');
+    if (!OBJECTID_REGEX.test(subjectId)) {
+      throw new InvalidArgumentError('Invalid subjectId');
     }
     if (!code) {
       throw new InvalidArgumentError('code is required');
@@ -76,7 +76,7 @@ export class CodesService {
 
     const existingCode = await this.codeModel.findOneAndUpdate(
       {
-        holderId: new Types.ObjectId(holderId),
+        subjectId: new Types.ObjectId(subjectId),
         type,
         code,
         used: false,

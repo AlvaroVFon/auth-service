@@ -280,17 +280,19 @@
         "line": 26,
         "symbol": "AuthModule.constructor"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "b706e2e",
       "commit": "960de3c",
       "evidence": {
         "type": "caller-snippet",
         "detail": "application.composition.ts:111-129 passes 15 positional arguments."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 AuthModule is now a thin seam; graph built in composition root"
+      ],
       "detail": "AuthModule receives usersService, cryptoService, jwtService, logger, mailService, codeService, authenticationMiddleware, refreshTokenService, blacklistService, holdersService, authTenantService plus maxLoginAttempts, lockoutDurationMs, rateLimitConfig and publicAppUrl, then constructs SessionService/AuthService/AuthController itself. Wiring, policy and construction are mixed; the caller must know every collaborator to build auth."
     },
     {
@@ -436,17 +438,19 @@
         "line": 23,
         "symbol": "AuthTenantService.login"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "4c8970d",
       "commit": "960de3c",
       "evidence": {
         "type": "interface",
         "detail": "tenants.service.ts:14 re-validates with OBJECTID_REGEX; auth-tenant reads tenant.active and tenant.secret."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 tenants.verifyCredentials owns tenant id/secret checks"
+      ],
       "detail": "AuthTenantService validates tenantId with Types.ObjectId.isValid and then calls TenantsPort.findById, which validates the same id again. It also reads tenant.active/tenant.secret directly, so tenant representation leaks into auth. The check belongs in tenants (verifyCredentials) or a dedicated operation."
     },
     {

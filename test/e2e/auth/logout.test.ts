@@ -31,7 +31,7 @@ describe('E2E Auth Logout', () => {
 
     const holderId = signupResponse.body._id;
 
-    const codeDoc: any = await fixture.findOne('Code', { holderId });
+    const codeDoc: any = await fixture.findOne('Code', { subjectId: holderId });
     await request(app)
       .post('/auth/verify')
       .query({ holderId })

@@ -5,7 +5,7 @@ import { Code, CodeType } from './code.interface';
 export const CodesSchema = new Schema<Code>(
   {
     code: { type: String, required: true },
-    holderId: { type: Schema.Types.ObjectId, ref: 'Holder', required: true },
+    subjectId: { type: Schema.Types.ObjectId, required: true },
     expiresAt: { type: Date, required: true },
     used: { type: Boolean, default: false },
     type: {
@@ -17,6 +17,6 @@ export const CodesSchema = new Schema<Code>(
   { timestamps: true },
 );
 
-CodesSchema.index({ holderId: 1, type: 1, used: 1 });
+CodesSchema.index({ subjectId: 1, type: 1, used: 1 });
 
 export const CodesModel = model<Code>('Code', CodesSchema);
