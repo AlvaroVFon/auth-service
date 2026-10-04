@@ -1,5 +1,6 @@
 import { Roles } from '../../common/enums/roles.enum';
 import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
+import { EntityNotFoundError } from '../../common/exceptions/base.exception';
 import { JwtService, TokenPair, TokenTypes } from '../../libs/jwt';
 import { RefreshTokenService } from './refresh-token.service';
 import { RequestContext } from './request-context.type';
@@ -51,10 +52,17 @@ export class SessionService {
 
     const session = this.jwtService.issueSession(userId, role);
 
-    await this.refreshTokenService.revokeByJti(
-      claims.jti,
-      session.refreshTokenId,
-    );
+    try {
+      await this.refreshTokenService.revokeByJti(
+        claims.jti,
+        session.refreshTokenId,
+      );
+    } catch (error) {
+      if (error instanceof EntityNotFoundError) {
+        throw new UnauthorizedError('Refresh token has been revoked');
+      }
+      throw error;
+    }
     await this.persistRefreshToken(userId, session, ctx);
 
     return session;

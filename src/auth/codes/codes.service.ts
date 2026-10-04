@@ -84,23 +84,31 @@ export class CodesService {
       throw new InvalidArgumentError('Invalid codeType');
     }
 
-    const existingCode = await this.codeModel.findOne({
-      holderId: new Types.ObjectId(holderId),
-      type,
-      used: false,
-    });
+    const existingCode = await this.codeModel.findOneAndUpdate(
+      {
+        holderId: new Types.ObjectId(holderId),
+        type,
+        code,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      },
+      { $set: { used: true } },
+      { returnDocument: 'after' },
+    );
 
-    const isValidCode =
-      existingCode?.code === code && existingCode.expiresAt > new Date();
-
-    if (!isValidCode) {
+    if (!existingCode) {
       throw new InvalidCodeError(
         'The provided code is invalid, used or expired',
       );
     }
+  }
 
-    existingCode.used = true;
-    await existingCode.save();
+  async deleteById(id: string): Promise<void> {
+    if (!OBJECTID_REGEX.test(id)) {
+      throw new InvalidArgumentError('Invalid code ID');
+    }
+
+    await this.codeModel.findByIdAndDelete(id);
   }
 
   generateCode(

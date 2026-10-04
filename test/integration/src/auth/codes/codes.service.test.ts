@@ -147,6 +147,29 @@ describe('Codes Service', () => {
   });
 
   describe('validateCode()', () => {
+    test('should consume a code only once under concurrent validation', async () => {
+      const holderId = new Types.ObjectId().toString();
+      const code = await codesService.create(holderId, CodeType.SIGNUP);
+
+      const results = await Promise.allSettled([
+        codesService.validateCode(holderId, code.code, CodeType.SIGNUP),
+        codesService.validateCode(holderId, code.code, CodeType.SIGNUP),
+      ]);
+
+      assert.strictEqual(
+        results.filter((result) => result.status === 'fulfilled').length,
+        1,
+      );
+      assert.strictEqual(
+        results.filter(
+          (result) =>
+            result.status === 'rejected' &&
+            result.reason instanceof InvalidCodeError,
+        ).length,
+        1,
+      );
+    });
+
     test('should not throw for a valid, unused, and unexpired code', async () => {
       const holderId = new Types.ObjectId().toString();
       const code = await codesService.create(holderId, CodeType.SIGNUP);

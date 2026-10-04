@@ -120,20 +120,22 @@ export class UsersService {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    const user = await this.usersModel.findById(id);
+    const user = await this.usersModel.findOneAndUpdate(
+      { _id: id },
+      { $inc: { loginAttempts: 1 } },
+      { returnDocument: 'after' },
+    );
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
 
-    const loginAttempts = (user.loginAttempts ?? 0) + 1;
-    const lockoutUntil =
-      loginAttempts >= maxAttempts
-        ? new Date(Date.now() + lockoutDurationMs)
-        : null;
+    if ((user.loginAttempts ?? 0) < maxAttempts) {
+      return user;
+    }
 
     return this.usersModel.findByIdAndUpdate(
       id,
-      { loginAttempts, lockoutUntil },
+      { lockoutUntil: new Date(Date.now() + lockoutDurationMs) },
       { returnDocument: 'after' },
     );
   }

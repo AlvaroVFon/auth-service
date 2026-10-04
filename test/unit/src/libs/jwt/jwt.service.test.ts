@@ -12,7 +12,7 @@ import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
 describe('JwtService', () => {
   let jwtService: JwtService;
   const jwtSecret = process.env.JWT_SECRET!;
-  const jwtExpiresIn = parseInt(process.env.JWT_EXPIRES_IN || '3600', 10);
+  const jwtExpiresIn = parseInt(process.env.JWT_EXPIRATION || '3600', 10);
   const jwtRefreshExpiresIn = parseInt(
     process.env.JWT_REFRESH_EXPIRES_IN || '86400',
     10,

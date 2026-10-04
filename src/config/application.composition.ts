@@ -78,7 +78,7 @@ export const createApplicationComposition = (
   const jwtService = new JwtService(
     options.jwtSecret ?? getStringEnvVariable('JWT_SECRET'),
     options.jwtExpiresIn ??
-      parseInt(getStringEnvVariable('JWT_EXPIRES_IN', '3600'), 10),
+      parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10),
     options.refreshTokenExpiresIn ??
       parseInt(
         getStringEnvVariable(

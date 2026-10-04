@@ -17,6 +17,24 @@ describe('HoldersService', () => {
   });
 
   describe('create', () => {
+    test('should set holder expiration in the future and use a date TTL', async () => {
+      const holderData = HolderFactory.generate();
+      const holder = await holdersService.create(
+        holderData.email,
+        holderData.password,
+      );
+
+      assert.ok(holder.expiresAt.getTime() > Date.now());
+      assert.ok(
+        HoldersModel.schema
+          .indexes()
+          .some(
+            ([fields, options]) =>
+              fields.expiresAt === 1 && options?.expireAfterSeconds === 0,
+          ),
+      );
+    });
+
     test('should throw an error if email is not provided', async () => {
       const holderData = HolderFactory.generate({
         email: undefined as unknown as string,

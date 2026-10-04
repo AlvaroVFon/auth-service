@@ -3,7 +3,7 @@ import { Schema, model } from 'mongoose';
 import { getNumberEnvVariable } from '../config/env.config';
 import { Holder } from './holders.interface';
 
-const holderExpiration = getNumberEnvVariable('CODE_EXPIRATION_MS');
+const holderExpiration = getNumberEnvVariable('CODE_EXPIRATION_MS', 3600000);
 
 const HoldersSchema = new Schema<Holder>(
   {
@@ -28,6 +28,6 @@ const HoldersSchema = new Schema<Holder>(
   },
 );
 
-HoldersSchema.index({ expiresAt: 1 }, { expireAfterSeconds: holderExpiration });
+HoldersSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const HoldersModel = model<Holder>('Holder', HoldersSchema);

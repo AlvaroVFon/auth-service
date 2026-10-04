@@ -62,7 +62,7 @@ export class RefreshTokenService {
     }
 
     const result = await this.refreshTokenModel.updateOne(
-      { jti },
+      { jti, revokedAt: null },
       {
         revokedAt: new Date(),
         replacedByJti: replacedByJti || null,
