@@ -1,7 +1,3 @@
-import { Types } from 'mongoose';
-
-import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
-import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { JwtService } from '../../libs/jwt';
 import { TenantsPort } from '../../tenants';
 
@@ -17,24 +13,10 @@ export class AuthTenantService {
   ) {}
 
   async login(credentials: AuthTenantCredentials): Promise<string> {
-    if (!credentials.tenantId) {
-      throw new InvalidArgumentError('Tenant ID is required');
-    }
-    if (!Types.ObjectId.isValid(credentials.tenantId)) {
-      throw new InvalidArgumentError('Tenant ID is invalid');
-    }
-    if (!credentials.tenantSecret) {
-      throw new InvalidArgumentError('Tenant secret is required');
-    }
-
-    const tenant = await this.tenantsService.findById(credentials.tenantId);
-    if (!tenant) {
-      throw new UnauthorizedError('Invalid credentials');
-    }
-
-    if (!tenant.active || tenant.secret !== credentials.tenantSecret) {
-      throw new UnauthorizedError('Invalid credentials');
-    }
+    const tenant = await this.tenantsService.verifyCredentials(
+      credentials.tenantId,
+      credentials.tenantSecret,
+    );
 
     return this.jwtService.generateTenantToken(String(tenant._id));
   }
