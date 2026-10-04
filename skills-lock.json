@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "adr": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/adr/SKILL.md",
+      "computedHash": "db45c08dc317118d8f28162e643c10e8ea479823705e9d1e9ef275fa08253cbb"
+    },
+    "bug-scan": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/bug-scan/SKILL.md",
+      "computedHash": "04c8d5463a5eb5d0f5b5e79ebb91de8acff105cac9d2a21184fc07464dadb903"
+    },
+    "code-review": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code-review/SKILL.md",
+      "computedHash": "c5c236daf32cb4ccf3b7beabb1b4aee031ba260f7f45c73211d2c22e42d2cb1e"
+    },
+    "create-commit": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/create-commit/SKILL.md",
+      "computedHash": "2d21e4ea50e1900830ac8316d40f3713c168fdc4dcd063af17e416a5a5c323ca"
+    },
+    "create-pr": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/create-pr/SKILL.md",
+      "computedHash": "ea00b4612b441ed66bbef48d95b0da2feac69b90091396a02ab0cbb9455f338b"
+    },
+    "module-design": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/module-design/SKILL.md",
+      "computedHash": "1cbd8e55d5ded708f46317959d0975db54df714455993350dac22f9869796baf"
+    },
+    "mutation-test": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/mutation-test/SKILL.md",
+      "computedHash": "d82fb71ad2d27602e63a52a0d0ca59eaf6302215b4eb7d074553dee668821a4b"
+    },
+    "refactor": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/refactor/SKILL.md",
+      "computedHash": "28f8d703ce9dea9fae0b626db7d12130643b7d7f73cb134011fd1cdbcb38dcd5"
+    },
+    "tdd": {
+      "source": "AlvaroVFon/skills",
+      "sourceType": "github",
+      "skillPath": "skills/tdd/SKILL.md",
+      "computedHash": "e7cb30cc23947594dd08fb10415fa53cbcd45ae00e94848a6720261254b5a677"
+    }
+  }
+}
