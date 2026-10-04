@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
 import { CodesService } from '../../../../../src/auth/codes/codes.service';
+import { AuthMailer } from '../../../../../src/auth/services/auth-mailer';
 import { AuthService } from '../../../../../src/auth/services/auth.service';
 import { BlacklistService } from '../../../../../src/auth/tokens/blacklist.service';
 import { BlacklistedTokenModel } from '../../../../../src/auth/tokens/blacklisted-token.schema';
@@ -18,7 +19,6 @@ import { HoldersService } from '../../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
-import { MailerInterface } from '../../../../../src/libs/mailer/mailer.interface';
 import { User as UserInterface } from '../../../../../src/users/users.interface';
 import { User } from '../../../../../src/users/users.schema';
 import { UsersService } from '../../../../../src/users/users.service';
@@ -45,10 +45,10 @@ describe('Auth Service', () => {
     hashString: mock.fn((str: string) => Promise.resolve(`hashed_${str}`)),
   } as CryptoService;
 
-  const mockMailerService = {
+  const mockAuthMailer = {
     sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
     sendResetPasswordEmail: mock.fn(() => Promise.resolve()),
-  } as MailerInterface;
+  } as unknown as AuthMailer;
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRATION || '3600', 10);
@@ -81,12 +81,11 @@ describe('Auth Service', () => {
 
     authService = new AuthService(
       userService,
-      mockMailerService as MailerInterface,
+      mockAuthMailer,
       codeService,
       sessionService,
       blacklistService,
       holdersService,
-      'https://test.example',
     );
   });
 
@@ -168,7 +167,7 @@ describe('Auth Service', () => {
       );
       authService = new AuthService(
         userService,
-        mockMailerService as MailerInterface,
+        mockAuthMailer,
         codeService,
         sessionService,
         blacklistService,
@@ -487,7 +486,7 @@ describe('Auth Service', () => {
       assert.notStrictEqual(holder.password, 'ValidPass123!');
       assert.ok(
         // @ts-expect-error mock.call exists
-        mockMailerService.sendSignupVerificationEmail.mock.calls.length === 1,
+        mockAuthMailer.sendSignupVerificationEmail.mock.calls.length === 1,
       );
       const code = await fixture.findOne<Code>('Code', {
         holderId: holder._id,
@@ -496,22 +495,15 @@ describe('Auth Service', () => {
 
       assert.deepStrictEqual(
         // @ts-expect-error mock.call exists
-        mockMailerService.sendSignupVerificationEmail.mock.calls[0].arguments,
-        [
-          email,
-          {
-            userName: email,
-            code: code!.code,
-            link: `https://test.example/verify?holderId=${holder._id.toString()}&code=${code!.code}`,
-          },
-        ],
+        mockAuthMailer.sendSignupVerificationEmail.mock.calls[0].arguments,
+        [email, holder._id.toString(), code!.code],
       );
     });
 
     test('should clean up holder and code when verification email fails', async () => {
       const email = generateRandomEmail('mail-failure+');
       // @ts-expect-error Node test mocks expose mock at runtime.
-      mockMailerService.sendSignupVerificationEmail.mock.mockImplementation(
+      mockAuthMailer.sendSignupVerificationEmail.mock.mockImplementation(
         async () => {
           throw new Error('SMTP down');
         },
@@ -621,7 +613,7 @@ describe('Auth Service', () => {
       await authService.forgotPassword(email);
 
       // @ts-expect-error mock.call exists
-      assert(mockMailerService.sendResetPasswordEmail.mock.calls.length === 1);
+      assert(mockAuthMailer.sendResetPasswordEmail.mock.calls.length === 1);
 
       const code = await fixture.findOne<Code>('Code', {
         holderId: user._id.toString(),
@@ -630,16 +622,8 @@ describe('Auth Service', () => {
 
       assert.deepStrictEqual(
         // @ts-expect-error mock.call exists
-        mockMailerService.sendResetPasswordEmail.mock.calls[0].arguments,
-        [
-          email,
-          {
-            username: user.email,
-            email,
-            code: code!.code,
-            link: `https://test.example/reset-password?userId=${user._id}&code=${code!.code}`,
-          },
-        ],
+        mockAuthMailer.sendResetPasswordEmail.mock.calls[0].arguments,
+        [email, user._id.toString(), code!.code],
       );
     });
   });

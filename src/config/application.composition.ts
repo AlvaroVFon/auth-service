@@ -4,6 +4,7 @@ import { AuthModule } from '../auth';
 import type { AuthRateLimitConfig } from '../auth';
 import { CodesModel } from '../auth/codes/codes.schema';
 import { CodesService } from '../auth/codes/codes.service';
+import { AuthMailer } from '../auth/services/auth-mailer';
 import { AuthTenantService } from '../auth/services/auth-tenant.service';
 import { BlacklistService } from '../auth/tokens/blacklist.service';
 import { BlacklistedTokenModel } from '../auth/tokens/blacklisted-token.schema';
@@ -107,6 +108,12 @@ export const createApplicationComposition = (
   const templateRenderer = new HandlebarsEngine();
   const mailer =
     options.mailer ?? new NodeMailerAdapter(templateRenderer, logger);
+  const authMailer = new AuthMailer(
+    mailer,
+    options.publicAppUrl ??
+      getStringEnvVariable('PUBLIC_APP_URL', 'https://ourservice.com'),
+    getStringEnvVariable('APP_NAME', 'Auth Service'),
+  );
   const codeService = new CodesService(
     CodesModel,
     getNumberEnvVariable('CODE_EXPIRATION_MS', 3600000),
@@ -129,7 +136,7 @@ export const createApplicationComposition = (
     usersModule.service,
     jwtService,
     logger,
-    mailer,
+    authMailer,
     codeService,
     authenticationMiddleware,
     refreshTokenService,
@@ -137,8 +144,6 @@ export const createApplicationComposition = (
     holdersService,
     authTenantService,
     options.rateLimitConfig ?? getDefaultRateLimitConfig(),
-    options.publicAppUrl ??
-      getStringEnvVariable('PUBLIC_APP_URL', 'https://ourservice.com'),
   );
 
   return {

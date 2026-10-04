@@ -11,8 +11,8 @@ import { silentLogger } from '../mocks/logger.mock';
 let app: Application;
 
 const mailer = {
-  sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
-  sendResetPasswordEmail: mock.fn(() => Promise.resolve()),
+  sendEmail: mock.fn(() => Promise.resolve()),
+  sendMailWithTemplate: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
 
 const composition = createApplicationComposition({

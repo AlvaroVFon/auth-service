@@ -6,12 +6,12 @@ import { TokenBlacklistPort } from '../common/ports/token-blacklist.port';
 import { HoldersPort } from '../holders';
 import { JwtService } from '../libs/jwt';
 import { LoggerInterface } from '../libs/logger';
-import { MailerInterface } from '../libs/mailer';
 import { UsersPort } from '../users';
 import { AuthRouter, AuthRateLimitConfig } from './auth.router';
 import { CodesService } from './codes/codes.service';
 import { AuthController } from './controllers/auth.controller';
 import { AuthTenantController } from './controllers/auth.tenant.controller';
+import { AuthMailer } from './services/auth-mailer';
 import { AuthTenantService } from './services/auth-tenant.service';
 import { AuthService } from './services/auth.service';
 import { RefreshTokenService } from './tokens/refresh-token.service';
@@ -25,7 +25,7 @@ export class AuthModule {
     private readonly usersService: UsersPort,
     private readonly jwtService: JwtService,
     private readonly logger: LoggerInterface,
-    private readonly mailService: MailerInterface,
+    private readonly authMailer: AuthMailer,
     private readonly codeService: CodesService,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly refreshTokenService: RefreshTokenService,
@@ -33,14 +33,13 @@ export class AuthModule {
     private readonly holdersService: HoldersPort,
     private readonly authTenantService: AuthTenantService,
     private readonly rateLimitConfig: AuthRateLimitConfig,
-    private readonly publicAppUrl: string = 'https://ourservice.com',
   ) {
     assertDependencies(
       {
         usersService,
         jwtService,
         logger,
-        mailService,
+        authMailer,
         codeService,
         authenticationMiddleware,
         refreshTokenService,
@@ -58,12 +57,11 @@ export class AuthModule {
 
     const service = new AuthService(
       this.usersService,
-      this.mailService,
+      this.authMailer,
       this.codeService,
       sessionService,
       this.blacklistService,
       this.holdersService,
-      this.publicAppUrl,
     );
     this.controller = new AuthController(service);
     this.tenantsController = new AuthTenantController(this.authTenantService);

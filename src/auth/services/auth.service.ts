@@ -9,23 +9,22 @@ import {
 } from '../../common/exceptions/base.exception';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
-import { MailerInterface } from '../../libs/mailer';
 import { UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
 import { CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
 import { RequestContext } from '../tokens/request-context.type';
 import { SessionService } from '../tokens/session.service';
+import { AuthMailer } from './auth-mailer';
 
 export class AuthService {
   constructor(
     private readonly usersService: UsersPort,
-    private readonly mailService: MailerInterface,
+    private readonly authMailer: AuthMailer,
     private readonly codeService: CodesService,
     private readonly sessionService: SessionService,
     private readonly blacklistService: TokenBlacklistPort,
     private readonly holdersService: HoldersPort,
-    private readonly publicAppUrl: string = 'https://ourservice.com',
   ) {}
 
   async login(
@@ -102,11 +101,11 @@ export class AuthService {
     );
 
     try {
-      await this.mailService.sendSignupVerificationEmail(newHolder.email, {
-        userName: newHolder.email,
-        code: verificationCode.code,
-        link: `${this.publicAppUrl}/verify?holderId=${newHolder._id}&code=${verificationCode.code}`,
-      });
+      await this.authMailer.sendSignupVerificationEmail(
+        newHolder.email,
+        newHolder._id.toString(),
+        verificationCode.code,
+      );
     } catch (error) {
       await Promise.allSettled([
         this.codeService.deleteById(verificationCode._id.toString()),
@@ -136,12 +135,11 @@ export class AuthService {
       CodeType.RESET_PASSWORD,
     );
 
-    await this.mailService.sendResetPasswordEmail(email, {
-      username: user.email,
+    await this.authMailer.sendResetPasswordEmail(
       email,
-      code: code.code,
-      link: `${this.publicAppUrl}/reset-password?userId=${user._id}&code=${code.code}`,
-    });
+      user._id.toString(),
+      code.code,
+    );
   }
 
   async resetPassword(

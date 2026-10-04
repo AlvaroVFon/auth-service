@@ -4,7 +4,6 @@ import {
   getStringEnvVariable,
   getNumberEnvVariable,
 } from '../../../config/env.config';
-import { MailTemplate } from '../../../mail/mail.enum';
 import { LoggerInterface } from '../../logger/logger.interface';
 import { TemplateRenderer } from '../../templates-engine/template-renderer.interface';
 import { MailerInterface as Mailer } from '../mailer.interface';
@@ -16,8 +15,6 @@ export class NodeMailerAdapter implements Mailer {
   private readonly smtpUser: string;
   private readonly smtpPass: string;
   private readonly mailFrom: string;
-  private readonly appName: string;
-  private readonly year: string;
 
   constructor(
     private readonly templateRenderer: TemplateRenderer,
@@ -31,8 +28,6 @@ export class NodeMailerAdapter implements Mailer {
       'MAIL_FROM',
       'no-reply@auth-service.com',
     );
-    this.appName = getStringEnvVariable('APP_NAME', 'Auth Service');
-    this.year = new Date().getFullYear().toString();
     this.transporter = this.createTransport();
   }
 
@@ -77,62 +72,5 @@ export class NodeMailerAdapter implements Mailer {
       this.logger.error(`Error rendering or sending template email: ${error}`);
       throw error;
     }
-  }
-
-  async sendWelcomeEmail(
-    to: string,
-    context: Record<string, string>,
-  ): Promise<void> {
-    const subject = `Welcome to ${this.appName}`;
-    const enrichedContext = {
-      ...context,
-      appName: this.appName,
-      year: this.year,
-    };
-
-    await this.sendMailWithTemplate(
-      to,
-      subject,
-      MailTemplate.WELCOME,
-      enrichedContext,
-    );
-  }
-
-  async sendSignupVerificationEmail(
-    to: string,
-    context: Record<string, string>,
-  ): Promise<void> {
-    const subject = `Verify your account`;
-    const enrichedContext = {
-      ...context,
-      appName: this.appName,
-      year: this.year,
-    };
-
-    await this.sendMailWithTemplate(
-      to,
-      subject,
-      MailTemplate.SIGNUP_VERIFICATION,
-      enrichedContext,
-    );
-  }
-
-  async sendResetPasswordEmail(
-    to: string,
-    context: Record<string, string>,
-  ): Promise<void> {
-    const subject = 'Reset your password';
-    const enrichedContext = {
-      ...context,
-      appName: this.appName,
-      year: this.year,
-    };
-
-    await this.sendMailWithTemplate(
-      to,
-      subject,
-      MailTemplate.RESET_PASSWORD,
-      enrichedContext,
-    );
   }
 }

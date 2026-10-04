@@ -7,16 +7,4 @@ export interface MailerInterface {
     templatePath: string,
     context: Record<string, string>,
   ): Promise<void>;
-
-  sendWelcomeEmail(to: string, context: Record<string, string>): Promise<void>;
-
-  sendSignupVerificationEmail(
-    to: string,
-    context: Record<string, string>,
-  ): Promise<void>;
-
-  sendResetPasswordEmail(
-    to: string,
-    context: Record<string, string>,
-  ): Promise<void>;
 }
