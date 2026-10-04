@@ -16,17 +16,19 @@
         "line": 6,
         "symbol": "UsersPort"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "1634c82",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "users.service.ts / holders.service.ts / tenants.service.ts declare no implements clause."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 2: intent-based ports with implements; lockout policy owned by users; auth uses TokenBlacklistPort; facade has a consumer"
+      ],
       "detail": "UsersPort/HoldersPort/TenantsPort live inside index.ts and the services (UsersService, HoldersService, TenantsService) never `implements` them. Compatibility is structural only, so a service change can silently break the contract at the composition root instead of failing to compile."
     },
     {
@@ -116,17 +118,19 @@
         "line": 99,
         "symbol": "handleSuccessfulLogin"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "1634c82",
       "commit": "960de3c",
       "evidence": {
         "type": "interface",
         "detail": "updateOneById(id: string, updateData: Partial<User>) exposed on UsersPort."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 2: intent-based ports with implements; lockout policy owned by users; auth uses TokenBlacklistPort; facade has a consumer"
+      ],
       "detail": "AuthService resets loginAttempts/lockoutUntil through UsersPort.updateOneById(id, Partial<User>), so auth must know the user representation and can mutate any field (including password) without going through users' invariants (e.g. hashing is implicit). This is Tell-Don't-Ask broken across the boundary."
     },
     {
@@ -166,17 +170,19 @@
         "line": 7,
         "symbol": "UsersPort.createFromHolder"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "1634c82",
       "commit": "960de3c",
       "evidence": {
         "type": "interface",
         "detail": "users/index.ts imports { Holder } from '../holders'."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 2: intent-based ports with implements; lockout policy owned by users; auth uses TokenBlacklistPort; facade has a consumer"
+      ],
       "detail": "UsersPort.createFromHolder(holder: Holder) makes the users module import the holders entity type, coupling two modules through a concrete representation instead of an explicit primitive (for example a VerifiedEmail value with email and password)."
     },
     {
@@ -241,17 +247,19 @@
         "line": 10,
         "symbol": "UsersPort.incrementLoginAttempts"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "1634c82",
       "commit": "960de3c",
       "evidence": {
         "type": "caller-snippet",
         "detail": "auth.service.ts:91-95 forwards this.maxLoginAttempts and this.lockoutDurationMs."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 2: intent-based ports with implements; lockout policy owned by users; auth uses TokenBlacklistPort; facade has a consumer"
+      ],
       "detail": "incrementLoginAttempts(id, maxAttempts, lockoutDurationMs) requires the caller (AuthService) to pass the lockout policy on every failed login. The policy is decided once at the composition root, then threaded through two layers; the common case should be a domain default owned by users."
     },
     {
@@ -291,17 +299,19 @@
         "line": 1,
         "symbol": "auth barrel"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "1634c82",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "No import of '../auth' exists in src/ or test/."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 2: intent-based ports with implements; lockout policy owned by users; auth uses TokenBlacklistPort; facade has a consumer"
+      ],
       "detail": "The barrel exports AuthModule and the concrete AuthService, yet no file imports from '../auth'. Cross-module consumers bypass the facade entirely (auth.module imports users/holders indexes directly), so the boundary is undefined and the concrete class is the de-facto contract."
     },
     {
@@ -366,17 +376,19 @@
         "line": 32,
         "symbol": "blacklistService"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "1634c82",
       "commit": "960de3c",
       "evidence": {
         "type": "interface",
         "detail": "constructor(... blacklistService: BlacklistService ...) and auth.module.ts:35 passes BlacklistService."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 2: intent-based ports with implements; lockout policy owned by users; auth uses TokenBlacklistPort; facade has a consumer"
+      ],
       "detail": "The port TokenBlacklistPort exists and BlacklistService implements it, yet AuthService and AuthModule type the dependency as the concrete class, so the boundary is weaker than it needs to be."
     },
     {
