@@ -341,17 +341,19 @@
         "line": 1,
         "symbol": "ConfigService"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "rg for config-service/ConfigService outside src/libs/config-service/** returns nothing."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 deleted unwired libs/config-service and its tests/fixtures"
+      ],
       "detail": "config-service.interface.ts, its Mongo adapter and schema have zero production wiring and no consumers outside their own folder. It is pure maintenance cost until a real dynamic-config need exists."
     },
     {
@@ -391,17 +393,19 @@
         "line": 1,
         "symbol": "Tenant"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "tenants/index.ts and tenants.service.ts import './tentants.interface'."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 renamed tentants.interface.ts -> tenants.interface.ts"
+      ],
       "detail": "The filename `tentants.interface.ts` is imported by tenants/index.ts and tenants.service.ts. Renaming removes a permanent naming wart at low risk."
     },
     {
@@ -416,17 +420,19 @@
         "line": 87,
         "symbol": "NodeMailerAdapter send*Email"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
       "commit": "960de3c",
       "evidence": {
         "type": "back-door",
         "detail": "context.appName = this.appName; context.year = this.year in three methods."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 NodeMailerAdapter clones context instead of mutating it"
+      ],
       "detail": "sendWelcomeEmail/sendSignupVerificationEmail/sendResetPasswordEmail write appName and year onto the caller-supplied context object, so the caller's data is silently mutated. The adapter should copy the context before enriching it."
     },
     {
@@ -441,17 +447,19 @@
         "line": 6,
         "symbol": "WinstonLogger.logger"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
       "commit": "960de3c",
       "evidence": {
         "type": "interface",
         "detail": "public logger: Logger (winston) on the adapter."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 WinstonLogger.logger and createLogger are now private"
+      ],
       "detail": "The adapter declares a public `logger: winston.Logger` field, exposing the concrete logging library to anyone holding the logger. The LoggerInterface port is the intended surface; the field should be private."
     },
     {
