@@ -1,3 +1,3 @@
 export { AuthModule } from './auth.module';
-export { AuthService } from './services/auth.service';
+export type { AuthRateLimitConfig } from './auth.router';
 export type { Credentials, SignupCredentials } from './auth.interface';

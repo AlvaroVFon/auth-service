@@ -81,14 +81,11 @@ describe('Auth Service', () => {
 
     authService = new AuthService(
       userService,
-      mockCryptoService as unknown as CryptoService,
       mockMailerService as MailerInterface,
       codeService,
       sessionService,
       blacklistService,
       holdersService,
-      5,
-      900000,
       'https://test.example',
     );
   });
@@ -163,16 +160,19 @@ describe('Auth Service', () => {
     const LOCKOUT_DURATION_MS = 900000;
 
     beforeEach(() => {
+      userService = new UsersService(
+        User,
+        mockCryptoService as unknown as CryptoService,
+        MAX_LOGIN_ATTEMPTS,
+        LOCKOUT_DURATION_MS,
+      );
       authService = new AuthService(
         userService,
-        mockCryptoService as unknown as CryptoService,
         mockMailerService as MailerInterface,
         codeService,
         sessionService,
         blacklistService,
         holdersService,
-        MAX_LOGIN_ATTEMPTS,
-        LOCKOUT_DURATION_MS,
       );
     });
 
@@ -833,7 +833,7 @@ describe('Auth Service', () => {
       assert.strictEqual(updatedUser!.password, `hashed_${newPassword}`);
     });
 
-    test('should call updateOneById with correct parameters', async () => {
+    test('should delegate the password change to setPassword', async () => {
       const user = await fixture.create<UserInterface>('User');
       const code = await fixture.create<Code>('Code', {
         holderId: user._id,
@@ -844,7 +844,7 @@ describe('Auth Service', () => {
 
       const newPassword = 'NewPass123!';
 
-      const updateOneByIdSpy = mock.method(userService, 'updateOneById');
+      const setPasswordSpy = mock.method(userService, 'setPassword');
 
       await authService.resetPassword(
         user._id.toString(),
@@ -853,10 +853,10 @@ describe('Auth Service', () => {
         newPassword,
       );
 
-      assert.ok(updateOneByIdSpy.mock.calls.length === 1);
-      assert.deepStrictEqual(updateOneByIdSpy.mock.calls[0].arguments, [
+      assert.ok(setPasswordSpy.mock.calls.length === 1);
+      assert.deepStrictEqual(setPasswordSpy.mock.calls[0].arguments, [
         user._id.toString(),
-        { password: `hashed_${newPassword}` },
+        newPassword,
       ]);
     });
 

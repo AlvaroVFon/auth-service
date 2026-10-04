@@ -19,6 +19,8 @@ export class UsersModule {
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly authorizationMiddleware: AuthorizationMiddleware,
     private readonly logger: LoggerInterface,
+    private readonly maxLoginAttempts: number = 5,
+    private readonly lockoutDurationMs: number = 900000,
   ) {
     assertDependencies(
       {
@@ -30,7 +32,12 @@ export class UsersModule {
       this.constructor.name,
     );
 
-    this.service = new UsersService(User, this.cryptoService);
+    this.service = new UsersService(
+      User,
+      this.cryptoService,
+      this.maxLoginAttempts,
+      this.lockoutDurationMs,
+    );
     this.controller = new UsersController(this.service);
   }
 

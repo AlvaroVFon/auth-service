@@ -30,15 +30,16 @@ describe('UsersService', () => {
 
   describe('UsersService Methods', () => {
     test('should count concurrent login failures without lost updates', async () => {
+      const email = generateRandomEmail('attempts+');
       const user = await fixture.create<UserInterface>('User', {
-        email: generateRandomEmail('attempts+'),
+        email,
         loginAttempts: 0,
         lockoutUntil: null,
       });
 
-      await Promise.all([
-        usersService.incrementLoginAttempts(user._id.toString(), 5, 900000),
-        usersService.incrementLoginAttempts(user._id.toString(), 5, 900000),
+      await Promise.allSettled([
+        usersService.verifyCredentials(email, 'wrongpassword'),
+        usersService.verifyCredentials(email, 'wrongpassword'),
       ]);
 
       const updated = await fixture.findById<UserInterface>(

@@ -1,7 +1,7 @@
 import { Application } from 'express';
 
-import { AuthModule } from '../auth/auth.module';
-import { AuthRateLimitConfig } from '../auth/auth.router';
+import { AuthModule } from '../auth';
+import type { AuthRateLimitConfig } from '../auth';
 import { CodesModel } from '../auth/codes/codes.schema';
 import { CodesService } from '../auth/codes/codes.service';
 import { AuthTenantService } from '../auth/services/auth-tenant.service';
@@ -107,10 +107,12 @@ export const createApplicationComposition = (
     authenticationMiddleware,
     authorizationMiddleware,
     logger,
+    options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
+    options.lockoutDurationMs ??
+      getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
   );
   const authModule = new AuthModule(
     usersModule.service,
-    cryptoService,
     jwtService,
     logger,
     mailer,
@@ -120,9 +122,6 @@ export const createApplicationComposition = (
     blacklistService,
     holdersService,
     authTenantService,
-    options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
-    options.lockoutDurationMs ??
-      getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
     options.rateLimitConfig ?? getDefaultRateLimitConfig(),
     options.publicAppUrl ??
       getStringEnvVariable('PUBLIC_APP_URL', 'https://ourservice.com'),

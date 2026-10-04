@@ -2,18 +2,24 @@ import { Model } from 'mongoose';
 
 import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
 import {
+  AccountLockedError,
+  InvalidCredentialsError,
+} from '../common/exceptions/auth.exceptions';
+import {
   EntityAlreadyExistsError,
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
-import { Holder } from '../holders';
 import { CryptoService } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
+import type { UsersPort } from './users.port';
 
-export class UsersService {
+export class UsersService implements UsersPort {
   constructor(
     private readonly usersModel: Model<UserInterface>,
     private readonly cryptoService: CryptoService,
+    private readonly maxLoginAttempts: number = 5,
+    private readonly lockoutDurationMs: number = 900000,
   ) {}
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
@@ -37,19 +43,50 @@ export class UsersService {
     return this.usersModel.create(data);
   }
 
-  async createFromHolder(holder: Holder): Promise<UserInterface> {
-    const userData: Partial<UserInterface> = {
-      email: holder.email,
-      password: holder.password,
-      verified: true,
-    };
-
-    const existingUser = await this.usersModel.findOne({ email: holder.email });
+  async createVerifiedUser(input: {
+    email: string;
+    passwordHash: string;
+  }): Promise<UserInterface> {
+    const existingUser = await this.usersModel.findOne({ email: input.email });
     if (existingUser) {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
-    return this.usersModel.create(userData);
+    return this.usersModel.create({
+      email: input.email,
+      password: input.passwordHash,
+      verified: true,
+    });
+  }
+
+  async verifyCredentials(
+    email: string,
+    password: string,
+  ): Promise<UserInterface> {
+    const user = await this.findByEmail(email);
+    if (!user) {
+      throw new InvalidCredentialsError('Invalid email or password');
+    }
+
+    if (this.isAccountLocked(user)) {
+      throw new AccountLockedError(
+        'Account is temporarily locked. Please try again later.',
+      );
+    }
+
+    const isPasswordValid = await this.cryptoService.compareString(
+      password,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
+      await this.recordFailedLogin(user._id.toString());
+      throw new InvalidCredentialsError('Invalid email or password');
+    }
+
+    await this.resetLoginAttempts(user._id.toString());
+
+    return user;
   }
 
   async findByEmail(email: string): Promise<UserInterface | null> {
@@ -108,11 +145,7 @@ export class UsersService {
     return user;
   }
 
-  async incrementLoginAttempts(
-    id: string,
-    maxAttempts: number,
-    lockoutDurationMs: number,
-  ): Promise<UserInterface | null> {
+  async setPassword(id: string, newPassword: string): Promise<void> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
@@ -120,6 +153,24 @@ export class UsersService {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
+    const hashedPassword = await this.cryptoService.hashString(newPassword);
+
+    const user = await this.usersModel.findByIdAndUpdate(
+      id,
+      { password: hashedPassword },
+      { returnDocument: 'after' },
+    );
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+  }
+
+  private isAccountLocked(user: UserInterface): boolean {
+    return !!user.lockoutUntil && user.lockoutUntil.getTime() > Date.now();
+  }
+
+  private async recordFailedLogin(id: string): Promise<void> {
     const user = await this.usersModel.findOneAndUpdate(
       { _id: id },
       { $inc: { loginAttempts: 1 } },
@@ -129,15 +180,20 @@ export class UsersService {
       throw new EntityNotFoundError('User not found');
     }
 
-    if ((user.loginAttempts ?? 0) < maxAttempts) {
-      return user;
+    if ((user.loginAttempts ?? 0) < this.maxLoginAttempts) {
+      return;
     }
 
-    return this.usersModel.findByIdAndUpdate(
-      id,
-      { lockoutUntil: new Date(Date.now() + lockoutDurationMs) },
-      { returnDocument: 'after' },
-    );
+    await this.usersModel.findByIdAndUpdate(id, {
+      lockoutUntil: new Date(Date.now() + this.lockoutDurationMs),
+    });
+  }
+
+  private async resetLoginAttempts(id: string): Promise<void> {
+    await this.usersModel.findByIdAndUpdate(id, {
+      loginAttempts: 0,
+      lockoutUntil: null,
+    });
   }
 
   async deleteOneById(id: string): Promise<UserInterface | null> {

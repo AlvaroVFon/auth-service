@@ -4,35 +4,27 @@ import {
   PASSWORD_REGEX,
 } from '../../common/constants/regex';
 import {
-  AccountLockedError,
-  InvalidCredentialsError,
-} from '../../common/exceptions/auth.exceptions';
-import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
+import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
-import { CryptoService } from '../../libs/crypto';
 import { MailerInterface } from '../../libs/mailer';
-import { User as UserInterface, UsersPort } from '../../users';
+import { UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
 import { CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
-import { BlacklistService } from '../tokens/blacklist.service';
 import { RequestContext } from '../tokens/request-context.type';
 import { SessionService } from '../tokens/session.service';
 
 export class AuthService {
   constructor(
     private readonly usersService: UsersPort,
-    private readonly cryptoService: CryptoService,
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
     private readonly sessionService: SessionService,
-    private readonly blacklistService: BlacklistService,
+    private readonly blacklistService: TokenBlacklistPort,
     private readonly holdersService: HoldersPort,
-    private readonly maxLoginAttempts: number,
-    private readonly lockoutDurationMs: number,
     private readonly publicAppUrl: string = 'https://ourservice.com',
   ) {}
 
@@ -48,28 +40,10 @@ export class AuthService {
       throw new InvalidArgumentError('Invalid email or password');
     }
 
-    const user = await this.usersService.findByEmail(credentials.email);
-    if (!user) {
-      throw new InvalidCredentialsError('Invalid email or password');
-    }
-
-    if (this.isAccountLocked(user)) {
-      throw new AccountLockedError(
-        'Account is temporarily locked. Please try again later.',
-      );
-    }
-
-    const isPasswordValid = await this.cryptoService.compareString(
+    const user = await this.usersService.verifyCredentials(
+      credentials.email,
       credentials.password,
-      user.password,
     );
-
-    if (!isPasswordValid) {
-      await this.handleFailedLogin(user);
-      throw new InvalidCredentialsError('Invalid email or password');
-    }
-
-    await this.handleSuccessfulLogin(user);
 
     const session = await this.sessionService.create(
       user._id.toString(),
@@ -81,25 +55,6 @@ export class AuthService {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
     };
-  }
-
-  private isAccountLocked(user: UserInterface): boolean {
-    return !!user.lockoutUntil && user.lockoutUntil.getTime() > Date.now();
-  }
-
-  private async handleFailedLogin(user: UserInterface): Promise<void> {
-    await this.usersService.incrementLoginAttempts(
-      user._id.toString(),
-      this.maxLoginAttempts,
-      this.lockoutDurationMs,
-    );
-  }
-
-  private async handleSuccessfulLogin(user: UserInterface): Promise<void> {
-    await this.usersService.updateOneById(user._id.toString(), {
-      loginAttempts: 0,
-      lockoutUntil: null,
-    });
   }
 
   async signup(credentials: SignupCredentials): Promise<Holder> {
@@ -223,7 +178,7 @@ export class AuthService {
 
     await this.codeService.validateCode(userId, code, CodeType.RESET_PASSWORD);
 
-    await this.usersService.updateOneById(userId, { password: newPassword });
+    await this.usersService.setPassword(userId, newPassword);
     await this.sessionService.revokeAll(userId);
   }
 
@@ -238,7 +193,10 @@ export class AuthService {
       throw new EntityNotFoundError('Holder not found');
     }
 
-    await this.usersService.createFromHolder(holder);
+    await this.usersService.createVerifiedUser({
+      email: holder.email,
+      passwordHash: holder.password,
+    });
     await this.holdersService.deleteById(holderId);
   }
 

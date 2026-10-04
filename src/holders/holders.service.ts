@@ -8,8 +8,9 @@ import {
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto';
 import { Holder } from './holders.interface';
+import type { HoldersPort } from './holders.port';
 
-export class HoldersService {
+export class HoldersService implements HoldersPort {
   constructor(
     private readonly holderModel: Model<Holder>,
     private readonly cryptoService: CryptoService,
