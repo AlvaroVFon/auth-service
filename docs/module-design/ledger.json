@@ -147,17 +147,17 @@
         "line": 3,
         "symbol": "EXCLUDED_PATHS"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "27e7292",
       "commit": "960de3c",
       "evidence": {
         "type": "back-door",
         "detail": "required-body.middleware.ts:3 hardcodes an auth endpoint path."
       },
-      "notes": [],
+      "notes": ["2026-10-04 excluded body paths injected from composition"],
       "detail": "A generic common middleware embeds knowledge of an auth route via EXCLUDED_PATHS = ['/auth/logout']. This is the same class of shared-boundary assumption the TokenBlacklistPort refactor removed: common should be route-agnostic and receive the exclusion policy from the caller."
     },
     {
@@ -330,17 +330,17 @@
         "line": 46,
         "symbol": "findAllActiveByUserId"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "27e7292",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "rg shows only test/integration/src/auth/tokens/refresh-tokens.service.test.ts references."
       },
-      "notes": [],
+      "notes": ["2026-10-04 removed unused findAllActiveByUserId"],
       "detail": "The method is used only by integration tests; no production path lists active tokens. Either wire it or drop it to keep the surface honest."
     },
     {
@@ -484,17 +484,19 @@
         "line": 22,
         "symbol": "AuthModule.service"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "27e7292",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "Only authModule.initialize(app) is called in application.composition.ts:140."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 removed 1:1 code creators; callers use create(id, type)"
+      ],
       "detail": "The public fields are declared but the composition root only calls initialize(app). They are pass-through exports with no consumer; the real entry point is initialize."
     },
     {
@@ -509,17 +511,17 @@
         "line": 58,
         "symbol": "CodesService.createSignupCode"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "27e7292",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "codes.service.ts:58-64 delegate directly to create()."
       },
-      "notes": [],
+      "notes": ["2026-10-04 AuthModule fields private; service is a local"],
       "detail": "createSignupCode and createForgotPasswordCode add no behavior over create(holderId, type); they only rename. They are intent-revealing but add a hop without hiding complexity."
     },
     {
