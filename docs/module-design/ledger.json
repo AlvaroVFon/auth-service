@@ -43,7 +43,7 @@
         "line": 105,
         "symbol": "AuthService.signup"
       },
-      "status": "open",
+      "status": "wontfix",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
       "fixed_at": null,
@@ -53,7 +53,9 @@
         "type": "analysis",
         "detail": "Same if(!email)/EMAIL_REGEX/PASSWORD_REGEX blocks repeated in auth.service.ts, users.service.ts, holders.service.ts."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 regex already has a single home in common/constants/regex; per-endpoint messages are deliberate (login stays generic to prevent account enumeration). A shared validator would either change those messages (behavior/security regression) or take message params, adding indirection without removing knowledge."
+      ],
       "detail": "Although EMAIL_REGEX/PASSWORD_REGEX/OBJECTID_REGEX now live in common/constants/regex, the surrounding guard-and-error logic is copied in AuthService (login/signup/reset), UsersService, HoldersService, CodesService and RefreshTokenService. Changing a rule or message still forces edits in five-plus files; no email/password value object owns the policy."
     },
     {
@@ -68,17 +70,19 @@
         "line": 8,
         "symbol": "CodesSchema.holderId"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "9ddb4c2",
       "commit": "960de3c",
       "evidence": {
         "type": "back-door",
         "detail": "auth.service.ts:178-180 createForgotPasswordCode(user._id); codes.service.ts:62 create(userId, RESET_PASSWORD)."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 Code.subjectId neutral; ref removed; index updated; CreateCodeDTO deleted"
+      ],
       "detail": "CodesService.create always writes to field holderId with ref 'Holder', but forgot-password passes a User id. The field name and mongoose ref no longer describe what is stored for RESET_PASSWORD codes, an implicit assumption shared between auth and codes."
     },
     {
@@ -359,7 +363,7 @@
         "line": 3,
         "symbol": "AlreadyGeneratedCodeError"
       },
-      "status": "open",
+      "status": "wontfix",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
       "fixed_at": null,
@@ -369,7 +373,9 @@
         "type": "interface",
         "detail": "common/exceptions/{codes,auth}.exceptions.ts define auth/business failures."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 BaseError + auth.codes exceptions act as a shared error kernel consumed by common middlewares; moving them into features would reintroduce the common -> auth coupling removed in part 1."
+      ],
       "detail": "AlreadyGeneratedCodeError/InvalidCodeError live in common/exceptions/codes.exceptions.ts and UnauthorizedError/InvalidCredentialsError/AccountLockedError in auth.exceptions.ts. A shared BaseError kernel is legitimate, but codes/auth domain failures belong to their modules; common should only hold genuinely cross-cutting infra errors (as InfraError does)."
     },
     {
@@ -544,7 +550,7 @@
         "line": 10,
         "symbol": "TenantsService.findById"
       },
-      "status": "stale",
+      "status": "wontfix",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
       "fixed_at": null,
@@ -554,7 +560,9 @@
         "type": "analysis",
         "detail": "tenants.service.ts:18 returns this.tenantsModel.findById(id).lean().exec()."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 Tenants is intentionally a single-operation module until multi-tenancy adds operations; revisit then."
+      ],
       "detail": "The entire module is one method whose body is a single findById().lean().exec(). Signature is equivalent to the body; it earns its boundary only when a second tenant operation appears."
     },
     {
