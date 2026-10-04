@@ -454,6 +454,25 @@ describe('Auth Service', () => {
       );
     });
 
+    test('should throw an error if a verified user already owns the email', async () => {
+      const email = generateRandomEmail('existinguser+');
+      await fixture.create<UserInterface>('User', { email, verified: true });
+
+      await assert.rejects(
+        async () =>
+          await authService.signup({
+            email,
+            password: 'ValidPass123!',
+            passwordConfirmation: 'ValidPass123!',
+          }),
+        {
+          name: 'InvalidArgumentError',
+          message: 'Invalid email or password',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
     test('should succeed with valid credentials', async () => {
       const email = generateRandomEmail('auth+');
       const holder = await authService.signup({
