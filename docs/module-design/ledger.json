@@ -255,33 +255,6 @@
       "detail": "incrementLoginAttempts(id, maxAttempts, lockoutDurationMs) requires the caller (AuthService) to pass the lockout policy on every failed login. The policy is decided once at the composition root, then threaded through two layers; the common case should be a domain default owned by users."
     },
     {
-      "id": "shallow-1590a9a9e344",
-      "kind": "design",
-      "title": "JwtService exposes unused generate* wrappers and duplicate jti logic",
-      "severity": "Major",
-      "type": "shallow",
-      "module": "libs/jwt",
-      "location": {
-        "file": "src/libs/jwt/jwt.service.ts",
-        "line": 35,
-        "symbol": "JwtService.generateToken"
-      },
-      "status": "resolved",
-      "first_seen": "2026-10-04",
-      "last_seen": "2026-10-04",
-      "fixed_at": "2026-10-04",
-      "fixed_commit": "22141be",
-      "commit": "960de3c",
-      "evidence": {
-        "type": "analysis",
-        "detail": "rg shows generateAccessToken/generateRefreshToken/generateTokens used only in tests; signUserToken duplicates generateToken's validation."
-      },
-      "notes": [
-        "2026-10-04 public surface reduced to issueSession + generateTenantToken + verifyToken"
-      ],
-      "detail": "The public surface has generateToken, generateAccessToken, generateRefreshToken, generateTenantToken, generateTokens, issueSession and signUserToken. Production uses only issueSession and generateTenantToken; generateAccessToken/generateRefreshToken/generateTokens are test-only and their jti logic duplicates issueSession/signUserToken. The interface is nearly as broad as the implementation."
-    },
-    {
       "id": "shallow-242df171a56b",
       "kind": "design",
       "title": "AuthModule is a composition magnet with 15 constructor parameters",
@@ -332,33 +305,6 @@
       "detail": "The barrel exports AuthModule and the concrete AuthService, yet no file imports from '../auth'. Cross-module consumers bypass the facade entirely (auth.module imports users/holders indexes directly), so the boundary is undefined and the concrete class is the de-facto contract."
     },
     {
-      "id": "shallow-9dc6b4897ce0",
-      "kind": "design",
-      "title": "libs/config-service is an unwired dead abstraction",
-      "severity": "Major",
-      "type": "shallow",
-      "module": "libs/config-service",
-      "location": {
-        "file": "src/libs/config-service/config-service.interface.ts",
-        "line": 1,
-        "symbol": "ConfigService"
-      },
-      "status": "resolved",
-      "first_seen": "2026-10-04",
-      "last_seen": "2026-10-04",
-      "fixed_at": "2026-10-04",
-      "fixed_commit": "a30ba60",
-      "commit": "960de3c",
-      "evidence": {
-        "type": "analysis",
-        "detail": "rg for config-service/ConfigService outside src/libs/config-service/** returns nothing."
-      },
-      "notes": [
-        "2026-10-04 deleted unwired libs/config-service and its tests/fixtures"
-      ],
-      "detail": "config-service.interface.ts, its Mongo adapter and schema have zero production wiring and no consumers outside their own folder. It is pure maintenance cost until a real dynamic-config need exists."
-    },
-    {
       "id": "improvement-06807efeb8c5",
       "kind": "design",
       "title": "RefreshTokenService.findAllActiveByUserId has no production consumer",
@@ -382,87 +328,6 @@
       },
       "notes": [],
       "detail": "The method is used only by integration tests; no production path lists active tokens. Either wire it or drop it to keep the surface honest."
-    },
-    {
-      "id": "improvement-48e318a9977b",
-      "kind": "design",
-      "title": "tenants interface file is misspelled tentants.interface.ts",
-      "severity": "Minor",
-      "type": "improvement",
-      "module": "tenants",
-      "location": {
-        "file": "src/tenants/tentants.interface.ts",
-        "line": 1,
-        "symbol": "Tenant"
-      },
-      "status": "resolved",
-      "first_seen": "2026-10-04",
-      "last_seen": "2026-10-04",
-      "fixed_at": "2026-10-04",
-      "fixed_commit": "a30ba60",
-      "commit": "960de3c",
-      "evidence": {
-        "type": "analysis",
-        "detail": "tenants/index.ts and tenants.service.ts import './tentants.interface'."
-      },
-      "notes": [
-        "2026-10-04 renamed tentants.interface.ts -> tenants.interface.ts"
-      ],
-      "detail": "The filename `tentants.interface.ts` is imported by tenants/index.ts and tenants.service.ts. Renaming removes a permanent naming wart at low risk."
-    },
-    {
-      "id": "leakage-back-door-c19456ea76d5",
-      "kind": "design",
-      "title": "NodeMailerAdapter mutates the caller's template context",
-      "severity": "Minor",
-      "type": "leakage-back-door",
-      "module": "libs/mailer",
-      "location": {
-        "file": "src/libs/mailer/adapters/nodemailer.adapter.ts",
-        "line": 87,
-        "symbol": "NodeMailerAdapter send*Email"
-      },
-      "status": "resolved",
-      "first_seen": "2026-10-04",
-      "last_seen": "2026-10-04",
-      "fixed_at": "2026-10-04",
-      "fixed_commit": "a30ba60",
-      "commit": "960de3c",
-      "evidence": {
-        "type": "back-door",
-        "detail": "context.appName = this.appName; context.year = this.year in three methods."
-      },
-      "notes": [
-        "2026-10-04 NodeMailerAdapter clones context instead of mutating it"
-      ],
-      "detail": "sendWelcomeEmail/sendSignupVerificationEmail/sendResetPasswordEmail write appName and year onto the caller-supplied context object, so the caller's data is silently mutated. The adapter should copy the context before enriching it."
-    },
-    {
-      "id": "leakage-interface-118d5e0585d6",
-      "kind": "design",
-      "title": "WinstonLogger.logger exposes the concrete winston.Logger",
-      "severity": "Minor",
-      "type": "leakage-interface",
-      "module": "libs/logger",
-      "location": {
-        "file": "src/libs/logger/adapters/winston.logger.ts",
-        "line": 6,
-        "symbol": "WinstonLogger.logger"
-      },
-      "status": "resolved",
-      "first_seen": "2026-10-04",
-      "last_seen": "2026-10-04",
-      "fixed_at": "2026-10-04",
-      "fixed_commit": "a30ba60",
-      "commit": "960de3c",
-      "evidence": {
-        "type": "interface",
-        "detail": "public logger: Logger (winston) on the adapter."
-      },
-      "notes": [
-        "2026-10-04 WinstonLogger.logger and createLogger are now private"
-      ],
-      "detail": "The adapter declares a public `logger: winston.Logger` field, exposing the concrete logging library to anyone holding the logger. The LoggerInterface port is the intended surface; the field should be private."
     },
     {
       "id": "leakage-interface-3b59a54ded09",
@@ -513,6 +378,33 @@
       },
       "notes": [],
       "detail": "The port TokenBlacklistPort exists and BlacklistService implements it, yet AuthService and AuthModule type the dependency as the concrete class, so the boundary is weaker than it needs to be."
+    },
+    {
+      "id": "leakage-interface-69c0e41b2ff2",
+      "kind": "design",
+      "title": "JwtService exposed a domain-named operation (issueSession)",
+      "severity": "Minor",
+      "type": "leakage-interface",
+      "module": "libs/jwt",
+      "location": {
+        "file": "src/libs/jwt/jwt.service.ts",
+        "line": 35,
+        "symbol": "JwtService.signTokenPair"
+      },
+      "status": "resolved",
+      "first_seen": "2026-10-04",
+      "last_seen": "2026-10-04",
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "335f15a",
+      "commit": "335f15a",
+      "evidence": {
+        "type": "interface",
+        "detail": "Before: issueSession(userId, role): TokenPair; after: signTokenPair(userId, role): TokenPair. Sole production caller is SessionService."
+      },
+      "notes": [
+        "2026-10-04 renamed issueSession -> signTokenPair; SessionService owns session semantics"
+      ],
+      "detail": "The technical signing lib named a method issueSession, borrowing the session concept that belongs to SessionService. Naming mixed interface nature (technical lib vs domain concept). Renamed to signTokenPair so libs/jwt stays technical and session semantics live only in SessionService."
     },
     {
       "id": "leakage-interface-a7898f25339d",
@@ -626,7 +518,7 @@
         "line": 10,
         "symbol": "TenantsService.findById"
       },
-      "status": "open",
+      "status": "stale",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
       "fixed_at": null,
@@ -740,6 +632,60 @@
       "detail": "UsersService/HoldersService findById declared Promise<X | null> yet threw on miss, so callers kept dead null checks. They now return null and callers genuinely branch on it."
     },
     {
+      "id": "shallow-1590a9a9e344",
+      "kind": "design",
+      "title": "JwtService exposes unused generate* wrappers and duplicate jti logic",
+      "severity": "Major",
+      "type": "shallow",
+      "module": "libs/jwt",
+      "location": {
+        "file": "src/libs/jwt/jwt.service.ts",
+        "line": 35,
+        "symbol": "JwtService.generateToken"
+      },
+      "status": "resolved",
+      "first_seen": "2026-10-04",
+      "last_seen": "2026-10-04",
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "22141be",
+      "commit": "960de3c",
+      "evidence": {
+        "type": "analysis",
+        "detail": "rg shows generateAccessToken/generateRefreshToken/generateTokens used only in tests; signUserToken duplicates generateToken's validation."
+      },
+      "notes": [
+        "2026-10-04 public surface reduced to issueSession + generateTenantToken + verifyToken"
+      ],
+      "detail": "The public surface has generateToken, generateAccessToken, generateRefreshToken, generateTenantToken, generateTokens, issueSession and signUserToken. Production uses only issueSession and generateTenantToken; generateAccessToken/generateRefreshToken/generateTokens are test-only and their jti logic duplicates issueSession/signUserToken. The interface is nearly as broad as the implementation."
+    },
+    {
+      "id": "shallow-9dc6b4897ce0",
+      "kind": "design",
+      "title": "libs/config-service is an unwired dead abstraction",
+      "severity": "Major",
+      "type": "shallow",
+      "module": "libs/config-service",
+      "location": {
+        "file": "src/libs/config-service/config-service.interface.ts",
+        "line": 1,
+        "symbol": "ConfigService"
+      },
+      "status": "resolved",
+      "first_seen": "2026-10-04",
+      "last_seen": "2026-10-04",
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
+      "commit": "960de3c",
+      "evidence": {
+        "type": "analysis",
+        "detail": "rg for config-service/ConfigService outside src/libs/config-service/** returns nothing."
+      },
+      "notes": [
+        "2026-10-04 deleted unwired libs/config-service and its tests/fixtures"
+      ],
+      "detail": "config-service.interface.ts, its Mongo adapter and schema have zero production wiring and no consumers outside their own folder. It is pure maintenance cost until a real dynamic-config need exists."
+    },
+    {
       "id": "temporal-decomposition-d95a08966af8",
       "kind": "design",
       "title": "Session issuance was split by execution order across AuthService",
@@ -763,6 +709,87 @@
       },
       "notes": [],
       "detail": "The generate -> verify -> revoke -> persist sequence was duplicated across login and refresh within AuthService. Extracted into SessionService.create/rotate with JwtService.issueSession returning TokenPair metadata."
+    },
+    {
+      "id": "improvement-48e318a9977b",
+      "kind": "design",
+      "title": "tenants interface file is misspelled tentants.interface.ts",
+      "severity": "Minor",
+      "type": "improvement",
+      "module": "tenants",
+      "location": {
+        "file": "src/tenants/tentants.interface.ts",
+        "line": 1,
+        "symbol": "Tenant"
+      },
+      "status": "resolved",
+      "first_seen": "2026-10-04",
+      "last_seen": "2026-10-04",
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
+      "commit": "960de3c",
+      "evidence": {
+        "type": "analysis",
+        "detail": "tenants/index.ts and tenants.service.ts import './tentants.interface'."
+      },
+      "notes": [
+        "2026-10-04 renamed tentants.interface.ts -> tenants.interface.ts"
+      ],
+      "detail": "The filename `tentants.interface.ts` is imported by tenants/index.ts and tenants.service.ts. Renaming removes a permanent naming wart at low risk."
+    },
+    {
+      "id": "leakage-back-door-c19456ea76d5",
+      "kind": "design",
+      "title": "NodeMailerAdapter mutates the caller's template context",
+      "severity": "Minor",
+      "type": "leakage-back-door",
+      "module": "libs/mailer",
+      "location": {
+        "file": "src/libs/mailer/adapters/nodemailer.adapter.ts",
+        "line": 87,
+        "symbol": "NodeMailerAdapter send*Email"
+      },
+      "status": "resolved",
+      "first_seen": "2026-10-04",
+      "last_seen": "2026-10-04",
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
+      "commit": "960de3c",
+      "evidence": {
+        "type": "back-door",
+        "detail": "context.appName = this.appName; context.year = this.year in three methods."
+      },
+      "notes": [
+        "2026-10-04 NodeMailerAdapter clones context instead of mutating it"
+      ],
+      "detail": "sendWelcomeEmail/sendSignupVerificationEmail/sendResetPasswordEmail write appName and year onto the caller-supplied context object, so the caller's data is silently mutated. The adapter should copy the context before enriching it."
+    },
+    {
+      "id": "leakage-interface-118d5e0585d6",
+      "kind": "design",
+      "title": "WinstonLogger.logger exposes the concrete winston.Logger",
+      "severity": "Minor",
+      "type": "leakage-interface",
+      "module": "libs/logger",
+      "location": {
+        "file": "src/libs/logger/adapters/winston.logger.ts",
+        "line": 6,
+        "symbol": "WinstonLogger.logger"
+      },
+      "status": "resolved",
+      "first_seen": "2026-10-04",
+      "last_seen": "2026-10-04",
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "a30ba60",
+      "commit": "960de3c",
+      "evidence": {
+        "type": "interface",
+        "detail": "public logger: Logger (winston) on the adapter."
+      },
+      "notes": [
+        "2026-10-04 WinstonLogger.logger and createLogger are now private"
+      ],
+      "detail": "The adapter declares a public `logger: winston.Logger` field, exposing the concrete logging library to anyone holding the logger. The LoggerInterface port is the intended surface; the field should be private."
     }
   ]
 }
