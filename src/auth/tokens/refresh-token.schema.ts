@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 
-import { TokenTypes } from '../../libs/jwt/token-types.enum';
+import { TokenTypes } from '../../libs/jwt';
 import { RefreshToken } from './refresh-token.interface';
 
 const RefreshTokenSchema = new Schema<RefreshToken>(

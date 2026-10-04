@@ -11,12 +11,10 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
-import { Holder } from '../../holders/holders.interface';
-import { HoldersService } from '../../holders/holders.service';
-import { CryptoService } from '../../libs/crypto/crypto.service';
-import { MailerInterface } from '../../libs/mailer/mailer.interface';
-import { User as UserInterface } from '../../users/users.interface';
-import { UsersService } from '../../users/users.service';
+import { Holder, HoldersPort } from '../../holders';
+import { CryptoService } from '../../libs/crypto';
+import { MailerInterface } from '../../libs/mailer';
+import { User as UserInterface, UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
 import { CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
@@ -26,13 +24,13 @@ import { SessionService } from '../tokens/session.service';
 
 export class AuthService {
   constructor(
-    private readonly usersService: UsersService,
+    private readonly usersService: UsersPort,
     private readonly cryptoService: CryptoService,
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
     private readonly sessionService: SessionService,
     private readonly blacklistService: BlacklistService,
-    private readonly holdersService: HoldersService,
+    private readonly holdersService: HoldersPort,
     private readonly maxLoginAttempts: number,
     private readonly lockoutDurationMs: number,
     private readonly publicAppUrl: string = 'https://ourservice.com',

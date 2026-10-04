@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 
-import { TokenTypes } from '../../libs/jwt/token-types.enum';
+import { TokenTypes } from '../../libs/jwt';
 
 export interface RefreshToken {
   _id: Types.ObjectId;

@@ -2,12 +2,12 @@ import { Application } from 'express';
 
 import { assertDependencies } from '../common/depencencies-validator';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
-import { HoldersService } from '../holders/holders.service';
-import { CryptoService } from '../libs/crypto/crypto.service';
-import { JwtService } from '../libs/jwt/jwt.service';
-import { LoggerInterface } from '../libs/logger/logger.interface';
-import { MailerInterface } from '../libs/mailer/mailer.interface';
-import { UsersService } from '../users/users.service';
+import { HoldersPort } from '../holders';
+import { CryptoService } from '../libs/crypto';
+import { JwtService } from '../libs/jwt';
+import { LoggerInterface } from '../libs/logger';
+import { MailerInterface } from '../libs/mailer';
+import { UsersPort } from '../users';
 import { AuthRouter, AuthRateLimitConfig } from './auth.router';
 import { CodesService } from './codes/codes.service';
 import { AuthController } from './controllers/auth.controller';
@@ -24,7 +24,7 @@ export class AuthModule {
   public readonly tenantsController: AuthTenantController;
 
   constructor(
-    private readonly usersService: UsersService,
+    private readonly usersService: UsersPort,
     private readonly cryptoService: CryptoService,
     private readonly jwtService: JwtService,
     private readonly logger: LoggerInterface,
@@ -33,7 +33,7 @@ export class AuthModule {
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly blacklistService: BlacklistService,
-    private readonly holdersService: HoldersService,
+    private readonly holdersService: HoldersPort,
     private readonly authTenantService: AuthTenantService,
     private readonly maxLoginAttempts: number,
     private readonly lockoutDurationMs: number,

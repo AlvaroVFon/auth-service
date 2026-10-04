@@ -1,6 +1,6 @@
 import { Application, Request, Response, NextFunction } from 'express';
 
-import { LoggerInterface } from '../../libs/logger/logger.interface';
+import { LoggerInterface } from '../../libs/logger';
 import { BaseError } from '../exceptions/base.exception';
 
 export class HttpInterceptor {

@@ -1,6 +1,6 @@
 import { Application, NextFunction, Request, Response } from 'express';
 
-import { LoggerInterface } from '../../libs/logger/logger.interface';
+import { LoggerInterface } from '../../libs/logger';
 import { HeadersBlackList } from '../enums/black-lists.enum';
 
 export class HttpLoggerInterceptor {
