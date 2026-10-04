@@ -2,8 +2,8 @@ import { Types } from 'mongoose';
 
 import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
-import { JwtService } from '../../libs/jwt/jwt.service';
-import { TenantsService } from '../../tenants/tenants.service';
+import { JwtService } from '../../libs/jwt';
+import { TenantsPort } from '../../tenants';
 
 export interface AuthTenantCredentials {
   tenantId: string;
@@ -12,7 +12,7 @@ export interface AuthTenantCredentials {
 
 export class AuthTenantService {
   constructor(
-    private readonly tenantsService: TenantsService,
+    private readonly tenantsService: TenantsPort,
     private readonly jwtService: JwtService,
   ) {}
 

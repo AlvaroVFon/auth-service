@@ -6,7 +6,7 @@ import {
   PASSWORD_REGEX,
 } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
-import { CryptoService } from '../libs/crypto/crypto.service';
+import { CryptoService } from '../libs/crypto';
 import { Holder } from './holders.interface';
 
 export class HoldersService {

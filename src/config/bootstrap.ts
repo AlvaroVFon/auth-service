@@ -2,34 +2,9 @@ import fs from 'node:fs';
 
 import express, { Application } from 'express';
 
-import { AuthModule } from '../auth/auth.module';
-import { AuthRateLimitConfig } from '../auth/auth.router';
-import { CodesModel } from '../auth/codes/codes.schema';
-import { CodesService } from '../auth/codes/codes.service';
-import { AuthTenantService } from '../auth/services/auth-tenant.service';
-import { BlacklistService } from '../auth/tokens/blacklist.service';
-import { BlacklistedTokenModel } from '../auth/tokens/blacklisted-token.schema';
-import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
-import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
-import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
-import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
-import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
-import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
-import { HoldersModel } from '../holders/holders.schema';
-import { HoldersService } from '../holders/holders.service';
-import { CryptoService } from '../libs/crypto/crypto.service';
-import { JwtService } from '../libs/jwt/jwt.service';
-import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
-import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
-import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
-import { TenantsModel } from '../tenants/tenants.schema';
-import { TenantsService } from '../tenants/tenants.service';
-import { UsersModule } from '../users/users.module';
 import { startServer } from './app.config';
+import { createApplicationComposition } from './application.composition';
 import { BootstrapOverrides } from './bootstrap.interface';
-import { Database } from './database.config';
-import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
-import { GlobalMiddlewares } from './middlewares.config';
 
 const app: Application = express();
 
@@ -37,121 +12,18 @@ if (fs.existsSync('.env')) {
   process.loadEnvFile('.env');
 }
 
-const DB_CONNECTION_STRING = getStringEnvVariable('MONGO_URI');
-const JWT_SECRET = getStringEnvVariable('JWT_SECRET');
-const JWT_EXPIRES_IN = parseInt(
-  getStringEnvVariable('JWT_EXPIRES_IN', '3600'),
-  10,
-);
-const JWT_REFRESH_EXPIRES_IN = parseInt(
-  getStringEnvVariable('JWT_REFRESH_EXPIRATION', '86400'),
-  10,
-);
-const MAX_LOGIN_ATTEMPTS = getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5);
-const LOCKOUT_DURATION_MS = getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000);
-const PUBLIC_APP_URL = getStringEnvVariable(
-  'PUBLIC_APP_URL',
-  'https://ourservice.com',
-);
-
-const RATE_LIMIT_LOGIN_WINDOW_MS = getNumberEnvVariable(
-  'RATE_LIMIT_LOGIN_WINDOW_MS',
-  900000,
-);
-const RATE_LIMIT_LOGIN_MAX = getNumberEnvVariable('RATE_LIMIT_LOGIN_MAX', 5);
-const RATE_LIMIT_SIGNUP_WINDOW_MS = getNumberEnvVariable(
-  'RATE_LIMIT_SIGNUP_WINDOW_MS',
-  3600000,
-);
-const RATE_LIMIT_SIGNUP_MAX = getNumberEnvVariable('RATE_LIMIT_SIGNUP_MAX', 3);
-const RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS = getNumberEnvVariable(
-  'RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS',
-  3600000,
-);
-const RATE_LIMIT_FORGOT_PASSWORD_MAX = getNumberEnvVariable(
-  'RATE_LIMIT_FORGOT_PASSWORD_MAX',
-  3,
-);
-
-const rateLimitConfig: AuthRateLimitConfig = {
-  login: {
-    windowMs: RATE_LIMIT_LOGIN_WINDOW_MS,
-    max: RATE_LIMIT_LOGIN_MAX,
-  },
-  signup: {
-    windowMs: RATE_LIMIT_SIGNUP_WINDOW_MS,
-    max: RATE_LIMIT_SIGNUP_MAX,
-  },
-  forgotPassword: {
-    windowMs: RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS,
-    max: RATE_LIMIT_FORGOT_PASSWORD_MAX,
-  },
-};
-
-// Shared instances
-const winstonLogger = new WinstonLogger();
-const database = new Database(DB_CONNECTION_STRING, winstonLogger);
-const cryptoService = new CryptoService();
-const jwtService = new JwtService(
-  JWT_SECRET,
-  JWT_EXPIRES_IN,
-  JWT_REFRESH_EXPIRES_IN,
-);
-const blacklistService = new BlacklistService(BlacklistedTokenModel);
-const authenticationMiddleware = new AuthenticationMiddleware(
-  jwtService,
-  blacklistService,
-);
-const authorizationMiddleware = new AuthorizationMiddleware();
-const templateRenderer = new HandlebarsEngine();
-const mailService = new NodeMailerAdapter(templateRenderer, winstonLogger);
-const codeService = new CodesService(CodesModel);
-const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
-const holdersService = new HoldersService(HoldersModel, cryptoService);
-const tenantsService = new TenantsService(TenantsModel);
-const authTenantService = new AuthTenantService(tenantsService, jwtService);
-// Modules
-const usersModule = new UsersModule(
-  cryptoService,
-  authenticationMiddleware,
-  authorizationMiddleware,
-  winstonLogger,
-);
-
-const authModule = new AuthModule(
-  usersModule.service,
-  cryptoService,
-  jwtService,
-  winstonLogger,
-  mailService,
-  codeService,
-  authenticationMiddleware,
-  refreshTokenService,
-  blacklistService,
-  holdersService,
-  authTenantService,
-  MAX_LOGIN_ATTEMPTS,
-  LOCKOUT_DURATION_MS,
-  rateLimitConfig,
-  PUBLIC_APP_URL,
-);
+const composition = createApplicationComposition();
 
 export const bootstrap = async (overrides: BootstrapOverrides = {}) => {
-  const logger = overrides.logger ?? winstonLogger;
-  const db = overrides.database ?? database;
+  const logger = overrides.logger ?? composition.logger;
+  const db = overrides.database ?? composition.database;
   const expressApp = overrides.app ?? app;
   const listen = overrides.startServer ?? startServer;
 
   try {
     await db.connect();
 
-    HttpLoggerInterceptor.initialize(expressApp, logger);
-    GlobalMiddlewares.initialize(expressApp);
-
-    usersModule.initialize(expressApp);
-    authModule.initialize(expressApp);
-
-    HttpInterceptor.initialize(expressApp, logger);
+    composition.initialize(expressApp, logger);
 
     return listen(expressApp, logger);
   } catch (error) {

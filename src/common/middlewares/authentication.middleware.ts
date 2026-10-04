@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
-import { JwtService } from '../../libs/jwt/jwt.service';
-import { TokenTypes } from '../../libs/jwt/token-types.enum';
+import { JwtService, TokenTypes } from '../../libs/jwt';
 import { InvalidCredentialsError } from '../exceptions/auth.exceptions';
 import { TokenBlacklistPort } from '../ports/token-blacklist.port';
 

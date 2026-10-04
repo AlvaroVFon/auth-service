@@ -1,6 +1,6 @@
 import { Application } from 'express';
 
-import { LoggerInterface } from '../libs/logger/logger.interface';
+import { LoggerInterface } from '../libs/logger';
 
 export interface BootstrapOverrides {
   logger?: LoggerInterface;

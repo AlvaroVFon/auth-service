@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 import { InfraError } from '../common/exceptions/infra.exceptions';
-import { LoggerInterface } from '../libs/logger/logger.interface';
+import { LoggerInterface } from '../libs/logger';
 
 export class Database {
   private connection: mongoose.Connection | null = null;

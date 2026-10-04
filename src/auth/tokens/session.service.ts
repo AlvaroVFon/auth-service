@@ -1,8 +1,6 @@
 import { Roles } from '../../common/enums/roles.enum';
 import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
-import { TokenPair } from '../../libs/jwt/jwt.interfaces';
-import { JwtService } from '../../libs/jwt/jwt.service';
-import { TokenTypes } from '../../libs/jwt/token-types.enum';
+import { JwtService, TokenPair, TokenTypes } from '../../libs/jwt';
 import { RefreshTokenService } from './refresh-token.service';
 import { RequestContext } from './request-context.type';
 

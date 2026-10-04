@@ -6,8 +6,8 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
-import { Holder } from '../holders/holders.interface';
-import { CryptoService } from '../libs/crypto/crypto.service';
+import { Holder } from '../holders';
+import { CryptoService } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
 
 export class UsersService {
