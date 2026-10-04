@@ -97,7 +97,11 @@ export const createApplicationComposition = (
   const templateRenderer = new HandlebarsEngine();
   const mailer =
     options.mailer ?? new NodeMailerAdapter(templateRenderer, logger);
-  const codeService = new CodesService(CodesModel);
+  const codeService = new CodesService(
+    CodesModel,
+    getNumberEnvVariable('CODE_EXPIRATION_MS', 3600000),
+    getNumberEnvVariable('CODE_LENGTH', 6),
+  );
   const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
   const holdersService = new HoldersService(HoldersModel, cryptoService);
   const tenantsService = new TenantsService(TenantsModel);

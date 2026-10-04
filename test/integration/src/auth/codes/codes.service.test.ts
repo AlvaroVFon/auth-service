@@ -103,35 +103,27 @@ describe('Codes Service', () => {
       assert.strictEqual(resetCode.type, CodeType.RESET_PASSWORD);
     });
 
-    test('should set expiration time based on CODE_EXPIRATION_MS env variable', async () => {
+    test('should set expiration time from the injected value', async () => {
       const holderId = new Types.ObjectId().toString();
       const customExpirationMs = 2 * 60 * 60 * 1000; // 2 hours
 
-      process.env.CODE_EXPIRATION_MS = customExpirationMs.toString();
-
-      codesService = new CodesService(CodesModel);
+      codesService = new CodesService(CodesModel, customExpirationMs);
 
       const code = await codesService.create(holderId, CodeType.SIGNUP);
       const expectedExpiration = Date.now() + customExpirationMs;
 
       assert.ok(Math.abs(code.expiresAt.getTime() - expectedExpiration) < 1000);
-
-      delete process.env.CODE_EXPIRATION_MS;
     });
 
-    test('should create codes of length defined by CODE_LENGTH env variable', async () => {
+    test('should create codes of the injected length', async () => {
       const holderId = new Types.ObjectId().toString();
       const customCodeLength = 8;
 
-      process.env.CODE_LENGTH = customCodeLength.toString();
-
-      codesService = new CodesService(CodesModel);
+      codesService = new CodesService(CodesModel, undefined, customCodeLength);
 
       const code = await codesService.create(holderId, CodeType.SIGNUP);
 
       assert.strictEqual(code.code.length, customCodeLength);
-
-      delete process.env.CODE_LENGTH;
     });
 
     test('should not create a new code for the same user and type if the code is not expired', async () => {

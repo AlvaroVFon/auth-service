@@ -6,19 +6,17 @@ import {
   AlreadyGeneratedCodeError,
   InvalidCodeError,
 } from '../../common/exceptions/codes.exceptions';
-import { getNumberEnvVariable } from '../../config/env.config';
 import { Code, CodeType } from './code.interface';
 
 export class CodesService {
   private readonly ALPHANUMERIC: string =
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  private readonly codeLength: number;
-  private readonly codeExpirationMs: number;
 
-  constructor(private readonly codeModel: Model<Code>) {
-    this.codeExpirationMs = getNumberEnvVariable('CODE_EXPIRATION_MS', 3600000);
-    this.codeLength = getNumberEnvVariable('CODE_LENGTH', 6);
-  }
+  constructor(
+    private readonly codeModel: Model<Code>,
+    private readonly codeExpirationMs: number = 3_600_000,
+    private readonly codeLength: number = 6,
+  ) {}
 
   async create(holderId: string, type: CodeType): Promise<Code> {
     if (!holderId) {
