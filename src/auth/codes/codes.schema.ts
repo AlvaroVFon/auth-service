@@ -17,6 +17,6 @@ export const CodesSchema = new Schema<Code>(
   { timestamps: true },
 );
 
-CodesSchema.index({ userId: 1, type: 1, used: 1 });
+CodesSchema.index({ holderId: 1, type: 1, used: 1 });
 
 export const CodesModel = model<Code>('Code', CodesSchema);

@@ -32,7 +32,7 @@ export class AuthTenantService {
       throw new UnauthorizedError('Invalid credentials');
     }
 
-    if (tenant.secret !== credentials.tenantSecret) {
+    if (!tenant.active || tenant.secret !== credentials.tenantSecret) {
       throw new UnauthorizedError('Invalid credentials');
     }
 

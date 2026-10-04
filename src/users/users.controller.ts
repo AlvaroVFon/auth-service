@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import { Catch } from '../common/decorators/catch.decorator';
+import { EntityNotFoundError } from '../common/exceptions/base.exception';
 import { UsersService } from './users.service';
 
 export class UsersController {
@@ -18,6 +19,10 @@ export class UsersController {
   async getById(req: Request, res: Response): Promise<void> {
     const id = req.params.id as string;
     const users = await this.userService.findById(id);
+
+    if (!users) {
+      throw new EntityNotFoundError('User not found');
+    }
 
     res.status(200).json(users);
   }

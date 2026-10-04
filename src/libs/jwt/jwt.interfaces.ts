@@ -12,3 +12,19 @@ export interface Payload {
   jti?: string;
   tenantId?: string;
 }
+
+export interface TokenClaims {
+  userId?: string;
+  role?: Roles;
+  tenantId?: string;
+  type: TokenTypes;
+  jti?: string;
+  exp: number;
+}
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  refreshTokenId: string;
+  refreshExpiresAt: Date;
+}

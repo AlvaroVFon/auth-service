@@ -1,8 +1,9 @@
 import { Model } from 'mongoose';
 
+import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { BlacklistedToken } from './blacklisted-token.interface';
 
-export class BlacklistService {
+export class BlacklistService implements TokenBlacklistPort {
   constructor(private readonly model: Model<BlacklistedToken>) {}
 
   async blacklist(jti: string, expiresAt: Date): Promise<void> {
