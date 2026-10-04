@@ -199,17 +199,19 @@
         "line": 11,
         "symbol": "MailerInterface.sendWelcomeEmail"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "785268e",
       "commit": "960de3c",
       "evidence": {
         "type": "interface",
         "detail": "nodemailer.adapter.ts:7 imports { MailTemplate } from '../../../mail/mail.enum'."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 4b: generic MailerInterface; AuthMailer owns templates/links/branding"
+      ],
       "detail": "MailerInterface couples generic delivery (sendEmail/sendMailWithTemplate) with specific policy (sendWelcomeEmail/sendSignupVerificationEmail/sendResetPasswordEmail). The nodemailer adapter also imports MailTemplate from the mail/ domain folder, so infrastructure depends on a business enum. General mechanism and specific policy should be split."
     },
     {
@@ -459,17 +461,19 @@
         "line": 26,
         "symbol": "AuthService.constructor"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "785268e",
       "commit": "960de3c",
       "evidence": {
         "type": "analysis",
         "detail": "publicAppUrl default 'https://ourservice.com' used in signup/forgotPassword link building (lines 152,186)."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 AuthService no longer holds lockout policy nor publicAppUrl; 6 params"
+      ],
       "detail": "AuthService takes ten collaborators including maxLoginAttempts/lockoutDurationMs (policy owned elsewhere) and publicAppUrl with a hardcoded default. The URL builds mail links inside the domain service, leaking a deployment concern into orchestration."
     },
     {

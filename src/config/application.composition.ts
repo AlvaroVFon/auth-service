@@ -4,12 +4,16 @@ import { AuthModule } from '../auth';
 import type { AuthRateLimitConfig } from '../auth';
 import { CodesModel } from '../auth/codes/codes.schema';
 import { CodesService } from '../auth/codes/codes.service';
+import { AuthController } from '../auth/controllers/auth.controller';
+import { AuthTenantController } from '../auth/controllers/auth.tenant.controller';
 import { AuthMailer } from '../auth/services/auth-mailer';
 import { AuthTenantService } from '../auth/services/auth-tenant.service';
+import { AuthService } from '../auth/services/auth.service';
 import { BlacklistService } from '../auth/tokens/blacklist.service';
 import { BlacklistedTokenModel } from '../auth/tokens/blacklisted-token.schema';
 import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
 import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
+import { SessionService } from '../auth/tokens/session.service';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
@@ -132,19 +136,22 @@ export const createApplicationComposition = (
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
   );
-  const authModule = new AuthModule(
+  const sessionService = new SessionService(jwtService, refreshTokenService);
+  const authService = new AuthService(
     usersModule.service,
-    jwtService,
-    logger,
     authMailer,
     codeService,
-    authenticationMiddleware,
-    refreshTokenService,
+    sessionService,
     blacklistService,
     holdersService,
-    authTenantService,
-    options.rateLimitConfig ?? getDefaultRateLimitConfig(),
   );
+  const authModule = new AuthModule({
+    authController: new AuthController(authService),
+    authTenantController: new AuthTenantController(authTenantService),
+    authenticationMiddleware,
+    rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
+    logger,
+  });
 
   return {
     logger,
