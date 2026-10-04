@@ -6,7 +6,6 @@ import {
 import {
   AccountLockedError,
   InvalidCredentialsError,
-  UnauthorizedError,
 } from '../../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
@@ -15,8 +14,6 @@ import {
 import { Holder } from '../../holders/holders.interface';
 import { HoldersService } from '../../holders/holders.service';
 import { CryptoService } from '../../libs/crypto/crypto.service';
-import { JwtService } from '../../libs/jwt/jwt.service';
-import { TokenTypes } from '../../libs/jwt/token-types.enum';
 import { MailerInterface } from '../../libs/mailer/mailer.interface';
 import { User as UserInterface } from '../../users/users.interface';
 import { UsersService } from '../../users/users.service';
@@ -24,17 +21,16 @@ import { Credentials, SignupCredentials } from '../auth.interface';
 import { CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
 import { BlacklistService } from '../tokens/blacklist.service';
-import { RefreshTokenService } from '../tokens/refresh-token.service';
 import { RequestContext } from '../tokens/request-context.type';
+import { SessionService } from '../tokens/session.service';
 
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly cryptoService: CryptoService,
-    private readonly jwtService: JwtService,
     private readonly mailService: MailerInterface,
     private readonly codeService: CodesService,
-    private readonly refreshTokenService: RefreshTokenService,
+    private readonly sessionService: SessionService,
     private readonly blacklistService: BlacklistService,
     private readonly holdersService: HoldersService,
     private readonly maxLoginAttempts: number,
@@ -77,17 +73,9 @@ export class AuthService {
 
     await this.handleSuccessfulLogin(user);
 
-    const session = this.jwtService.issueSession(
+    const session = await this.sessionService.create(
       user._id.toString(),
       user.role,
-    );
-
-    await this.refreshTokenService.revokeAllByUserId(user._id.toString());
-
-    await this.refreshTokenService.create(
-      user._id.toString(),
-      session.refreshTokenId,
-      session.refreshExpiresAt,
       ctx,
     );
 
@@ -259,35 +247,15 @@ export class AuthService {
       throw new InvalidArgumentError('refreshToken is required');
     }
 
-    const decoded = this.jwtService.verifyToken(refreshToken);
-    if (!decoded.jti || decoded.type !== TokenTypes.REFRESH) {
-      throw new UnauthorizedError('Invalid refresh token');
-    }
-    const jti = decoded.jti;
-
-    const storedToken = await this.refreshTokenService.findByJti(jti);
-
-    if (!storedToken) {
-      throw new UnauthorizedError('Invalid refresh token');
-    }
-
-    if (storedToken.revokedAt !== null) {
-      throw new UnauthorizedError('Refresh token has been revoked');
-    }
-
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
 
-    const session = this.jwtService.issueSession(userId, user.role);
-
-    await this.refreshTokenService.revokeByJti(jti, session.refreshTokenId);
-
-    await this.refreshTokenService.create(
+    const session = await this.sessionService.rotate(
       userId,
-      session.refreshTokenId,
-      session.refreshExpiresAt,
+      user.role,
+      refreshToken,
       ctx,
     );
 
@@ -313,6 +281,6 @@ export class AuthService {
       await this.blacklistService.blacklist(accessJti, accessExpiresAt);
     }
 
-    await this.refreshTokenService.revokeAllByUserId(userId);
+    await this.sessionService.revokeAll(userId);
   }
 }
