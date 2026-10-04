@@ -93,17 +93,19 @@
         "line": 6,
         "symbol": "holderExpiration"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "320ee04",
       "commit": "960de3c",
       "evidence": {
         "type": "back-door",
         "detail": "codes.service.ts:19 also reads CODE_EXPIRATION_MS."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 3: CodesService takes policy by constructor; holder TTL uses HOLDER_EXPIRATION_MS"
+      ],
       "detail": "HoldersSchema derives its TTL from CODE_EXPIRATION_MS, the same env var that CodesService uses for one-time codes. Two unrelated concepts share one undeclared constant; changing code lifetime silently changes holder lifetime."
     },
     {
@@ -222,17 +224,19 @@
         "line": 19,
         "symbol": "CodesService.constructor"
       },
-      "status": "open",
+      "status": "resolved",
       "first_seen": "2026-10-04",
       "last_seen": "2026-10-04",
-      "fixed_at": null,
-      "fixed_commit": null,
+      "fixed_at": "2026-10-04",
+      "fixed_commit": "320ee04",
       "commit": "960de3c",
       "evidence": {
         "type": "back-door",
         "detail": "codes.service.ts:19-20 getNumberEnvVariable('CODE_EXPIRATION_MS'/'CODE_LENGTH'); jwt.service.ts receives expiresIn injected."
       },
-      "notes": [],
+      "notes": [
+        "2026-10-04 part 3: CodesService takes policy by constructor; holder TTL uses HOLDER_EXPIRATION_MS"
+      ],
       "detail": "Unlike JwtService (which receives expiry via constructor), CodesService reads two env vars directly in its constructor. Config-injection policy is inconsistent across libs/modules and the code lifetime is a hidden global rather than a declared constructor contract."
     },
     {
