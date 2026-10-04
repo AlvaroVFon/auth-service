@@ -9,7 +9,6 @@ import {
 } from '../../../../../src/common/exceptions/base.exception';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
 import fixture from '../../../../fixtures';
-import { MotherFactory } from '../../../../helpers/factories/mother.factory';
 import { RefreshTokenFactory } from '../../../../helpers/factories/refresh-token.factory';
 
 describe('RefreshTokenService', () => {
@@ -185,61 +184,6 @@ describe('RefreshTokenService', () => {
     });
   });
 
-  describe('findAllActiveByUserId', () => {
-    test('should throw an error when userId is invalid', async () => {
-      await assert.rejects(
-        () => refreshTokenService.findAllActiveByUserId('invalid'),
-        new InvalidArgumentError('userId is not a valid ObjectId'),
-      );
-    });
-
-    test('should return empty array when no active tokens exist', async () => {
-      const userId = new Types.ObjectId();
-      const tokens = await refreshTokenService.findAllActiveByUserId(
-        userId.toString(),
-      );
-      assert.deepStrictEqual(tokens, []);
-    });
-
-    test('should return only active tokens', async () => {
-      const userId = MotherFactory.objectId();
-
-      const tokensData = [
-        RefreshTokenFactory.generate({
-          userId,
-          jti: '550e8400-e29b-41d4-a716-446655440003',
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
-        }),
-        RefreshTokenFactory.generate({
-          userId,
-          jti: '550e8400-e29b-41d4-a716-446655440004',
-          expiresAt: new Date(Date.now() - 1000 * 60 * 60),
-        }),
-        RefreshTokenFactory.generate({
-          userId,
-          jti: '550e8400-e29b-41d4-a716-446655440005',
-          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
-          revokedAt: new Date(),
-        }),
-      ];
-
-      await fixture.createMany<RefreshToken>(
-        RefreshTokenModel.modelName,
-        tokensData,
-      );
-
-      const tokens = await refreshTokenService.findAllActiveByUserId(
-        userId.toString(),
-      );
-
-      assert.strictEqual(tokens.length, 1);
-      assert.strictEqual(
-        tokens[0]?.jti,
-        '550e8400-e29b-41d4-a716-446655440003',
-      );
-    });
-  });
-
   describe('revokeByJti', () => {
     test('should throw an error when jti is invalid', async () => {
       await assert.rejects(
@@ -337,8 +281,9 @@ describe('RefreshTokenService', () => {
       );
       await refreshTokenService.revokeAllByUserId(userId.toString());
 
-      const activeTokens = await refreshTokenService.findAllActiveByUserId(
-        userId.toString(),
+      const activeTokens = await fixture.find<RefreshToken>(
+        RefreshTokenModel.modelName,
+        { userId, revokedAt: null },
       );
       assert.strictEqual(activeTokens.length, 0);
 

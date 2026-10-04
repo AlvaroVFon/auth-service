@@ -68,6 +68,24 @@ const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
   },
 });
 
+export const resolveAccessTokenTtl = (
+  options: ApplicationCompositionOptions = {},
+): number =>
+  options.jwtExpiresIn ??
+  parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10);
+
+const resolveRefreshTokenTtl = (
+  options: ApplicationCompositionOptions = {},
+): number =>
+  options.refreshTokenExpiresIn ??
+  parseInt(
+    getStringEnvVariable(
+      'JWT_REFRESH_EXPIRATION',
+      getStringEnvVariable('JWT_REFRESH_EXPIRES_IN', '86400'),
+    ),
+    10,
+  );
+
 export const createApplicationComposition = (
   options: ApplicationCompositionOptions = {},
 ): ApplicationComposition => {
@@ -77,16 +95,8 @@ export const createApplicationComposition = (
   const cryptoService = new CryptoService();
   const jwtService = new JwtService(
     options.jwtSecret ?? getStringEnvVariable('JWT_SECRET'),
-    options.jwtExpiresIn ??
-      parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10),
-    options.refreshTokenExpiresIn ??
-      parseInt(
-        getStringEnvVariable(
-          'JWT_REFRESH_EXPIRATION',
-          getStringEnvVariable('JWT_REFRESH_EXPIRES_IN', '86400'),
-        ),
-        10,
-      ),
+    resolveAccessTokenTtl(options),
+    resolveRefreshTokenTtl(options),
   );
   const blacklistService = new BlacklistService(BlacklistedTokenModel);
   const authenticationMiddleware = new AuthenticationMiddleware(
@@ -138,7 +148,7 @@ export const createApplicationComposition = (
     authModule,
     initialize(app, requestLogger = logger): void {
       HttpLoggerInterceptor.initialize(app, requestLogger);
-      GlobalMiddlewares.initialize(app);
+      GlobalMiddlewares.initialize(app, ['/auth/logout']);
       usersModule.initialize(app);
       authModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);

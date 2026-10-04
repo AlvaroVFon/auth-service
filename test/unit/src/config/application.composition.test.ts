@@ -1,6 +1,4 @@
-import { Roles } from '../../../../src/common/enums/roles.enum';
-import { createApplicationComposition } from '../../../../src/config/application.composition';
-import { JwtService } from '../../../../src/libs/jwt/jwt.service';
+import { resolveAccessTokenTtl } from '../../../../src/config/application.composition';
 
 describe('application composition configuration', () => {
   test('uses JWT_EXPIRATION for access tokens', () => {
@@ -11,17 +9,7 @@ describe('application composition configuration', () => {
     delete process.env.JWT_EXPIRES_IN;
 
     try {
-      const composition = createApplicationComposition();
-      const authService = composition.authModule.service as unknown as {
-        sessionService: { jwtService: JwtService };
-      };
-      const token = authService.sessionService.jwtService.signTokenPair(
-        '507f1f77bcf86cd799439011',
-        Roles.USER,
-      ).accessToken;
-      const claims = authService.sessionService.jwtService.verifyToken(token);
-
-      assert.ok(claims.exp - Math.floor(Date.now() / 1000) >= 122);
+      assert.strictEqual(resolveAccessTokenTtl({}), 123);
     } finally {
       if (originalExpiration === undefined) {
         delete process.env.JWT_EXPIRATION;
@@ -34,5 +22,9 @@ describe('application composition configuration', () => {
         process.env.JWT_EXPIRES_IN = originalLegacyExpiration;
       }
     }
+  });
+
+  test('prefers an explicit access token ttl override', () => {
+    assert.strictEqual(resolveAccessTokenTtl({ jwtExpiresIn: 456 }), 456);
   });
 });

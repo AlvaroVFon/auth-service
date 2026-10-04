@@ -18,9 +18,8 @@ import { RefreshTokenService } from './tokens/refresh-token.service';
 import { SessionService } from './tokens/session.service';
 
 export class AuthModule {
-  public readonly service: AuthService;
-  public readonly controller: AuthController;
-  public readonly tenantsController: AuthTenantController;
+  private readonly controller: AuthController;
+  private readonly tenantsController: AuthTenantController;
 
   constructor(
     private readonly usersService: UsersPort,
@@ -57,7 +56,7 @@ export class AuthModule {
       this.refreshTokenService,
     );
 
-    this.service = new AuthService(
+    const service = new AuthService(
       this.usersService,
       this.mailService,
       this.codeService,
@@ -66,7 +65,7 @@ export class AuthModule {
       this.holdersService,
       this.publicAppUrl,
     );
-    this.controller = new AuthController(this.service);
+    this.controller = new AuthController(service);
     this.tenantsController = new AuthTenantController(this.authTenantService);
   }
 

@@ -43,19 +43,6 @@ export class RefreshTokenService {
     return this.refreshTokenModel.findOne({ jti });
   }
 
-  async findAllActiveByUserId(userId: string): Promise<RefreshToken[]> {
-    if (!OBJECTID_REGEX.test(userId)) {
-      throw new InvalidArgumentError('userId is not a valid ObjectId');
-    }
-
-    const now = new Date();
-    return this.refreshTokenModel.find({
-      userId,
-      expiresAt: { $gt: now },
-      revokedAt: null,
-    });
-  }
-
   async revokeByJti(jti: string, replacedByJti?: string): Promise<void> {
     if (!UUID_REGEX.test(jti)) {
       throw new InvalidArgumentError('jti is not a valid UUID');

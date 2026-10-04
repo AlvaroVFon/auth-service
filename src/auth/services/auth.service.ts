@@ -96,8 +96,9 @@ export class AuthService {
       credentials.password,
     );
 
-    const verificationCode = await this.codeService.createSignupCode(
+    const verificationCode = await this.codeService.create(
       newHolder._id.toString(),
+      CodeType.SIGNUP,
     );
 
     try {
@@ -130,8 +131,9 @@ export class AuthService {
       throw new EntityNotFoundError(`user with email ${email} not found`);
     }
 
-    const code = await this.codeService.createForgotPasswordCode(
+    const code = await this.codeService.create(
       user._id.toString(),
+      CodeType.RESET_PASSWORD,
     );
 
     await this.mailService.sendResetPasswordEmail(email, {
