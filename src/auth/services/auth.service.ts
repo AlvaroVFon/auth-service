@@ -1,5 +1,3 @@
-import { JwtPayload } from 'jsonwebtoken';
-
 import {
   EMAIL_REGEX,
   OBJECTID_REGEX,
@@ -18,6 +16,7 @@ import { Holder } from '../../holders/holders.interface';
 import { HoldersService } from '../../holders/holders.service';
 import { CryptoService } from '../../libs/crypto/crypto.service';
 import { JwtService } from '../../libs/jwt/jwt.service';
+import { TokenTypes } from '../../libs/jwt/token-types.enum';
 import { MailerInterface } from '../../libs/mailer/mailer.interface';
 import { User as UserInterface } from '../../users/users.interface';
 import { UsersService } from '../../users/users.service';
@@ -40,6 +39,7 @@ export class AuthService {
     private readonly holdersService: HoldersService,
     private readonly maxLoginAttempts: number,
     private readonly lockoutDurationMs: number,
+    private readonly publicAppUrl: string = 'https://ourservice.com',
   ) {}
 
   async login(
@@ -77,23 +77,24 @@ export class AuthService {
 
     await this.handleSuccessfulLogin(user);
 
-    const { accessToken, refreshToken } = this.jwtService.generateTokens(
+    const session = this.jwtService.issueSession(
       user._id.toString(),
       user.role,
     );
-
-    const decoded = this.jwtService.verifyToken(refreshToken) as JwtPayload;
 
     await this.refreshTokenService.revokeAllByUserId(user._id.toString());
 
     await this.refreshTokenService.create(
       user._id.toString(),
-      decoded.jti as string,
-      new Date(decoded.exp! * 1000),
+      session.refreshTokenId,
+      session.refreshExpiresAt,
       ctx,
     );
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    };
   }
 
   private isAccountLocked(user: UserInterface): boolean {
@@ -161,7 +162,7 @@ export class AuthService {
     await this.mailService.sendSignupVerificationEmail(newHolder.email, {
       userName: newHolder.email,
       code: verificationCode.code,
-      link: `https://ourservice.com/verify?holderId=${newHolder._id}&code=${verificationCode.code}`,
+      link: `${this.publicAppUrl}/verify?holderId=${newHolder._id}&code=${verificationCode.code}`,
     });
 
     return newHolder;
@@ -188,7 +189,7 @@ export class AuthService {
       username: user.email,
       email,
       code: code.code,
-      link: `https://ourservice.com/reset-password?userId=${user._id}&code=${code.code}`,
+      link: `${this.publicAppUrl}/reset-password?userId=${user._id}&code=${code.code}`,
     });
   }
 
@@ -258,8 +259,11 @@ export class AuthService {
       throw new InvalidArgumentError('refreshToken is required');
     }
 
-    const decoded = this.jwtService.verifyToken(refreshToken) as JwtPayload;
-    const jti = decoded.jti as string;
+    const decoded = this.jwtService.verifyToken(refreshToken);
+    if (!decoded.jti || decoded.type !== TokenTypes.REFRESH) {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+    const jti = decoded.jti;
 
     const storedToken = await this.refreshTokenService.findByJti(jti);
 
@@ -276,23 +280,21 @@ export class AuthService {
       throw new EntityNotFoundError('User not found');
     }
 
-    const { accessToken, refreshToken: newRefreshToken } =
-      this.jwtService.generateTokens(userId, user.role);
+    const session = this.jwtService.issueSession(userId, user.role);
 
-    const newDecoded = this.jwtService.verifyToken(
-      newRefreshToken,
-    ) as JwtPayload;
-
-    await this.refreshTokenService.revokeByJti(jti, newDecoded.jti as string);
+    await this.refreshTokenService.revokeByJti(jti, session.refreshTokenId);
 
     await this.refreshTokenService.create(
       userId,
-      newDecoded.jti as string,
-      new Date(newDecoded.exp! * 1000),
+      session.refreshTokenId,
+      session.refreshExpiresAt,
       ctx,
     );
 
-    return { accessToken, refreshToken: newRefreshToken };
+    return {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    };
   }
 
   async logout(

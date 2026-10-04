@@ -1,3 +1,5 @@
+import { Types } from 'mongoose';
+
 import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
 import { Holder } from '../../../../src/holders/holders.interface';
 import { HoldersModel } from '../../../../src/holders/holders.schema';
@@ -79,6 +81,16 @@ describe('HoldersService', () => {
       });
       assert.strictEqual(dbHolder!.email, holderData.email);
       assert.ok(newHolder.password === dbHolder!.password);
+    });
+  });
+
+  describe('findById', () => {
+    test('should return null when the holder does not exist', async () => {
+      const holder = await holdersService.findById(
+        new Types.ObjectId().toString(),
+      );
+
+      assert.strictEqual(holder, null);
     });
   });
 });

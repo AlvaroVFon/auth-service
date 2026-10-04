@@ -87,6 +87,7 @@ describe('Auth Service', () => {
       holdersService,
       5,
       900000,
+      'https://test.example',
     );
   });
 
@@ -481,7 +482,7 @@ describe('Auth Service', () => {
           {
             userName: email,
             code: code!.code,
-            link: `https://ourservice.com/verify?holderId=${holder._id.toString()}&code=${code!.code}`,
+            link: `https://test.example/verify?holderId=${holder._id.toString()}&code=${code!.code}`,
           },
         ],
       );
@@ -594,7 +595,7 @@ describe('Auth Service', () => {
             username: user.email,
             email,
             code: code!.code,
-            link: `https://ourservice.com/reset-password?userId=${user._id}&code=${code!.code}`,
+            link: `https://test.example/reset-password?userId=${user._id}&code=${code!.code}`,
           },
         ],
       );

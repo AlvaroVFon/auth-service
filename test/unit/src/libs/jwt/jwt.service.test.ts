@@ -82,7 +82,6 @@ describe('JwtService', () => {
         type: payload.type,
         // @ts-expect-error 'iat' and 'exp' are added by jsonwebtoken
         iat: isValid['iat'],
-        // @ts-expect-error 'iat' and 'exp' are added by jsonwebtoken
         exp: isValid['exp'],
         jti: payload.jti,
         role: payload.role,
@@ -120,6 +119,17 @@ describe('JwtService', () => {
 
       assert.strictEqual(decoded.tenantId, String(tenantId));
       assert.strictEqual(decoded.type, TokenTypes.ACCESS);
+    });
+  });
+
+  describe('issueSession', () => {
+    test('should return refresh metadata without re-verifying the token', () => {
+      const session = jwtService.issueSession('0'.repeat(24), Roles.USER);
+      const claims = jwtService.verifyToken(session.refreshToken);
+
+      assert.strictEqual(session.refreshTokenId, claims.jti);
+      assert.ok(session.refreshExpiresAt instanceof Date);
+      assert.strictEqual(claims.type, TokenTypes.REFRESH);
     });
   });
 });

@@ -49,6 +49,10 @@ const JWT_REFRESH_EXPIRES_IN = parseInt(
 );
 const MAX_LOGIN_ATTEMPTS = getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5);
 const LOCKOUT_DURATION_MS = getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000);
+const PUBLIC_APP_URL = getStringEnvVariable(
+  'PUBLIC_APP_URL',
+  'https://ourservice.com',
+);
 
 const RATE_LIMIT_LOGIN_WINDOW_MS = getNumberEnvVariable(
   'RATE_LIMIT_LOGIN_WINDOW_MS',
@@ -129,6 +133,7 @@ const authModule = new AuthModule(
   MAX_LOGIN_ATTEMPTS,
   LOCKOUT_DURATION_MS,
   rateLimitConfig,
+  PUBLIC_APP_URL,
 );
 
 export const bootstrap = async (overrides: BootstrapOverrides = {}) => {

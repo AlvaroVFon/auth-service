@@ -75,6 +75,20 @@ describe('AuthTenantService', () => {
       );
     });
 
+    test('should reject inactive tenants', async () => {
+      const inactiveTenant = await fixture.create<Tenant>('Tenant', {
+        active: false,
+      });
+
+      await assert.rejects(
+        authTenantService.login({
+          tenantId: String(inactiveTenant._id),
+          tenantSecret: inactiveTenant.secret,
+        }),
+        new UnauthorizedError('Invalid credentials'),
+      );
+    });
+
     test('should return tenant access token if credentials are correct', async () => {
       const result = await authTenantService.login({
         tenantId: String(tenant._id),

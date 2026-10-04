@@ -1,15 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 
-import { BlacklistService } from '../../auth/tokens/blacklist.service';
-import { Payload } from '../../libs/jwt/jwt.interfaces';
 import { JwtService } from '../../libs/jwt/jwt.service';
 import { TokenTypes } from '../../libs/jwt/token-types.enum';
 import { InvalidCredentialsError } from '../exceptions/auth.exceptions';
+import { TokenBlacklistPort } from '../ports/token-blacklist.port';
 
 export class AuthenticationMiddleware {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly blacklistService: BlacklistService,
+    private readonly blacklistService: TokenBlacklistPort,
   ) {}
 
   authenticate = async (req: Request, _res: Response, next: NextFunction) => {
@@ -24,9 +23,9 @@ export class AuthenticationMiddleware {
 
       const token = authHeader.slice(7).trim();
 
-      const payload = this.jwtService.verifyToken(token) as Payload;
+      const payload = this.jwtService.verifyToken(token);
 
-      if (!payload?.userId) {
+      if (!payload.userId || !payload.role) {
         throw new InvalidCredentialsError('Invalid token payload');
       }
 
@@ -50,7 +49,7 @@ export class AuthenticationMiddleware {
         id: payload.userId,
         role: payload.role,
         jti: payload.jti,
-        expiresAt: new Date((payload as Payload & { exp: number }).exp * 1000),
+        expiresAt: new Date(payload.exp * 1000),
       };
 
       next();

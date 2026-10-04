@@ -37,6 +37,7 @@ export class AuthModule {
     private readonly maxLoginAttempts: number,
     private readonly lockoutDurationMs: number,
     private readonly rateLimitConfig: AuthRateLimitConfig,
+    private readonly publicAppUrl: string = 'https://ourservice.com',
   ) {
     assertDependencies(
       {
@@ -66,6 +67,7 @@ export class AuthModule {
       this.holdersService,
       this.maxLoginAttempts,
       this.lockoutDurationMs,
+      this.publicAppUrl,
     );
     this.controller = new AuthController(this.service);
     this.tenantsController = new AuthTenantController(this.authTenantService);

@@ -1,3 +1,5 @@
+import { Types } from 'mongoose';
+
 import {
   EntityAlreadyExistsError,
   EntityNotFoundError,
@@ -295,6 +297,14 @@ describe('UsersService', () => {
         assert.strictEqual(foundUser!._id.toString(), newUser._id.toString());
         assert.strictEqual(foundUser!.email, newUser.email);
         assert.strictEqual(foundUser!.username, newUser.username);
+      });
+
+      test('should return null when the user does not exist', async () => {
+        const foundUser = await usersService.findById(
+          new Types.ObjectId().toString(),
+        );
+
+        assert.strictEqual(foundUser, null);
       });
     });
 

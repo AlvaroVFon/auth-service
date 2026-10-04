@@ -5,10 +5,7 @@ import {
   OBJECTID_REGEX,
   PASSWORD_REGEX,
 } from '../common/constants/regex';
-import {
-  EntityNotFoundError,
-  InvalidArgumentError,
-} from '../common/exceptions/base.exception';
+import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto/crypto.service';
 import { Holder } from './holders.interface';
 
@@ -55,7 +52,7 @@ export class HoldersService {
     return await this.holderModel.findOne({ email });
   }
 
-  async findById(id: string): Promise<Holder> {
+  async findById(id: string): Promise<Holder | null> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
@@ -64,10 +61,6 @@ export class HoldersService {
     }
 
     const holder = await this.holderModel.findById(id);
-    if (!holder) {
-      throw new EntityNotFoundError('Holder not found');
-    }
-
     return holder;
   }
 

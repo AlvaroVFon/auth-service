@@ -73,10 +73,6 @@ export class UsersService {
     }
 
     const user = await this.usersModel.findById(id);
-    if (!user) {
-      throw new EntityNotFoundError('User not found');
-    }
-
     return user;
   }
 

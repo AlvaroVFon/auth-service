@@ -15,6 +15,18 @@ import { CodesFactory } from '../../../../helpers/factories/codes.factory';
 describe('Codes Service', () => {
   let codesService: CodesService;
 
+  test('should index code lookups by holderId, type, and used', () => {
+    assert.ok(
+      CodesModel.schema
+        .indexes()
+        .some(
+          ([fields]) =>
+            JSON.stringify(fields) ===
+            JSON.stringify({ holderId: 1, type: 1, used: 1 }),
+        ),
+    );
+  });
+
   beforeEach(async () => {
     codesService = new CodesService(CodesModel);
   });
