@@ -1,0 +1,648 @@
+{
+  "schema": "module-design/brief@1",
+  "date": "2026-10-04",
+  "requested_by": "AlvaroVFon",
+  "commit": "960de3c",
+  "baseline": "docs/module-design.md",
+  "module": "whole-repository",
+  "language": "typescript",
+  "responsibility": "Expose feature modules (users, auth, holders, tenants) and infrastructure libs so a consumer can wire and use one module through a narrow public contract without reaching into a neighbour's internal files or representation.",
+  "public_interface": {
+    "language": "typescript",
+    "code": "// users/index.ts\nexport type { User } from './users.interface';\nexport { UsersModule } from './users.module';\nexport interface UsersPort {\n  createFromHolder(holder: Holder): Promise<User>;\n  findByEmail(email: string): Promise<User | null>;\n  findById(id: string): Promise<User | null>;\n  incrementLoginAttempts(id: string, maxAttempts: number, lockoutDurationMs: number): Promise<User | null>;\n  updateOneById(id: string, updateData: Partial<User>): Promise<User | null>;\n}\n\n// holders/index.ts\nexport interface HoldersPort {\n  create(email: string, password: string): Promise<Holder>;\n  findByEmail(email: string): Promise<Holder | null>;\n  findById(id: string): Promise<Holder | null>;\n  deleteById(id: string): Promise<void>;\n}\n\n// tenants/index.ts\nexport interface TenantsPort { findById(id: string): Promise<Tenant | null>; }\n\n// auth/index.ts  (barrel; currently imported by nobody)\nexport { AuthModule } from './auth.module';\nexport { AuthService } from './services/auth.service';\nexport type { Credentials, SignupCredentials } from './auth.interface';\n\n// common/ports/token-blacklist.port.ts (port consumed by middleware)\nexport interface TokenBlacklistPort {\n  blacklist(jti: string, expiresAt: Date): Promise<void>;\n  isBlacklisted(jti: string): Promise<boolean>;\n}\n\n// libs ports\nexport interface LoggerInterface { info; error; warn; debug }\nexport type { MailerInterface } from './mailer/mailer.interface';\nexport type { TemplateRenderer } from './templates-engine/template-renderer.interface';"
+  },
+  "hidden_knowledge": [
+    "Mongo persistence and Mongoose model wiring per module (models are built inside each Module class, not passed in).",
+    "Password hashing via bcrypt and salt-round resolution lives in CryptoService.",
+    "JWT signing/verification, token type semantics and refresh metadata derivation live in JwtService.",
+    "Refresh-token rotation ordering and one-time code consumption are encapsulated by SessionService and CodesService.",
+    "Account lockout math (attempt threshold and lockout window) is decided by the composition root and applied inside UsersService.",
+    "HTTP wiring (routes, rate limiters, middleware order) is encapsulated by each module's Router."
+  ],
+  "complexity_absorbed": [
+    "Session issuance/rotation sequence (sign, revoke old, persist new) collapsed into SessionService.create/rotate.",
+    "JWT verification union normalized to a TokenClaims result instead of jsonwebtoken's JwtPayload | string.",
+    "Finder miss semantics normalized to T | null across users/holders/tenants.",
+    "Layering inversion removed: common depends on TokenBlacklistPort instead of auth's concrete BlacklistService.",
+    "One-time code validation performed atomically with an update-if-unused filter so callers need no retry."
+  ],
+  "failure_contract": [
+    {
+      "failure": "Credential mismatch or unknown account",
+      "caller_sees": "InvalidCredentialsError (domain 401)",
+      "caller_action": "Return 401; do not branch on which field failed."
+    },
+    {
+      "failure": "Account temporarily locked",
+      "caller_sees": "AccountLockedError",
+      "caller_action": "Return 423/401 with retry guidance; do not inspect lockoutUntil."
+    },
+    {
+      "failure": "Entity not found on finder",
+      "caller_sees": "null (finders) / EntityNotFoundError (mutations)",
+      "caller_action": "Check null for finders; catch EntityNotFoundError for mutations."
+    },
+    {
+      "failure": "Invalid or expired token",
+      "caller_sees": "InvalidTokenError from JwtService",
+      "caller_action": "Translate to 401 at the boundary; never read jsonwebtoken internals."
+    },
+    {
+      "failure": "Invalid argument (missing/bad format)",
+      "caller_sees": "InvalidArgumentError",
+      "caller_action": "Return 400 with the domain message."
+    }
+  ],
+  "split_merge": {
+    "decision": "keep",
+    "rationale": "Module boundaries are correct in kind (auth, users, holders, tenants, libs), but the surfaces must be tightened rather than redrawn: give every module an enforced port, stop leaking entity representation, and split the mailer's general mechanism from its business policy. Merging holders into users or deleting tenants is not justified yet by net complexity."
+  },
+  "depth_verdict": {
+    "macro": "shallow",
+    "macro_evidence": "Constructing auth still requires the caller to pass 15 dependencies through AuthModule (usersService, crypto, jwt, logger, mailer, codes, auth middleware, refresh-token, blacklist, holders, tenant service, lockout policy, rate-limit config, public URL); the facade exposes service/controller but no two-party contract, and auth/index.ts is never imported.",
+    "micro": "acceptable",
+    "micro_evidence": "SessionService and CodesService hide real ordering/atomicity; JwtService and TenantsService remain thin (unused generate* wrappers, pass-through finder), and UsersService mixes lockout mechanism with externally-supplied policy."
+  },
+  "caller_snippet": {
+    "language": "typescript",
+    "code": "// application.composition.ts — the caller must know every collaborator and policy.\nconst authModule = new AuthModule(\n  usersModule.service,\n  cryptoService,\n  jwtService,\n  logger,\n  mailer,\n  codeService,\n  authenticationMiddleware,\n  refreshTokenService,\n  blacklistService,\n  holdersService,\n  authTenantService,\n  options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),\n  options.lockoutDurationMs ?? getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),\n  options.rateLimitConfig ?? getDefaultRateLimitConfig(),\n  options.publicAppUrl ?? getStringEnvVariable('PUBLIC_APP_URL', 'https://ourservice.com'),\n);"
+  },
+  "before_after_interface": "After: each module exports one factory taking only ports/policy (`createAuthModule({ users, holders, tenants, jwt, mail, codes, blacklist, policy })`) and services declare `implements UsersPort|HoldersPort|TenantsPort` (compile-time check). Drop the `Partial<User>` and lockout scalars from the users port in favour of intent operations (`verifyCredentials`, `registerFailedAttempt`, `resetLockout`). Make the mailer port generic (`send(template, to, context)`) and move the `MailTemplate` policy into the auth/notification side. Delete unused `JwtService.generate*` wrappers and the unwired `libs/config-service`.",
+  "findings": [
+    {
+      "type": "leakage-back-door",
+      "title": "codes index built on nonexistent userId path (legacy finding)",
+      "severity": "Critical",
+      "status": "resolved",
+      "module": "auth/codes",
+      "detail": "The lookup index was previously declared on `userId` while the document field is `holderId`, leaving the (holderId,type,used) query unindexed. Now corrected to `holderId`.",
+      "location": {
+        "file": "src/auth/codes/codes.schema.ts",
+        "line": 20,
+        "symbol": "CodesSchema.index"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "codes.schema.ts:20 -> CodesSchema.index({ holderId: 1, type: 1, used: 1 })."
+      },
+      "id": "leakage-back-door-8de92442fab7"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "common imported auth blacklist concrete class (layering inversion)",
+      "severity": "Major",
+      "status": "resolved",
+      "module": "common",
+      "detail": "Authentication middleware previously imported auth/tokens/blacklist.service. It now depends on the TokenBlacklistPort owned by common; BlacklistService implements it.",
+      "location": {
+        "file": "src/common/ports/token-blacklist.port.ts",
+        "line": 1,
+        "symbol": "TokenBlacklistPort"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "authentication.middleware.ts imports ../../libs/jwt and ../ports/token-blacklist.port."
+      },
+      "id": "leakage-interface-523c172a0e89"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "JwtService.verifyToken leaked jsonwebtoken union",
+      "severity": "Major",
+      "status": "resolved",
+      "module": "libs/jwt",
+      "detail": "verifyToken used to return JwtPayload | string, forcing casts at every caller. It now returns the domain TokenClaims type.",
+      "location": {
+        "file": "src/libs/jwt/jwt.service.ts",
+        "line": 56,
+        "symbol": "verifyToken"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "verifyToken(token: string): TokenClaims; consumers read userId/role/jti without casting."
+      },
+      "id": "leakage-interface-187239bee15c"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "findById advertised |null but threw EntityNotFoundError",
+      "severity": "Major",
+      "status": "resolved",
+      "module": "users",
+      "detail": "UsersService/HoldersService findById declared Promise<X | null> yet threw on miss, so callers kept dead null checks. They now return null and callers genuinely branch on it.",
+      "location": {
+        "file": "src/users/users.service.ts",
+        "line": 67,
+        "symbol": "findById"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "findById returns this.usersModel.findById(id); auth.service.ts checks if (!user)."
+      },
+      "id": "leakage-interface-eb22124dbc2a"
+    },
+    {
+      "type": "temporal-decomposition",
+      "title": "Session issuance was split by execution order across AuthService",
+      "severity": "Major",
+      "status": "resolved",
+      "module": "auth/tokens",
+      "detail": "The generate -> verify -> revoke -> persist sequence was duplicated across login and refresh within AuthService. Extracted into SessionService.create/rotate with JwtService.issueSession returning TokenPair metadata.",
+      "location": {
+        "file": "src/auth/tokens/session.service.ts",
+        "line": 14,
+        "symbol": "SessionService.create"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "AuthService now calls sessionService.create/rotate; JwtService.issueSession returns { accessToken, refreshToken, refreshTokenId, refreshExpiresAt }."
+      },
+      "id": "temporal-decomposition-d95a08966af8"
+    },
+    {
+      "type": "shallow",
+      "title": "AuthModule is a composition magnet with 15 constructor parameters",
+      "severity": "Major",
+      "status": "new",
+      "module": "auth",
+      "detail": "AuthModule receives usersService, cryptoService, jwtService, logger, mailService, codeService, authenticationMiddleware, refreshTokenService, blacklistService, holdersService, authTenantService plus maxLoginAttempts, lockoutDurationMs, rateLimitConfig and publicAppUrl, then constructs SessionService/AuthService/AuthController itself. Wiring, policy and construction are mixed; the caller must know every collaborator to build auth.",
+      "location": {
+        "file": "src/auth/auth.module.ts",
+        "line": 26,
+        "symbol": "AuthModule.constructor"
+      },
+      "evidence": {
+        "type": "caller-snippet",
+        "detail": "application.composition.ts:111-129 passes 15 positional arguments."
+      },
+      "id": "shallow-242df171a56b"
+    },
+    {
+      "type": "shallow",
+      "title": "AuthModule exposes service/controller/tenantsController that nobody reads",
+      "severity": "Minor",
+      "status": "new",
+      "module": "auth",
+      "detail": "The public fields are declared but the composition root only calls initialize(app). They are pass-through exports with no consumer; the real entry point is initialize.",
+      "location": {
+        "file": "src/auth/auth.module.ts",
+        "line": 22,
+        "symbol": "AuthModule.service"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "Only authModule.initialize(app) is called in application.composition.ts:140."
+      },
+      "id": "shallow-11349186d87a"
+    },
+    {
+      "type": "shallow",
+      "title": "auth/index.ts facade is unused and exports concrete internals",
+      "severity": "Major",
+      "status": "new",
+      "module": "auth",
+      "detail": "The barrel exports AuthModule and the concrete AuthService, yet no file imports from '../auth'. Cross-module consumers bypass the facade entirely (auth.module imports users/holders indexes directly), so the boundary is undefined and the concrete class is the de-facto contract.",
+      "location": {
+        "file": "src/auth/index.ts",
+        "line": 1,
+        "symbol": "auth barrel"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "No import of '../auth' exists in src/ or test/."
+      },
+      "id": "shallow-7f9e9d7be678"
+    },
+    {
+      "type": "improvement",
+      "title": "Ports declared in barrels are not implemented by the concrete services",
+      "severity": "Major",
+      "status": "new",
+      "module": "users",
+      "detail": "UsersPort/HoldersPort/TenantsPort live inside index.ts and the services (UsersService, HoldersService, TenantsService) never `implements` them. Compatibility is structural only, so a service change can silently break the contract at the composition root instead of failing to compile.",
+      "location": {
+        "file": "src/users/index.ts",
+        "line": 6,
+        "symbol": "UsersPort"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "users.service.ts / holders.service.ts / tenants.service.ts declare no implements clause."
+      },
+      "id": "improvement-56670f357d19"
+    },
+    {
+      "type": "over-config",
+      "title": "Lockout policy parameters pushed onto UsersPort",
+      "severity": "Major",
+      "status": "new",
+      "module": "users",
+      "detail": "incrementLoginAttempts(id, maxAttempts, lockoutDurationMs) requires the caller (AuthService) to pass the lockout policy on every failed login. The policy is decided once at the composition root, then threaded through two layers; the common case should be a domain default owned by users.",
+      "location": {
+        "file": "src/users/index.ts",
+        "line": 10,
+        "symbol": "UsersPort.incrementLoginAttempts"
+      },
+      "evidence": {
+        "type": "caller-snippet",
+        "detail": "auth.service.ts:91-95 forwards this.maxLoginAttempts and this.lockoutDurationMs."
+      },
+      "id": "over-config-a8614d6d8e16"
+    },
+    {
+      "type": "leakage-back-door",
+      "title": "updateOneById(Partial<User>) lets auth write internal user fields",
+      "severity": "Major",
+      "status": "new",
+      "module": "users",
+      "detail": "AuthService resets loginAttempts/lockoutUntil through UsersPort.updateOneById(id, Partial<User>), so auth must know the user representation and can mutate any field (including password) without going through users' invariants (e.g. hashing is implicit). This is Tell-Don't-Ask broken across the boundary.",
+      "location": {
+        "file": "src/auth/services/auth.service.ts",
+        "line": 99,
+        "symbol": "handleSuccessfulLogin"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "updateOneById(id: string, updateData: Partial<User>) exposed on UsersPort."
+      },
+      "id": "leakage-back-door-add0dcf8d0ed"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "users port depends on holders' entity type",
+      "severity": "Major",
+      "status": "new",
+      "module": "users",
+      "detail": "UsersPort.createFromHolder(holder: Holder) makes the users module import the holders entity type, coupling two modules through a concrete representation instead of an explicit primitive (for example a VerifiedEmail value with email and password).",
+      "location": {
+        "file": "src/users/index.ts",
+        "line": 7,
+        "symbol": "UsersPort.createFromHolder"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "users/index.ts imports { Holder } from '../holders'."
+      },
+      "id": "leakage-interface-227ccbd8737b"
+    },
+    {
+      "type": "leakage-back-door",
+      "title": "Reset-password code stores a User id in holderId with ref 'Holder'",
+      "severity": "Major",
+      "status": "new",
+      "module": "auth/codes",
+      "detail": "CodesService.create always writes to field holderId with ref 'Holder', but forgot-password passes a User id. The field name and mongoose ref no longer describe what is stored for RESET_PASSWORD codes, an implicit assumption shared between auth and codes.",
+      "location": {
+        "file": "src/auth/codes/codes.schema.ts",
+        "line": 8,
+        "symbol": "CodesSchema.holderId"
+      },
+      "evidence": {
+        "type": "back-door",
+        "detail": "auth.service.ts:178-180 createForgotPasswordCode(user._id); codes.service.ts:62 create(userId, RESET_PASSWORD)."
+      },
+      "id": "leakage-back-door-5aa9bc762f79"
+    },
+    {
+      "type": "leakage-back-door",
+      "title": "Holder expiry and code expiry share CODE_EXPIRATION_MS",
+      "severity": "Major",
+      "status": "new",
+      "module": "holders",
+      "detail": "HoldersSchema derives its TTL from CODE_EXPIRATION_MS, the same env var that CodesService uses for one-time codes. Two unrelated concepts share one undeclared constant; changing code lifetime silently changes holder lifetime.",
+      "location": {
+        "file": "src/holders/holders.schema.ts",
+        "line": 6,
+        "symbol": "holderExpiration"
+      },
+      "evidence": {
+        "type": "back-door",
+        "detail": "codes.service.ts:19 also reads CODE_EXPIRATION_MS."
+      },
+      "id": "leakage-back-door-5fe4a7282c8f"
+    },
+    {
+      "type": "shallow",
+      "title": "JwtService exposes unused generate* wrappers and duplicate jti logic",
+      "severity": "Major",
+      "status": "new",
+      "module": "libs/jwt",
+      "detail": "The public surface has generateToken, generateAccessToken, generateRefreshToken, generateTenantToken, generateTokens, issueSession and signUserToken. Production uses only issueSession and generateTenantToken; generateAccessToken/generateRefreshToken/generateTokens are test-only and their jti logic duplicates issueSession/signUserToken. The interface is nearly as broad as the implementation.",
+      "location": {
+        "file": "src/libs/jwt/jwt.service.ts",
+        "line": 35,
+        "symbol": "JwtService.generateToken"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "rg shows generateAccessToken/generateRefreshToken/generateTokens used only in tests; signUserToken duplicates generateToken's validation."
+      },
+      "id": "shallow-1590a9a9e344"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "Mailer port mixes a general mechanism with business policy",
+      "severity": "Major",
+      "status": "new",
+      "module": "libs/mailer",
+      "detail": "MailerInterface couples generic delivery (sendEmail/sendMailWithTemplate) with specific policy (sendWelcomeEmail/sendSignupVerificationEmail/sendResetPasswordEmail). The nodemailer adapter also imports MailTemplate from the mail/ domain folder, so infrastructure depends on a business enum. General mechanism and specific policy should be split.",
+      "location": {
+        "file": "src/libs/mailer/mailer.interface.ts",
+        "line": 11,
+        "symbol": "MailerInterface.sendWelcomeEmail"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "nodemailer.adapter.ts:7 imports { MailTemplate } from '../../../mail/mail.enum'."
+      },
+      "id": "leakage-interface-e4012cfc12ec"
+    },
+    {
+      "type": "shallow",
+      "title": "libs/config-service is an unwired dead abstraction",
+      "severity": "Major",
+      "status": "new",
+      "module": "libs/config-service",
+      "detail": "config-service.interface.ts, its Mongo adapter and schema have zero production wiring and no consumers outside their own folder. It is pure maintenance cost until a real dynamic-config need exists.",
+      "location": {
+        "file": "src/libs/config-service/config-service.interface.ts",
+        "line": 1,
+        "symbol": "ConfigService"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "rg for config-service/ConfigService outside src/libs/config-service/** returns nothing."
+      },
+      "id": "shallow-9dc6b4897ce0"
+    },
+    {
+      "type": "leakage-back-door",
+      "title": "Validation logic and messages duplicated across five services",
+      "severity": "Major",
+      "status": "new",
+      "module": "auth",
+      "detail": "Although EMAIL_REGEX/PASSWORD_REGEX/OBJECTID_REGEX now live in common/constants/regex, the surrounding guard-and-error logic is copied in AuthService (login/signup/reset), UsersService, HoldersService, CodesService and RefreshTokenService. Changing a rule or message still forces edits in five-plus files; no email/password value object owns the policy.",
+      "location": {
+        "file": "src/auth/services/auth.service.ts",
+        "line": 105,
+        "symbol": "AuthService.signup"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "Same if(!email)/EMAIL_REGEX/PASSWORD_REGEX blocks repeated in auth.service.ts, users.service.ts, holders.service.ts."
+      },
+      "id": "leakage-back-door-1f877dfb8e88"
+    },
+    {
+      "type": "over-config",
+      "title": "AuthService constructor mixes orchestration, lockout policy and deployment URL",
+      "severity": "Minor",
+      "status": "new",
+      "module": "auth",
+      "detail": "AuthService takes ten collaborators including maxLoginAttempts/lockoutDurationMs (policy owned elsewhere) and publicAppUrl with a hardcoded default. The URL builds mail links inside the domain service, leaking a deployment concern into orchestration.",
+      "location": {
+        "file": "src/auth/services/auth.service.ts",
+        "line": 26,
+        "symbol": "AuthService.constructor"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "publicAppUrl default 'https://ourservice.com' used in signup/forgotPassword link building (lines 152,186)."
+      },
+      "id": "over-config-1d0892769b51"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "AuthTenantService duplicates ObjectId validation and compares secrets directly",
+      "severity": "Minor",
+      "status": "new",
+      "module": "auth",
+      "detail": "AuthTenantService validates tenantId with Types.ObjectId.isValid and then calls TenantsPort.findById, which validates the same id again. It also reads tenant.active/tenant.secret directly, so tenant representation leaks into auth. The check belongs in tenants (verifyCredentials) or a dedicated operation.",
+      "location": {
+        "file": "src/auth/services/auth-tenant.service.ts",
+        "line": 23,
+        "symbol": "AuthTenantService.login"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "tenants.service.ts:14 re-validates with OBJECTID_REGEX; auth-tenant reads tenant.active and tenant.secret."
+      },
+      "id": "leakage-interface-a7898f25339d"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "AuthService depends on concrete BlacklistService instead of the port",
+      "severity": "Minor",
+      "status": "new",
+      "module": "auth",
+      "detail": "The port TokenBlacklistPort exists and BlacklistService implements it, yet AuthService and AuthModule type the dependency as the concrete class, so the boundary is weaker than it needs to be.",
+      "location": {
+        "file": "src/auth/services/auth.service.ts",
+        "line": 32,
+        "symbol": "blacklistService"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "constructor(... blacklistService: BlacklistService ...) and auth.module.ts:35 passes BlacklistService."
+      },
+      "id": "leakage-interface-3f6abcea0614"
+    },
+    {
+      "type": "shallow",
+      "title": "TenantsService.findById is a pass-through wrapper",
+      "severity": "Minor",
+      "status": "new",
+      "module": "tenants",
+      "detail": "The entire module is one method whose body is a single findById().lean().exec(). Signature is equivalent to the body; it earns its boundary only when a second tenant operation appears.",
+      "location": {
+        "file": "src/tenants/tenants.service.ts",
+        "line": 10,
+        "symbol": "TenantsService.findById"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "tenants.service.ts:18 returns this.tenantsModel.findById(id).lean().exec()."
+      },
+      "id": "shallow-bea0801a21d5"
+    },
+    {
+      "type": "shallow",
+      "title": "CodesService signup/forgot-password creators are 1:1 wrappers",
+      "severity": "Minor",
+      "status": "new",
+      "module": "auth/codes",
+      "detail": "createSignupCode and createForgotPasswordCode add no behavior over create(holderId, type); they only rename. They are intent-revealing but add a hop without hiding complexity.",
+      "location": {
+        "file": "src/auth/codes/codes.service.ts",
+        "line": 58,
+        "symbol": "CodesService.createSignupCode"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "codes.service.ts:58-64 delegate directly to create()."
+      },
+      "id": "shallow-8138790103f4"
+    },
+    {
+      "type": "improvement",
+      "title": "RefreshTokenService.findAllActiveByUserId has no production consumer",
+      "severity": "Minor",
+      "status": "new",
+      "module": "auth/tokens",
+      "detail": "The method is used only by integration tests; no production path lists active tokens. Either wire it or drop it to keep the surface honest.",
+      "location": {
+        "file": "src/auth/tokens/refresh-token.service.ts",
+        "line": 46,
+        "symbol": "findAllActiveByUserId"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "rg shows only test/integration/src/auth/tokens/refresh-tokens.service.test.ts references."
+      },
+      "id": "improvement-06807efeb8c5"
+    },
+    {
+      "type": "improvement",
+      "title": "tenants interface file is misspelled tentants.interface.ts",
+      "severity": "Minor",
+      "status": "new",
+      "module": "tenants",
+      "detail": "The filename `tentants.interface.ts` is imported by tenants/index.ts and tenants.service.ts. Renaming removes a permanent naming wart at low risk.",
+      "location": {
+        "file": "src/tenants/tentants.interface.ts",
+        "line": 1,
+        "symbol": "Tenant"
+      },
+      "evidence": {
+        "type": "analysis",
+        "detail": "tenants/index.ts and tenants.service.ts import './tentants.interface'."
+      },
+      "id": "improvement-48e318a9977b"
+    },
+    {
+      "type": "leakage-back-door",
+      "title": "common RequiredBodyMiddleware hardcodes the /auth/logout route",
+      "severity": "Major",
+      "status": "new",
+      "module": "common",
+      "detail": "A generic common middleware embeds knowledge of an auth route via EXCLUDED_PATHS = ['/auth/logout']. This is the same class of shared-boundary assumption the TokenBlacklistPort refactor removed: common should be route-agnostic and receive the exclusion policy from the caller.",
+      "location": {
+        "file": "src/common/middlewares/required-body.middleware.ts",
+        "line": 3,
+        "symbol": "EXCLUDED_PATHS"
+      },
+      "evidence": {
+        "type": "back-door",
+        "detail": "required-body.middleware.ts:3 hardcodes an auth endpoint path."
+      },
+      "id": "leakage-back-door-f02e756b665c"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "common owns codes/auth domain exception taxonomy",
+      "severity": "Minor",
+      "status": "new",
+      "module": "common",
+      "detail": "AlreadyGeneratedCodeError/InvalidCodeError live in common/exceptions/codes.exceptions.ts and UnauthorizedError/InvalidCredentialsError/AccountLockedError in auth.exceptions.ts. A shared BaseError kernel is legitimate, but codes/auth domain failures belong to their modules; common should only hold genuinely cross-cutting infra errors (as InfraError does).",
+      "location": {
+        "file": "src/common/exceptions/codes.exceptions.ts",
+        "line": 3,
+        "symbol": "AlreadyGeneratedCodeError"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "common/exceptions/{codes,auth}.exceptions.ts define auth/business failures."
+      },
+      "id": "leakage-interface-3b59a54ded09"
+    },
+    {
+      "type": "over-config",
+      "title": "CodesService reads CODE_EXPIRATION_MS and CODE_LENGTH from env instead of being injected",
+      "severity": "Major",
+      "status": "new",
+      "module": "auth/codes",
+      "detail": "Unlike JwtService (which receives expiry via constructor), CodesService reads two env vars directly in its constructor. Config-injection policy is inconsistent across libs/modules and the code lifetime is a hidden global rather than a declared constructor contract.",
+      "location": {
+        "file": "src/auth/codes/codes.service.ts",
+        "line": 19,
+        "symbol": "CodesService.constructor"
+      },
+      "evidence": {
+        "type": "back-door",
+        "detail": "codes.service.ts:19-20 getNumberEnvVariable('CODE_EXPIRATION_MS'/'CODE_LENGTH'); jwt.service.ts receives expiresIn injected."
+      },
+      "id": "over-config-1e79bf7df611"
+    },
+    {
+      "type": "leakage-interface",
+      "title": "WinstonLogger.logger exposes the concrete winston.Logger",
+      "severity": "Minor",
+      "status": "new",
+      "module": "libs/logger",
+      "detail": "The adapter declares a public `logger: winston.Logger` field, exposing the concrete logging library to anyone holding the logger. The LoggerInterface port is the intended surface; the field should be private.",
+      "location": {
+        "file": "src/libs/logger/adapters/winston.logger.ts",
+        "line": 6,
+        "symbol": "WinstonLogger.logger"
+      },
+      "evidence": {
+        "type": "interface",
+        "detail": "public logger: Logger (winston) on the adapter."
+      },
+      "id": "leakage-interface-118d5e0585d6"
+    },
+    {
+      "type": "leakage-back-door",
+      "title": "NodeMailerAdapter mutates the caller's template context",
+      "severity": "Minor",
+      "status": "new",
+      "module": "libs/mailer",
+      "detail": "sendWelcomeEmail/sendSignupVerificationEmail/sendResetPasswordEmail write appName and year onto the caller-supplied context object, so the caller's data is silently mutated. The adapter should copy the context before enriching it.",
+      "location": {
+        "file": "src/libs/mailer/adapters/nodemailer.adapter.ts",
+        "line": 87,
+        "symbol": "NodeMailerAdapter send*Email"
+      },
+      "evidence": {
+        "type": "back-door",
+        "detail": "context.appName = this.appName; context.year = this.year in three methods."
+      },
+      "id": "leakage-back-door-c19456ea76d5"
+    }
+  ],
+  "delta": {
+    "persists": 0,
+    "resolved": 5,
+    "new": 25,
+    "regressed": 0,
+    "not_rechecked": 0,
+    "resolved_items": [
+      {
+        "id": "leakage-back-door-8de92442fab7",
+        "location": "src/auth/codes/codes.schema.ts:20",
+        "title": "codes index built on nonexistent userId path (legacy finding)"
+      },
+      {
+        "id": "leakage-interface-523c172a0e89",
+        "location": "src/common/ports/token-blacklist.port.ts:1",
+        "title": "common imported auth blacklist concrete class (layering inversion)"
+      },
+      {
+        "id": "leakage-interface-187239bee15c",
+        "location": "src/libs/jwt/jwt.service.ts:56",
+        "title": "JwtService.verifyToken leaked jsonwebtoken union"
+      },
+      {
+        "id": "leakage-interface-eb22124dbc2a",
+        "location": "src/users/users.service.ts:67",
+        "title": "findById advertised |null but threw EntityNotFoundError"
+      },
+      {
+        "id": "temporal-decomposition-d95a08966af8",
+        "location": "src/auth/tokens/session.service.ts:14",
+        "title": "Session issuance was split by execution order across AuthService"
+      }
+    ],
+    "not_rechecked_items": []
+  }
+}
