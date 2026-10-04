@@ -32,7 +32,7 @@ export class JwtService {
     );
   }
 
-  issueSession(userId: string, role: Roles): TokenPair {
+  signTokenPair(userId: string, role: Roles): TokenPair {
     const refreshTokenId = randomUUID();
     const accessToken = this.signUserToken(
       { userId, role, type: TokenTypes.ACCESS },

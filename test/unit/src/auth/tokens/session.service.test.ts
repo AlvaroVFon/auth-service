@@ -27,7 +27,7 @@ describe('SessionService', () => {
 
   test('creates a login session after revoking previous sessions', async () => {
     const jwtService = {
-      issueSession: mock.fn(() => pair),
+      signTokenPair: mock.fn(() => pair),
     } as unknown as JwtService;
     const refreshTokenService = {
       revokeAllByUserId: mock.fn(() => Promise.resolve()),
@@ -53,7 +53,7 @@ describe('SessionService', () => {
   test('rotates an active refresh session and links its replacement', async () => {
     const jwtService = {
       verifyToken: mock.fn(() => claims),
-      issueSession: mock.fn(() => pair),
+      signTokenPair: mock.fn(() => pair),
     } as unknown as JwtService;
     const refreshTokenService = {
       findByJti: mock.fn(() => Promise.resolve({ revokedAt: null })),

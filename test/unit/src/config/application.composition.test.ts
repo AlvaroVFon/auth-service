@@ -15,7 +15,7 @@ describe('application composition configuration', () => {
       const authService = composition.authModule.service as unknown as {
         sessionService: { jwtService: JwtService };
       };
-      const token = authService.sessionService.jwtService.issueSession(
+      const token = authService.sessionService.jwtService.signTokenPair(
         '507f1f77bcf86cd799439011',
         Roles.USER,
       ).accessToken;

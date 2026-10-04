@@ -774,7 +774,7 @@ describe('Auth Service', () => {
 
     test('should revoke refresh tokens issued before a password reset', async () => {
       const user = await fixture.create<UserInterface>('User');
-      const refreshToken = jwtService.issueSession(
+      const refreshToken = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,
       ).refreshToken;
@@ -939,7 +939,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if no stored token is found for the jti', async () => {
-      const refreshToken = jwtService.issueSession(
+      const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
       ).refreshToken;
@@ -959,7 +959,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if stored token has been revoked', async () => {
-      const refreshToken = jwtService.issueSession(
+      const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
       ).refreshToken;
@@ -989,7 +989,7 @@ describe('Auth Service', () => {
     });
 
     test('should succeed with valid userId and refreshToken', async () => {
-      const refreshToken = jwtService.issueSession(
+      const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
       ).refreshToken;
@@ -1033,7 +1033,7 @@ describe('Auth Service', () => {
     });
 
     test('should reject a reused (already revoked) refresh token', async () => {
-      const refreshToken = jwtService.issueSession(
+      const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
       ).refreshToken;
@@ -1066,7 +1066,7 @@ describe('Auth Service', () => {
 
     test('should allow only one concurrent refresh rotation', async () => {
       const user = await fixture.create<UserInterface>('User');
-      const refreshToken = jwtService.issueSession(
+      const refreshToken = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,
       ).refreshToken;
@@ -1116,13 +1116,13 @@ describe('Auth Service', () => {
     test('should revoke all active refresh tokens for the user', async () => {
       const user = await fixture.create<UserInterface>('User');
 
-      const refreshToken1 = jwtService.issueSession(
+      const refreshToken1 = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,
       ).refreshToken;
       const decoded1 = jwtService.verifyToken(refreshToken1) as any;
 
-      const refreshToken2 = jwtService.issueSession(
+      const refreshToken2 = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,
       ).refreshToken;

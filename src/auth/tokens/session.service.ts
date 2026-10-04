@@ -16,7 +16,7 @@ export class SessionService {
     role: Roles,
     ctx?: RequestContext,
   ): Promise<TokenPair> {
-    const session = this.jwtService.issueSession(userId, role);
+    const session = this.jwtService.signTokenPair(userId, role);
 
     await this.refreshTokenService.revokeAllByUserId(userId);
     await this.persistRefreshToken(userId, session, ctx);
@@ -50,7 +50,7 @@ export class SessionService {
       throw new UnauthorizedError('Refresh token has been revoked');
     }
 
-    const session = this.jwtService.issueSession(userId, role);
+    const session = this.jwtService.signTokenPair(userId, role);
 
     try {
       await this.refreshTokenService.revokeByJti(

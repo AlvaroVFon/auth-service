@@ -22,10 +22,10 @@ describe('JwtService', () => {
     jwtService = new JwtService(jwtSecret, jwtExpiresIn, jwtRefreshExpiresIn);
   });
 
-  describe('issueSession', () => {
+  describe('signTokenPair', () => {
     test('should throw an error when userId is not a valid ObjectId', () => {
       try {
-        jwtService.issueSession('invalid-object-id', Roles.USER);
+        jwtService.signTokenPair('invalid-object-id', Roles.USER);
         throw new Error('Test failed: Expected error was not thrown');
       } catch (error) {
         assert.ok(error instanceof InvalidArgumentError);
@@ -37,7 +37,7 @@ describe('JwtService', () => {
     });
 
     test('should return a token pair with jti and refresh metadata', () => {
-      const session = jwtService.issueSession('0'.repeat(24), Roles.USER);
+      const session = jwtService.signTokenPair('0'.repeat(24), Roles.USER);
       const access = jwtService.verifyToken(session.accessToken);
       const refresh = jwtService.verifyToken(session.refreshToken);
 
@@ -56,7 +56,7 @@ describe('JwtService', () => {
         accessExpiresIn,
         refreshExpiresIn,
       );
-      const session = service.issueSession('0'.repeat(24), Roles.USER);
+      const session = service.signTokenPair('0'.repeat(24), Roles.USER);
       const decoded = service.verifyToken(
         session.refreshToken,
       ) as TokenClaims & {
@@ -69,7 +69,7 @@ describe('JwtService', () => {
 
   describe('verifyToken', () => {
     test('should verify a valid JWT token', () => {
-      const session = jwtService.issueSession('0'.repeat(24), Roles.USER);
+      const session = jwtService.signTokenPair('0'.repeat(24), Roles.USER);
       const claims = jwtService.verifyToken(session.accessToken);
 
       assert.strictEqual(claims.userId, '0'.repeat(24));
