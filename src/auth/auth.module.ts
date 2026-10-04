@@ -16,6 +16,7 @@ import { AuthTenantService } from './services/auth-tenant.service';
 import { AuthService } from './services/auth.service';
 import { BlacklistService } from './tokens/blacklist.service';
 import { RefreshTokenService } from './tokens/refresh-token.service';
+import { SessionService } from './tokens/session.service';
 
 export class AuthModule {
   public readonly service: AuthService;
@@ -56,13 +57,17 @@ export class AuthModule {
       this.constructor.name,
     );
 
+    const sessionService = new SessionService(
+      this.jwtService,
+      this.refreshTokenService,
+    );
+
     this.service = new AuthService(
       this.usersService,
       this.cryptoService,
-      this.jwtService,
       this.mailService,
       this.codeService,
-      this.refreshTokenService,
+      sessionService,
       this.blacklistService,
       this.holdersService,
       this.maxLoginAttempts,

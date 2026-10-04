@@ -9,6 +9,7 @@ import { BlacklistedTokenModel } from '../../../../../src/auth/tokens/blackliste
 import { RefreshToken } from '../../../../../src/auth/tokens/refresh-token.interface';
 import { RefreshTokenModel } from '../../../../../src/auth/tokens/refresh-token.schema';
 import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-token.service';
+import { SessionService } from '../../../../../src/auth/tokens/session.service';
 import { JWT_REGEX } from '../../../../../src/common/constants/regex';
 import { Roles } from '../../../../../src/common/enums/roles.enum';
 import { Holder } from '../../../../../src/holders/holders.interface';
@@ -35,6 +36,7 @@ describe('Auth Service', () => {
   let holdersService: HoldersService;
   let codeService: CodesService;
   let refreshTokenService: RefreshTokenService;
+  let sessionService: SessionService;
   let blacklistService: BlacklistService;
   let jwtService: JwtService;
 
@@ -74,15 +76,15 @@ describe('Auth Service', () => {
       mockCryptoService as unknown as CryptoService,
     );
     refreshTokenService = new RefreshTokenService(RefreshTokenModel);
+    sessionService = new SessionService(jwtService, refreshTokenService);
     blacklistService = new BlacklistService(BlacklistedTokenModel);
 
     authService = new AuthService(
       userService,
       mockCryptoService as unknown as CryptoService,
-      jwtService,
       mockMailerService as MailerInterface,
       codeService,
-      refreshTokenService,
+      sessionService,
       blacklistService,
       holdersService,
       5,
@@ -164,10 +166,9 @@ describe('Auth Service', () => {
       authService = new AuthService(
         userService,
         mockCryptoService as unknown as CryptoService,
-        jwtService,
         mockMailerService as MailerInterface,
         codeService,
-        refreshTokenService,
+        sessionService,
         blacklistService,
         holdersService,
         MAX_LOGIN_ATTEMPTS,
