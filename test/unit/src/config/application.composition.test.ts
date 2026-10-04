@@ -15,10 +15,10 @@ describe('application composition configuration', () => {
       const authService = composition.authModule.service as unknown as {
         sessionService: { jwtService: JwtService };
       };
-      const token = authService.sessionService.jwtService.generateAccessToken(
+      const token = authService.sessionService.jwtService.issueSession(
         '507f1f77bcf86cd799439011',
         Roles.USER,
-      );
+      ).accessToken;
       const claims = authService.sessionService.jwtService.verifyToken(token);
 
       assert.ok(claims.exp - Math.floor(Date.now() / 1000) >= 122);

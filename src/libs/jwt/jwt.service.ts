@@ -32,25 +32,25 @@ export class JwtService {
     );
   }
 
-  generateToken(payload: Payload, expiresIn: number): string {
-    if (!Types.ObjectId.isValid(payload.userId)) {
-      throw new InvalidArgumentError(
-        'InvalidArgumentError: Payload userId is not a valid ObjectId',
-      );
-    }
-    if (
-      payload.type !== TokenTypes.ACCESS &&
-      payload.type !== TokenTypes.REFRESH
-    ) {
-      throw new InvalidArgumentError(
-        'InvalidArgumentError: Payload type is not valid',
-      );
-    }
+  issueSession(userId: string, role: Roles): TokenPair {
+    const refreshTokenId = randomUUID();
+    const accessToken = this.signUserToken(
+      { userId, role, type: TokenTypes.ACCESS },
+      this.expiresIn,
+    );
+    const refreshToken = this.signUserToken(
+      { userId, role, type: TokenTypes.REFRESH, jti: refreshTokenId },
+      this.refreshTokenExpiresIn,
+    );
 
-    const jti = randomUUID();
-    payload.jti = jti;
-
-    return jwt.sign(payload, this.secret, { expiresIn });
+    return {
+      accessToken,
+      refreshToken,
+      refreshTokenId,
+      refreshExpiresAt: new Date(
+        Date.now() + this.refreshTokenExpiresIn * 1000,
+      ),
+    };
   }
 
   verifyToken(token: string): TokenClaims {
@@ -73,16 +73,6 @@ export class JwtService {
     }
   }
 
-  generateAccessToken(userId: string, role: Roles): string {
-    const payload: Payload = { userId, role, type: TokenTypes.ACCESS };
-    return this.generateToken(payload, this.expiresIn);
-  }
-
-  generateRefreshToken(userId: string, role: Roles): string {
-    const payload: Payload = { userId, role, type: TokenTypes.REFRESH };
-    return this.generateToken(payload, this.refreshTokenExpiresIn);
-  }
-
   generateTenantToken(tenantId: string): string {
     if (!Types.ObjectId.isValid(tenantId)) {
       throw new InvalidArgumentError('Invalid tenant ID');
@@ -92,36 +82,6 @@ export class JwtService {
     return jwt.sign(payload, this.secret, {
       expiresIn: this.tenantTokenExpiresIn,
     });
-  }
-
-  generateTokens(
-    userId: string,
-    role: Roles,
-  ): { accessToken: string; refreshToken: string } {
-    const accessToken = this.generateAccessToken(userId, role);
-    const refreshToken = this.generateRefreshToken(userId, role);
-    return { accessToken, refreshToken };
-  }
-
-  issueSession(userId: string, role: Roles): TokenPair {
-    const refreshTokenId = randomUUID();
-    const accessToken = this.signUserToken(
-      { userId, role, type: TokenTypes.ACCESS },
-      this.expiresIn,
-    );
-    const refreshToken = this.signUserToken(
-      { userId, role, type: TokenTypes.REFRESH, jti: refreshTokenId },
-      this.refreshTokenExpiresIn,
-    );
-
-    return {
-      accessToken,
-      refreshToken,
-      refreshTokenId,
-      refreshExpiresAt: new Date(
-        Date.now() + this.refreshTokenExpiresIn * 1000,
-      ),
-    };
   }
 
   private signUserToken(payload: Payload, expiresIn: number): string {

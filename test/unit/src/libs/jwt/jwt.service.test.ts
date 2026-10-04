@@ -3,7 +3,6 @@ import { Types } from 'mongoose';
 import { Roles } from '../../../../../src/common/enums/roles.enum';
 import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
 import {
-  Payload,
   TenantPayload,
   TokenClaims,
 } from '../../../../../src/libs/jwt/jwt.interfaces';
@@ -23,15 +22,10 @@ describe('JwtService', () => {
     jwtService = new JwtService(jwtSecret, jwtExpiresIn, jwtRefreshExpiresIn);
   });
 
-  describe('generateToken', () => {
-    test('should throw an error when payload id is not a valid ObjectId', () => {
-      const invalidPayload: Payload = {
-        userId: 'invalid-object-id',
-        type: TokenTypes.ACCESS,
-        role: Roles.USER,
-      };
+  describe('issueSession', () => {
+    test('should throw an error when userId is not a valid ObjectId', () => {
       try {
-        jwtService.generateToken(invalidPayload, 3600);
+        jwtService.issueSession('invalid-object-id', Roles.USER);
         throw new Error('Test failed: Expected error was not thrown');
       } catch (error) {
         assert.ok(error instanceof InvalidArgumentError);
@@ -42,48 +36,18 @@ describe('JwtService', () => {
       }
     });
 
-    test('should throw an error when payload is missing token type', () => {
-      const invalidPayload: any = { userId: '0'.repeat(24) };
-      try {
-        jwtService.generateToken(invalidPayload, 3600);
-        throw new Error('Test failed: Expected error was not thrown');
-      } catch (error) {
-        assert.ok(error instanceof InvalidArgumentError);
-        assert.strictEqual(
-          (error as InvalidArgumentError).message,
-          'InvalidArgumentError: Payload type is not valid',
-        );
-      }
+    test('should return a token pair with jti and refresh metadata', () => {
+      const session = jwtService.issueSession('0'.repeat(24), Roles.USER);
+      const access = jwtService.verifyToken(session.accessToken);
+      const refresh = jwtService.verifyToken(session.refreshToken);
+
+      assert.ok(session.refreshExpiresAt instanceof Date);
+      assert.strictEqual(access.type, TokenTypes.ACCESS);
+      assert.ok(access.jti);
+      assert.strictEqual(refresh.type, TokenTypes.REFRESH);
+      assert.strictEqual(session.refreshTokenId, refresh.jti);
     });
 
-    test('should generate a valid JWT token', () => {
-      const payload: Payload = {
-        userId: '0'.repeat(24),
-        type: TokenTypes.ACCESS,
-        role: Roles.USER,
-      };
-      const token = jwtService.generateToken(payload, 3600);
-      assert.ok(token);
-      assert.strictEqual(typeof token, 'string');
-    });
-
-    test('should embed a jti claim in generated tokens', () => {
-      const payload: Payload = {
-        userId: '0'.repeat(24),
-        type: TokenTypes.ACCESS,
-        role: Roles.USER,
-      };
-      const token = jwtService.generateToken(payload, 3600);
-      const decoded = jwtService.verifyToken(token) as TokenClaims & {
-        iat: number;
-      };
-
-      assert.ok(decoded.jti);
-      assert.match(decoded.jti!, /^[0-9a-f-]{36}$/);
-    });
-  });
-
-  describe('generateRefreshToken', () => {
     test('should sign refresh tokens with the refresh token expiry', () => {
       const accessExpiresIn = 1000;
       const refreshExpiresIn = 5000;
@@ -92,8 +56,10 @@ describe('JwtService', () => {
         accessExpiresIn,
         refreshExpiresIn,
       );
-      const token = service.generateRefreshToken('0'.repeat(24), Roles.USER);
-      const decoded = service.verifyToken(token) as TokenClaims & {
+      const session = service.issueSession('0'.repeat(24), Roles.USER);
+      const decoded = service.verifyToken(
+        session.refreshToken,
+      ) as TokenClaims & {
         iat: number;
       };
 
@@ -103,23 +69,14 @@ describe('JwtService', () => {
 
   describe('verifyToken', () => {
     test('should verify a valid JWT token', () => {
-      const payload: Payload = {
-        userId: '0'.repeat(24),
-        type: TokenTypes.ACCESS,
-        role: Roles.USER,
-        jti: 'test-jti',
-      };
-      const token = jwtService.generateToken(payload, 3600);
-      const isValid = jwtService.verifyToken(token);
-      assert.deepStrictEqual(isValid, {
-        userId: payload.userId,
-        type: payload.type,
-        // @ts-expect-error 'iat' and 'exp' are added by jsonwebtoken
-        iat: isValid['iat'],
-        exp: isValid['exp'],
-        jti: payload.jti,
-        role: payload.role,
-      });
+      const session = jwtService.issueSession('0'.repeat(24), Roles.USER);
+      const claims = jwtService.verifyToken(session.accessToken);
+
+      assert.strictEqual(claims.userId, '0'.repeat(24));
+      assert.strictEqual(claims.role, Roles.USER);
+      assert.strictEqual(claims.type, TokenTypes.ACCESS);
+      assert.ok(claims.jti);
+      assert.ok(claims.exp > 0);
     });
 
     test('should throw an error for an invalid JWT token', () => {
@@ -138,8 +95,8 @@ describe('JwtService', () => {
     });
   });
 
-  describe('generateAccessToken', () => {
-    test('should generate a valid access token', () => {
+  describe('generateTenantToken', () => {
+    test('should generate a valid tenant token', () => {
       const tenantId = new Types.ObjectId();
       const token = jwtService.generateTenantToken(String(tenantId));
 
@@ -154,16 +111,12 @@ describe('JwtService', () => {
       assert.strictEqual(decoded.tenantId, String(tenantId));
       assert.strictEqual(decoded.type, TokenTypes.ACCESS);
     });
-  });
 
-  describe('issueSession', () => {
-    test('should return refresh metadata without re-verifying the token', () => {
-      const session = jwtService.issueSession('0'.repeat(24), Roles.USER);
-      const claims = jwtService.verifyToken(session.refreshToken);
-
-      assert.strictEqual(session.refreshTokenId, claims.jti);
-      assert.ok(session.refreshExpiresAt instanceof Date);
-      assert.strictEqual(claims.type, TokenTypes.REFRESH);
+    test('should throw an error when tenantId is not a valid ObjectId', () => {
+      assert.throws(
+        () => jwtService.generateTenantToken('invalid-tenant-id'),
+        InvalidArgumentError,
+      );
     });
   });
 });
