@@ -5,6 +5,7 @@ import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.
 import {
   Payload,
   TenantPayload,
+  TokenClaims,
 } from '../../../../../src/libs/jwt/jwt.interfaces';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
@@ -64,6 +65,39 @@ describe('JwtService', () => {
       const token = jwtService.generateToken(payload, 3600);
       assert.ok(token);
       assert.strictEqual(typeof token, 'string');
+    });
+
+    test('should embed a jti claim in generated tokens', () => {
+      const payload: Payload = {
+        userId: '0'.repeat(24),
+        type: TokenTypes.ACCESS,
+        role: Roles.USER,
+      };
+      const token = jwtService.generateToken(payload, 3600);
+      const decoded = jwtService.verifyToken(token) as TokenClaims & {
+        iat: number;
+      };
+
+      assert.ok(decoded.jti);
+      assert.match(decoded.jti!, /^[0-9a-f-]{36}$/);
+    });
+  });
+
+  describe('generateRefreshToken', () => {
+    test('should sign refresh tokens with the refresh token expiry', () => {
+      const accessExpiresIn = 1000;
+      const refreshExpiresIn = 5000;
+      const service = new JwtService(
+        jwtSecret,
+        accessExpiresIn,
+        refreshExpiresIn,
+      );
+      const token = service.generateRefreshToken('0'.repeat(24), Roles.USER);
+      const decoded = service.verifyToken(token) as TokenClaims & {
+        iat: number;
+      };
+
+      assert.strictEqual(decoded.exp - decoded.iat, refreshExpiresIn);
     });
   });
 

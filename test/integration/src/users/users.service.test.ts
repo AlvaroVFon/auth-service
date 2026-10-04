@@ -50,14 +50,24 @@ describe('UsersService', () => {
     });
 
     describe('Create()', () => {
-      test('should create a new user', async () => {
+      test('should create a new user with a hashed password', async () => {
         const plainPassword = 'securepassword123';
 
-        const userData: Partial<UserInterface> = UserFactory.generate();
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('create+'),
+          password: plainPassword,
+        });
         const newUser = await usersService.create(userData);
         assert.ok(newUser);
         assert.strictEqual(newUser.email, userData.email);
         assert.strictEqual(newUser.username, userData.username);
+        assert.notStrictEqual(newUser.password, plainPassword);
+        assert.ok(
+          await new CryptoService().compareString(
+            plainPassword,
+            newUser.password,
+          ),
+        );
 
         const foundUser = await fixture.findById<UserInterface>(
           'User',
@@ -68,7 +78,6 @@ describe('UsersService', () => {
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, userData.email);
         assert.strictEqual(foundUser!.username, userData.username);
-        assert.notStrictEqual(foundUser!.password, plainPassword);
         assert.strictEqual(foundUser?.password, newUser.password);
       });
 
