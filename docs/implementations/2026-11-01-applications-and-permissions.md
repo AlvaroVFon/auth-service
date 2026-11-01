@@ -50,6 +50,11 @@ Paso de despliegue:
 
 No hay script de migración versionado a propósito: la colección era código muerto (ningún middleware aceptaba el token) y no se migra ningún dato a `applications`/`grants`.
 
+## Pendientes para #39–#42
+
+- `UsersService.deleteOneById()` no borra los `grants` del usuario: un usuario eliminado deja filas huérfanas que ya no se pueden resolver. El borrado en cascada (o excluir usuarios inexistentes en las lecturas) entra con la autorización por aplicación en #41.
+- `findByUserAndApplication()` y `listByUser()` devuelven el grant sin mirar `Application.active`, mientras que `assignRole()` rechaza aplicaciones no asignables. Los consumidores de #39/#40 deben comprobar la aplicación; una variante de lectura que solo devuelva apps activas se valorará en #41.
+
 ## Verificación
 
 - `pnpm lint`, `pnpm format:check`, `pnpm build`, `pnpm test:unit`, `pnpm test:integration` y `pnpm test:e2e`.
