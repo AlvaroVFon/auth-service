@@ -1,6 +1,6 @@
 # Roadmap: Auth-Service Evolution
 
-Este documento detalla el plan para fortalecer el servicio de autenticación actual, transformándolo en una solución robusta y profesional antes de escalar a una arquitectura multi-tenant.
+Este documento detalla el plan para fortalecer el servicio de autenticación actual, transformándolo en una solución robusta y profesional antes de organizar el acceso por aplicación dentro del hogar.
 
 ---
 
@@ -43,33 +43,35 @@ El objetivo es permitir sesiones largas y seguras sin comprometer la seguridad.
 - [ ] **Login con Google:** No implementado.
 - [ ] **Login con GitHub:** No implementado.
 
-## Fase 5: Transición a Multi-Tenancy — ~20% Completada
+## Fase 5: Aplicaciones del Hogar y Permisos por App — ~30% Completada
 
-- [x] **Cimientos de Tenants:**
-  - [x] Módulo `Tenants` con schema (`name`, `active`, `description`, `secret`).
-  - [x] Servicio con `findById()`.
-  - [x] Autenticación tenant (`POST /auth/tenant/login` + JWT + middleware).
-- [ ] **CRUD completo de Tenants:** No implementado (create, update, delete, list).
-- [ ] **Aislamiento Físico (Database-per-tenant):** `ConnectionManager` no implementado.
-- [ ] **Seguridad Multi-tenant:** `tenantId` ausente en JWT, User y queries.
+El hogar es único; lo que varía es el acceso de cada usuario a cada aplicación.
+
+- [x] **Retirada del modelo de tenants:** schema, login por `tenantSecret`, servicio y token eliminados (#38).
+- [x] **Catálogo de aplicaciones:** `Application` con `name`, `slug`, `audience` y `active` (#38).
+- [x] **Permisos por par usuario-aplicación:** `Grant` con rol `viewer`, `editor` o `admin` (#38).
+- [ ] **API de administración:** alta de apps, asignación y revocación de permisos, bootstrap del owner (#41).
+- [ ] **Tokens con audiencia por app:** RS256 + JWKS y login contra una app concreta (#39, #40).
 
 ---
 
 ## Cobertura de Tests
 
-- **Unitarios:** Auth service, auth-tenant service, refresh tokens, JWT, crypto, users, holders, codes, tenants, config, env.
-- **E2E:** Login, signup, logout, refresh, verify email, forgot-password, reset-password, tenant-login, CRUD users.
+- **Unitarios:** Auth service, refresh tokens, JWT, crypto, users, holders, codes, applications, grants, config, env.
+- **E2E:** Login, signup, logout, refresh, verify email, forgot-password, reset-password, retirada de tenant-login, CRUD users.
 - Los tests usan `node --test` con `tsx` y base de datos aislada por proceso (`auth_db_test_${pid}`).
 
 ---
 
 ## Próximos Pasos Inmediatos
 
-1. Añadir políticas de rate limiting estrictas en `/auth/login`, `/auth/signup`, `/auth/forgot-password`.
-2. Implementar Account Lockout (campos en User schema + contador en login).
-3. Tracking de IP / User-Agent en login y refresh tokens.
-4. Blacklist de Access Tokens.
-5. OAuth2 (Google, GitHub).
+El backlog priorizado vive en GitHub (issues #38–#53). Orden inmediato:
+
+1. Emitir tokens por aplicación con RS256 y JWKS (#39).
+2. Autenticar usuarios contra una app concreta (#40).
+3. Gestión de apps, permisos y owner inicial (#41).
+4. Refresh sin access token (#44) y sesiones por dispositivo (#45).
+5. Invitaciones y reset por enlace compartible (#43).
 
 ---
 
@@ -78,5 +80,5 @@ El objetivo es permitir sesiones largas y seguras sin comprometer la seguridad.
 - **Stack:** Express 5 + Mongoose (MongoDB) + TypeScript (ESM via `tsx`).
 - **Tokens:** JWT con `jti` (UUID). Access: 1h. Refresh: configurable (JWT_REFRESH_EXPIRATION). Rotación completa.
 - **Rate Limiting:** `express-rate-limit` v8 global. Pendiente granularidad por endpoint.
-- **Multi-tenancy:** Base construida (schema + auth), sin aislamiento físico ni `tenantId` en datos.
-- **Prioridad:** Primero robustez y funcionalidad core (Fases 1-3), luego OAuth2, luego escalabilidad multi-proyecto.
+- **Aplicaciones del hogar:** `Application` (slug + audience) y `Grant` por par usuario-aplicación con rol `viewer`/`editor`/`admin`. Sin multi-hogar.
+- **Prioridad:** Primero robustez y funcionalidad core (Fases 1-3), luego tokens por aplicación y OAuth2.

@@ -7,12 +7,7 @@ import { assertDependencies } from '../../common/depencencies-validator';
 import { Roles } from '../../common/enums/roles.enum';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { InvalidTokenError } from './jwt.errors';
-import {
-  Payload,
-  TenantPayload,
-  TokenClaims,
-  TokenPair,
-} from './jwt.interfaces';
+import { Payload, TokenClaims, TokenPair } from './jwt.interfaces';
 import { TokenTypes } from './token-types.enum';
 
 export class JwtService {
@@ -20,7 +15,6 @@ export class JwtService {
     private readonly secret: string,
     private readonly expiresIn: number,
     private readonly refreshTokenExpiresIn: number,
-    private readonly tenantTokenExpiresIn: number = expiresIn,
   ) {
     assertDependencies(
       {
@@ -71,17 +65,6 @@ export class JwtService {
         'InvalidTokenError: Token is invalid or has expired',
       );
     }
-  }
-
-  generateTenantToken(tenantId: string): string {
-    if (!Types.ObjectId.isValid(tenantId)) {
-      throw new InvalidArgumentError('Invalid tenant ID');
-    }
-    const payload: TenantPayload = { tenantId, type: TokenTypes.ACCESS };
-
-    return jwt.sign(payload, this.secret, {
-      expiresIn: this.tenantTokenExpiresIn,
-    });
   }
 
   private signUserToken(payload: Payload, expiresIn: number): string {

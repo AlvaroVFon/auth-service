@@ -3,7 +3,6 @@ import { Application } from 'express';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { createRateLimiter } from '../common/middlewares/rate-limiter.middleware';
 import { AuthController } from './controllers/auth.controller';
-import { AuthTenantController } from './controllers/auth.tenant.controller';
 
 export interface AuthRateLimitConfig {
   login: {
@@ -23,7 +22,6 @@ export interface AuthRateLimitConfig {
 export class AuthRouter {
   constructor(
     private readonly authController: AuthController,
-    private readonly authTenantController: AuthTenantController,
     private readonly app: Application,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly rateLimitConfig: AuthRateLimitConfig,
@@ -83,11 +81,6 @@ export class AuthRouter {
       '/auth/logout',
       this.authenticationMiddleware.authenticate,
       this.authController.logout.bind(this.authController),
-    );
-
-    this.app.post(
-      '/auth/tenant/login',
-      this.authTenantController.login.bind(this.authTenantController),
     );
   }
 }
