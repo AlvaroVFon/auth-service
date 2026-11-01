@@ -299,3 +299,16 @@ describe('Codes Service', () => {
     });
   });
 });
+
+describe('Code TTL', () => {
+  test('should delete expired codes automatically', () => {
+    const ttl = CodesModel.schema
+      .indexes()
+      .some(
+        ([fields, options]) =>
+          fields.expiresAt === 1 && options?.expireAfterSeconds === 0,
+      );
+
+    assert.ok(ttl);
+  });
+});

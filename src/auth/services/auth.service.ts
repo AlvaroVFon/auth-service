@@ -3,6 +3,7 @@ import {
   OBJECTID_REGEX,
   PASSWORD_REGEX,
 } from '../../common/constants/regex';
+import { ForbiddenError } from '../../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -43,6 +44,10 @@ export class AuthService {
       credentials.email,
       credentials.password,
     );
+
+    if (!user.verified) {
+      throw new ForbiddenError('Email is not verified');
+    }
 
     const session = await this.sessionService.create(
       user._id.toString(),

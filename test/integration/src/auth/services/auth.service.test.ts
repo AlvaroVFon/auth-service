@@ -137,6 +137,27 @@ describe('Auth Service', () => {
       );
     });
 
+    test('should reject an unverified user', async () => {
+      await fixture.updateOne<UserInterface>(
+        'User',
+        { _id: DEFAULT_USER_ID },
+        { verified: false },
+      );
+
+      await assert.rejects(
+        async () =>
+          await authService.login({
+            email: DEFAULT_USER.email,
+            password: 'password123',
+          }),
+        {
+          name: 'ForbiddenError',
+          message: 'Email is not verified',
+          code: 'FORBIDDEN',
+        },
+      );
+    });
+
     test('should throw an error for invalid password', async () => {
       mockCryptoService.compareString = mock.fn(async () => false);
       await assert.rejects(
