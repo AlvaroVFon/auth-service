@@ -1,4 +1,11 @@
-import { resolveAccessTokenTtl } from '../../../../src/config/application.composition';
+import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
+import {
+  createApplicationComposition,
+  resolveAccessTokenTtl,
+} from '../../../../src/config/application.composition';
+import { GrantRoles } from '../../../../src/grants';
+import { MailerInterface } from '../../../../src/libs/mailer/mailer.interface';
+import { silentLogger } from '../../../mocks/logger.mock';
 
 describe('application composition configuration', () => {
   test('uses JWT_EXPIRATION for access tokens', () => {
@@ -26,5 +33,26 @@ describe('application composition configuration', () => {
 
   test('prefers an explicit access token ttl override', () => {
     assert.strictEqual(resolveAccessTokenTtl({ jwtExpiresIn: 456 }), 456);
+  });
+});
+
+describe('application composition wiring', () => {
+  test('exposes the applications and grants services', async () => {
+    const mailer = {
+      sendEmail: mock.fn(() => Promise.resolve()),
+      sendMailWithTemplate: mock.fn(() => Promise.resolve()),
+    } as unknown as MailerInterface;
+
+    const composition = createApplicationComposition({
+      logger: silentLogger,
+      mailer,
+    });
+
+    assert.ok(composition.applications);
+    assert.ok(composition.grants);
+    await assert.rejects(
+      composition.grants.assignRole('bad', 'bad', GrantRoles.VIEWER),
+      InvalidArgumentError,
+    );
   });
 });

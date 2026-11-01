@@ -1,11 +1,6 @@
-import { Types } from 'mongoose';
-
 import { Roles } from '../../../../../src/common/enums/roles.enum';
 import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
-import {
-  TenantPayload,
-  TokenClaims,
-} from '../../../../../src/libs/jwt/jwt.interfaces';
+import { TokenClaims } from '../../../../../src/libs/jwt/jwt.interfaces';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
 
@@ -95,27 +90,13 @@ describe('JwtService', () => {
     });
   });
 
-  describe('generateTenantToken', () => {
-    test('should generate a valid tenant token', () => {
-      const tenantId = new Types.ObjectId();
-      const token = jwtService.generateTenantToken(String(tenantId));
-
-      assert.ok(token);
-      assert.strictEqual(typeof token, 'string');
-
-      const decoded = jwtService.verifyToken(token) as TenantPayload & {
-        iat: number;
-        exp: number;
-      };
-
-      assert.strictEqual(decoded.tenantId, String(tenantId));
-      assert.strictEqual(decoded.type, TokenTypes.ACCESS);
-    });
-
-    test('should throw an error when tenantId is not a valid ObjectId', () => {
-      assert.throws(
-        () => jwtService.generateTenantToken('invalid-tenant-id'),
-        InvalidArgumentError,
+  describe('tenant token removal', () => {
+    test('should not expose tenant token generation', () => {
+      assert.strictEqual(
+        (jwtService as unknown as Record<string, unknown>)[
+          'generateTenantToken'
+        ],
+        undefined,
       );
     });
   });

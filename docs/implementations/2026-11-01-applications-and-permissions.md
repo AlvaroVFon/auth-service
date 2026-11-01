@@ -1,0 +1,40 @@
+# Aplicaciones del hogar y permisos por usuario
+
+Fecha: 2026-11-01
+Issue: #38 — Modelar aplicaciones y permisos por usuario
+
+## Contexto
+
+El servicio tenía un módulo `tenants` con un login por `tenantSecret` pensado como app cliente. Ese modelo no describía el uso real (un único hogar con varias aplicaciones), el token de tenant no lo aceptaba ningún middleware y el secreto se guardaba en claro.
+
+## Decisión
+
+- El hogar es único: no existe `Tenant` ni multi-hogar.
+- `Application` representa cada app del hogar con `name`, `slug` y `audience` únicos, más `active`.
+- `Grant` representa el permiso de un usuario en una aplicación: par `(userId, applicationId)` único y rol `viewer`, `editor` o `admin`.
+- Un usuario puede tener roles distintos en apps distintas y no tener permiso en otras.
+- Los endpoints HTTP, la emisión de tokens con audiencia y el bootstrap del owner quedan fuera de esta issue (#39–#42).
+
+## Modelo de datos
+
+| Colección      | Campos                                                                  | Índices                         |
+| -------------- | ----------------------------------------------------------------------- | ------------------------------- |
+| `applications` | `name`, `slug` (lowercase), `audience`, `active`, `createdAt/updatedAt` | `slug` único, `audience` único  |
+| `grants`       | `userId`, `applicationId`, `role`, `createdAt/updatedAt`                | `(userId, applicationId)` único |
+
+`GrantRoles` vive en `src/grants/grants.interface.ts` y no modifica el enum global `Roles`, que se sustituye en #41.
+
+## Servicios
+
+- `ApplicationsService`: `create`, `findById`, `findBySlug`, `findAll`, `findAssignableById` (devuelve `null` para apps inactivas).
+- `GrantsService`: `assignRole` (upsert idempotente), `findByUserAndApplication`, `listByUser`.
+- Ambos se exponen en `createApplicationComposition()` como `applications` y `grants`.
+
+## Retirada de tenants
+
+Se eliminaron el schema, el servicio, el port, el controller y la ruta `/auth/tenant/login`, junto con `generateTenantToken` y los claims de tenant. Un test e2e comprueba que la ruta responde 404.
+
+## Verificación
+
+- `pnpm lint`, `pnpm format:check`, `pnpm build`, `pnpm test:unit`, `pnpm test:integration` y `pnpm test:e2e`.
+- Tests nuevos: `test/integration/src/applications/applications.service.test.ts`, `test/integration/src/grants/grants.service.test.ts`, `test/integration/src/grants/grants.schema.test.ts` y `test/e2e/auth/tenant-login-removed.test.ts`.
