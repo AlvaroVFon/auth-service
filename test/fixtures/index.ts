@@ -11,6 +11,8 @@ export class Fixture {
     if (!mongoose.models[modelName]) {
       mongoose.model<T>(modelName, schema);
     }
+    // Await index build so unique constraints are enforced from the first test.
+    await mongoose.model<T>(modelName).init();
   }
 
   async create<T>(modelName: string, data?: Partial<T>): Promise<T> {

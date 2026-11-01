@@ -35,17 +35,6 @@ export class ApplicationsService implements ApplicationsPort {
       throw new InvalidArgumentError('Audience is required');
     }
 
-    const existing = await this.applicationModel.findOne({
-      $or: [{ slug }, { audience }],
-    });
-    if (existing) {
-      throw new EntityAlreadyExistsError(
-        existing.slug === slug
-          ? 'Application slug already exists'
-          : 'Application audience already exists',
-      );
-    }
-
     try {
       return await this.applicationModel.create({
         name,
