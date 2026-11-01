@@ -130,7 +130,6 @@ export const createApplicationComposition = (
   const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
   const holdersService = new HoldersService(HoldersModel, cryptoService);
   const applicationsService = new ApplicationsService(ApplicationModel);
-  const grantsService = new GrantsService(GrantModel, applicationsService);
   const usersModule = new UsersModule(
     cryptoService,
     authenticationMiddleware,
@@ -139,6 +138,11 @@ export const createApplicationComposition = (
     options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
+  );
+  const grantsService = new GrantsService(
+    GrantModel,
+    applicationsService,
+    usersModule.service,
   );
   const sessionService = new SessionService(jwtService, refreshTokenService);
   const authService = new AuthService(

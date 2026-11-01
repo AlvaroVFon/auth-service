@@ -10,9 +10,14 @@ import {
 import { Grant, GrantRoles } from '../../../../src/grants/grants.interface';
 import { GrantModel } from '../../../../src/grants/grants.schema';
 import { GrantsService } from '../../../../src/grants/grants.service';
+import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
+import { User as UserInterface } from '../../../../src/users/users.interface';
+import { User } from '../../../../src/users/users.schema';
+import { UsersService } from '../../../../src/users/users.service';
 import fixture from '../../../fixtures';
 import { ApplicationFactory } from '../../../helpers/factories/application.factory';
 import { MotherFactory } from '../../../helpers/factories/mother.factory';
+import { UserFactory } from '../../../helpers/factories/user.factory';
 
 describe('GrantsService', () => {
   let applicationsService: ApplicationsService;
@@ -20,7 +25,11 @@ describe('GrantsService', () => {
 
   before(() => {
     applicationsService = new ApplicationsService(ApplicationModel);
-    grantsService = new GrantsService(GrantModel, applicationsService);
+    grantsService = new GrantsService(
+      GrantModel,
+      applicationsService,
+      new UsersService(User, new CryptoService()),
+    );
   });
 
   const createApplication = async () => {
@@ -33,10 +42,19 @@ describe('GrantsService', () => {
     });
   };
 
+  const createUser = async () => {
+    const user = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate(),
+    );
+
+    return String(user._id);
+  };
+
   describe('assignRole', () => {
     test('should create a grant for a user and application', async () => {
       const application = await createApplication();
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       const grant = await grantsService.assignRole(
         userId,
@@ -54,7 +72,7 @@ describe('GrantsService', () => {
 
     test('should update the existing grant for the same pair', async () => {
       const application = await createApplication();
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       const first = await grantsService.assignRole(
         userId,
@@ -105,7 +123,7 @@ describe('GrantsService', () => {
     });
 
     test('should require an application id', async () => {
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       await assert.rejects(
         grantsService.assignRole(userId, '', GrantRoles.VIEWER),
@@ -114,7 +132,7 @@ describe('GrantsService', () => {
     });
 
     test('should reject an invalid application id', async () => {
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       await assert.rejects(
         grantsService.assignRole(userId, 'bad-id', GrantRoles.VIEWER),
@@ -124,7 +142,7 @@ describe('GrantsService', () => {
 
     test('should reject an unknown role', async () => {
       const application = await createApplication();
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       await assert.rejects(
         grantsService.assignRole(
@@ -137,7 +155,7 @@ describe('GrantsService', () => {
     });
 
     test('should reject an unknown application', async () => {
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       await assert.rejects(
         grantsService.assignRole(
@@ -155,7 +173,7 @@ describe('GrantsService', () => {
         'Application',
         { ...application, active: false },
       );
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       await assert.rejects(
         grantsService.assignRole(
@@ -167,6 +185,20 @@ describe('GrantsService', () => {
       );
       assert.strictEqual((await fixture.find<Grant>('Grant', {})).length, 0);
     });
+
+    test('should reject an unknown user', async () => {
+      const application = await createApplication();
+
+      await assert.rejects(
+        grantsService.assignRole(
+          String(MotherFactory.objectId()),
+          application._id.toString(),
+          GrantRoles.VIEWER,
+        ),
+        new EntityNotFoundError('User not found'),
+      );
+      assert.strictEqual((await fixture.find<Grant>('Grant', {})).length, 0);
+    });
   });
 
   describe('findByUserAndApplication', () => {
@@ -174,7 +206,7 @@ describe('GrantsService', () => {
       const applicationA = await createApplication();
       const applicationB = await createApplication();
       const applicationC = await createApplication();
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       await grantsService.assignRole(
         userId,
@@ -207,8 +239,8 @@ describe('GrantsService', () => {
 
     test('should not return grants from another user', async () => {
       const application = await createApplication();
-      const userId = String(MotherFactory.objectId());
-      const otherUserId = String(MotherFactory.objectId());
+      const userId = await createUser();
+      const otherUserId = await createUser();
 
       await grantsService.assignRole(
         userId,
@@ -236,7 +268,7 @@ describe('GrantsService', () => {
     test('should list every grant of a user', async () => {
       const applicationA = await createApplication();
       const applicationB = await createApplication();
-      const userId = String(MotherFactory.objectId());
+      const userId = await createUser();
 
       await grantsService.assignRole(
         userId,
