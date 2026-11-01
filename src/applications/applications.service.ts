@@ -1,18 +1,18 @@
 import { Model } from 'mongoose';
 
-import { OBJECTID_REGEX, SLUG_REGEX } from '../common/constants/regex';
+import { SLUG_REGEX } from '../common/constants/regex';
 import {
   EntityAlreadyExistsError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
+import {
+  DuplicateKeyError,
+  duplicateKeyFields,
+  isDuplicateKeyError,
+} from '../common/mongo/duplicate-key';
+import { assertObjectId } from '../common/validators/object-id';
 import { Application } from './applications.interface';
 import { ApplicationsPort, CreateApplicationInput } from './applications.port';
-
-const isDuplicateKeyError = (error: unknown): boolean =>
-  typeof error === 'object' &&
-  error !== null &&
-  'code' in error &&
-  (error as { code?: unknown }).code === 11000;
 
 export class ApplicationsService implements ApplicationsPort {
   constructor(private readonly applicationModel: Model<Application>) {}
@@ -35,14 +35,15 @@ export class ApplicationsService implements ApplicationsPort {
       throw new InvalidArgumentError('Audience is required');
     }
 
-    const existingSlug = await this.applicationModel.findOne({ slug });
-    if (existingSlug) {
-      throw new EntityAlreadyExistsError('Application slug already exists');
-    }
-
-    const existingAudience = await this.applicationModel.findOne({ audience });
-    if (existingAudience) {
-      throw new EntityAlreadyExistsError('Application audience already exists');
+    const existing = await this.applicationModel.findOne({
+      $or: [{ slug }, { audience }],
+    });
+    if (existing) {
+      throw new EntityAlreadyExistsError(
+        existing.slug === slug
+          ? 'Application slug already exists'
+          : 'Application audience already exists',
+      );
     }
 
     try {
@@ -54,14 +55,16 @@ export class ApplicationsService implements ApplicationsPort {
       });
     } catch (error) {
       if (isDuplicateKeyError(error)) {
-        throw new EntityAlreadyExistsError('Application already exists');
+        throw new EntityAlreadyExistsError(
+          this.duplicateApplicationMessage(error),
+        );
       }
       throw error;
     }
   }
 
   async findById(id: string): Promise<Application | null> {
-    this.assertObjectId(id);
+    assertObjectId(id);
 
     return this.applicationModel.findById(id);
   }
@@ -84,12 +87,15 @@ export class ApplicationsService implements ApplicationsPort {
     return application?.active ? application : null;
   }
 
-  private assertObjectId(id: string): void {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
+  private duplicateApplicationMessage(error: DuplicateKeyError): string {
+    const fields = duplicateKeyFields(error);
+    if (fields.includes('slug')) {
+      return 'Application slug already exists';
     }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
+    if (fields.includes('audience')) {
+      return 'Application audience already exists';
     }
+
+    return 'Application already exists';
   }
 }
