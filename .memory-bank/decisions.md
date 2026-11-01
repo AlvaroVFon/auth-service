@@ -31,3 +31,4 @@
   - No existe multi-hogar ni aislamiento por base de datos.
   - La autorización se resuelve por permiso de aplicación, no por un rol global.
   - Los endpoints, la emisión de tokens con audiencia y el bootstrap del owner quedan en issues posteriores (#39–#42).
+  - La colección `tenants` y sus `secret` en claro no se borran al eliminar el código: requiere `db.tenants.drop()` en cada entorno (ver `docs/implementations/2026-11-01-applications-and-permissions.md`).

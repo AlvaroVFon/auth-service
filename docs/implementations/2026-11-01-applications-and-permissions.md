@@ -27,12 +27,28 @@ El servicio tenía un módulo `tenants` con un login por `tenantSecret` pensado 
 ## Servicios
 
 - `ApplicationsService`: `create`, `findById`, `findBySlug`, `findAll`, `findAssignableById` (devuelve `null` para apps inactivas).
-- `GrantsService`: `assignRole` (upsert idempotente), `findByUserAndApplication`, `listByUser`.
+- `GrantsService`: `assignRole` (upsert idempotente, valida que la aplicación sea asignable y que el usuario exista), `findByUserAndApplication`, `listByUser`.
 - Ambos se exponen en `createApplicationComposition()` como `applications` y `grants`.
 
 ## Retirada de tenants
 
 Se eliminaron el schema, el servicio, el port, el controller y la ruta `/auth/tenant/login`, junto con `generateTenantToken` y los claims de tenant. Un test e2e comprueba que la ruta responde 404.
+
+## Migración de datos
+
+Eliminar el módulo detiene las lecturas y escrituras, pero no borra lo ya guardado: cualquier entorno que usó el antiguo login por tenant conserva en la colección `tenants` los `secret` en claro (el motivo de la retirada en ADR-003). Antes de desplegar, ejecutar sobre la base de datos del entorno la limpieza puntual:
+
+```js
+db.tenants.drop();
+```
+
+Paso de despliegue:
+
+1. Backup de la base de datos.
+2. `db.tenants.drop()` en cada entorno que tuvo el módulo activo.
+3. Desplegar esta versión y comprobar que `/auth/tenant/login` responde 404.
+
+No hay script de migración versionado a propósito: la colección era código muerto (ningún middleware aceptaba el token) y no se migra ningún dato a `applications`/`grants`.
 
 ## Verificación
 
