@@ -594,16 +594,23 @@ describe('Auth Service', () => {
       );
     });
 
-    test('should throw an error if user does not exist', async () => {
+    test('should not reveal whether the user exists', async () => {
       const email = generateRandomEmail('auth+');
-      await assert.rejects(
-        async () => await authService.forgotPassword(email),
-        {
-          name: 'EntityNotFoundError',
-          message: `user with email ${email} not found`,
-          code: 'NOT_FOUND',
-        },
-      );
+      const callsBefore = (
+        mockAuthMailer.sendResetPasswordEmail as unknown as {
+          mock: { calls: unknown[] };
+        }
+      ).mock.calls.length;
+
+      await authService.forgotPassword(email);
+
+      const callsAfter = (
+        mockAuthMailer.sendResetPasswordEmail as unknown as {
+          mock: { calls: unknown[] };
+        }
+      ).mock.calls.length;
+
+      assert.strictEqual(callsAfter, callsBefore);
     });
 
     test('on yellow brick road', async () => {

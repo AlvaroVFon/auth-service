@@ -14,7 +14,7 @@ describe('Password Reset E2E Tests', () => {
   });
 
   describe('POST /auth/forgot-password', () => {
-    test.only('on yellow brick road', async () => {
+    test('on yellow brick road', async () => {
       await fixture.create<User>('User');
 
       await request(app)
@@ -25,21 +25,15 @@ describe('Password Reset E2E Tests', () => {
         .expect(204);
     });
 
-    test('should fail if user does not exists', async () => {
+    test('should not reveal whether the user exists', async () => {
       await fixture.create<User>('User');
 
-      const res = await request(app)
+      await request(app)
         .post('/auth/forgot-password')
         .send({
           email: 'not-existing@email.com',
         })
-        .expect(404);
-
-      assert.strictEqual(
-        res.body.message,
-        `user with email not-existing@email.com not found`,
-      );
-      assert.strictEqual(res.body.code, 'NOT_FOUND');
+        .expect(204);
     });
   });
 });

@@ -26,16 +26,20 @@ export class UsersService implements UsersPort {
     if (!data.email) {
       throw new InvalidArgumentError('Email is required to create a user');
     }
-    if (!EMAIL_REGEX.test(data.email)) {
+
+    const email = data.email.trim().toLowerCase();
+
+    if (!EMAIL_REGEX.test(email)) {
       throw new InvalidArgumentError('Invalid email format');
     }
     if (!data.password) {
       throw new InvalidArgumentError('Password is required to create a user');
     }
 
+    data.email = email;
     data.password = await this.cryptoService.hashString(data.password);
 
-    const existingUser = await this.usersModel.findOne({ email: data.email });
+    const existingUser = await this.usersModel.findOne({ email });
     if (existingUser) {
       throw new EntityAlreadyExistsError('Email already exists');
     }
@@ -47,13 +51,14 @@ export class UsersService implements UsersPort {
     email: string;
     passwordHash: string;
   }): Promise<UserInterface> {
-    const existingUser = await this.usersModel.findOne({ email: input.email });
+    const email = input.email.trim().toLowerCase();
+    const existingUser = await this.usersModel.findOne({ email });
     if (existingUser) {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
     return this.usersModel.create({
-      email: input.email,
+      email,
       password: input.passwordHash,
       verified: true,
     });
@@ -94,11 +99,13 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Email is required');
     }
 
-    if (!EMAIL_REGEX.test(email)) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('Invalid email format');
     }
 
-    return this.usersModel.findOne({ email });
+    return this.usersModel.findOne({ email: normalizedEmail });
   }
 
   async findById(id: string): Promise<UserInterface | null> {

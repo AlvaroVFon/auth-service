@@ -127,7 +127,7 @@ export class AuthService {
 
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      throw new EntityNotFoundError(`user with email ${email} not found`);
+      return;
     }
 
     const code = await this.codeService.create(
