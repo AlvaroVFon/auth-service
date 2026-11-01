@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import { Model, Types } from 'mongoose';
 
 import { Application as ApplicationInterface } from '../../../../src/applications/applications.interface';
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
@@ -21,14 +21,16 @@ import { UserFactory } from '../../../helpers/factories/user.factory';
 
 describe('GrantsService', () => {
   let applicationsService: ApplicationsService;
+  let usersService: UsersService;
   let grantsService: GrantsService;
 
   before(() => {
     applicationsService = new ApplicationsService(ApplicationModel);
+    usersService = new UsersService(User, new CryptoService());
     grantsService = new GrantsService(
       GrantModel,
       applicationsService,
-      new UsersService(User, new CryptoService()),
+      usersService,
     );
   });
 
@@ -56,11 +58,11 @@ describe('GrantsService', () => {
       const application = await createApplication();
       const userId = await createUser();
 
-      const grant = await grantsService.assignRole(
+      const grant = await grantsService.assignRole({
         userId,
-        application._id.toString(),
-        GrantRoles.ADMIN,
-      );
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
 
       assert.strictEqual(grant.role, GrantRoles.ADMIN);
       assert.strictEqual(grant.userId.toString(), userId);
@@ -73,17 +75,18 @@ describe('GrantsService', () => {
     test('should update the existing grant for the same pair', async () => {
       const application = await createApplication();
       const userId = await createUser();
+      const applicationId = application._id.toString();
 
-      const first = await grantsService.assignRole(
+      const first = await grantsService.assignRole({
         userId,
-        application._id.toString(),
-        GrantRoles.VIEWER,
-      );
-      const second = await grantsService.assignRole(
+        applicationId,
+        role: GrantRoles.VIEWER,
+      });
+      const second = await grantsService.assignRole({
         userId,
-        application._id.toString(),
-        GrantRoles.EDITOR,
-      );
+        applicationId,
+        role: GrantRoles.EDITOR,
+      });
 
       assert.strictEqual(second._id.toString(), first._id.toString());
 
@@ -96,15 +99,74 @@ describe('GrantsService', () => {
       assert.strictEqual(grants[0]?.role, GrantRoles.EDITOR);
     });
 
+    test('should retry the upsert when a concurrent writer wins the index', async () => {
+      const application = await createApplication();
+      const userId = await createUser();
+      const expected = {
+        userId: new Types.ObjectId(userId),
+        applicationId: application._id,
+        role: GrantRoles.ADMIN,
+      } as Grant;
+      let calls = 0;
+      const findOneAndUpdate = mock.fn(async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error('E11000 duplicate key error'), {
+            code: 11000,
+          });
+        }
+
+        return expected;
+      });
+      const service = new GrantsService(
+        { findOneAndUpdate } as unknown as Model<Grant>,
+        applicationsService,
+        usersService,
+      );
+
+      const grant = await service.assignRole({
+        userId,
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+
+      assert.strictEqual(grant, expected);
+      assert.strictEqual(findOneAndUpdate.mock.callCount(), 2);
+    });
+
+    test('should not swallow other database errors', async () => {
+      const application = await createApplication();
+      const userId = await createUser();
+      const failure = new Error('connection lost');
+      const findOneAndUpdate = mock.fn(async () => {
+        throw failure;
+      });
+      const service = new GrantsService(
+        { findOneAndUpdate } as unknown as Model<Grant>,
+        applicationsService,
+        usersService,
+      );
+
+      await assert.rejects(
+        service.assignRole({
+          userId,
+          applicationId: application._id.toString(),
+          role: GrantRoles.ADMIN,
+        }),
+        failure,
+      );
+      assert.strictEqual(findOneAndUpdate.mock.callCount(), 1);
+    });
+
     test('should require a user id', async () => {
       const application = await createApplication();
 
       await assert.rejects(
-        grantsService.assignRole(
-          '',
-          application._id.toString(),
-          GrantRoles.VIEWER,
-        ),
+        grantsService.assignRole({
+          userId: '',
+          applicationId: application._id.toString(),
+          role: GrantRoles.VIEWER,
+        }),
         new InvalidArgumentError('userId is required'),
       );
     });
@@ -113,12 +175,12 @@ describe('GrantsService', () => {
       const application = await createApplication();
 
       await assert.rejects(
-        grantsService.assignRole(
-          'bad-id',
-          application._id.toString(),
-          GrantRoles.VIEWER,
-        ),
-        new InvalidArgumentError('Invalid ID format'),
+        grantsService.assignRole({
+          userId: 'bad-id',
+          applicationId: application._id.toString(),
+          role: GrantRoles.VIEWER,
+        }),
+        new InvalidArgumentError('userId format is invalid'),
       );
     });
 
@@ -126,7 +188,11 @@ describe('GrantsService', () => {
       const userId = await createUser();
 
       await assert.rejects(
-        grantsService.assignRole(userId, '', GrantRoles.VIEWER),
+        grantsService.assignRole({
+          userId,
+          applicationId: '',
+          role: GrantRoles.VIEWER,
+        }),
         new InvalidArgumentError('applicationId is required'),
       );
     });
@@ -135,8 +201,12 @@ describe('GrantsService', () => {
       const userId = await createUser();
 
       await assert.rejects(
-        grantsService.assignRole(userId, 'bad-id', GrantRoles.VIEWER),
-        new InvalidArgumentError('Invalid ID format'),
+        grantsService.assignRole({
+          userId,
+          applicationId: 'bad-id',
+          role: GrantRoles.VIEWER,
+        }),
+        new InvalidArgumentError('applicationId format is invalid'),
       );
     });
 
@@ -145,11 +215,11 @@ describe('GrantsService', () => {
       const userId = await createUser();
 
       await assert.rejects(
-        grantsService.assignRole(
+        grantsService.assignRole({
           userId,
-          application._id.toString(),
-          'owner' as GrantRoles,
-        ),
+          applicationId: application._id.toString(),
+          role: 'owner' as GrantRoles,
+        }),
         new InvalidArgumentError('Invalid role'),
       );
     });
@@ -158,11 +228,11 @@ describe('GrantsService', () => {
       const userId = await createUser();
 
       await assert.rejects(
-        grantsService.assignRole(
+        grantsService.assignRole({
           userId,
-          String(MotherFactory.objectId()),
-          GrantRoles.VIEWER,
-        ),
+          applicationId: String(MotherFactory.objectId()),
+          role: GrantRoles.VIEWER,
+        }),
         new EntityNotFoundError('Application not found'),
       );
     });
@@ -176,11 +246,11 @@ describe('GrantsService', () => {
       const userId = await createUser();
 
       await assert.rejects(
-        grantsService.assignRole(
+        grantsService.assignRole({
           userId,
-          inactive._id.toString(),
-          GrantRoles.VIEWER,
-        ),
+          applicationId: inactive._id.toString(),
+          role: GrantRoles.VIEWER,
+        }),
         new EntityNotFoundError('Application not found'),
       );
       assert.strictEqual((await fixture.find<Grant>('Grant', {})).length, 0);
@@ -190,11 +260,11 @@ describe('GrantsService', () => {
       const application = await createApplication();
 
       await assert.rejects(
-        grantsService.assignRole(
-          String(MotherFactory.objectId()),
-          application._id.toString(),
-          GrantRoles.VIEWER,
-        ),
+        grantsService.assignRole({
+          userId: String(MotherFactory.objectId()),
+          applicationId: application._id.toString(),
+          role: GrantRoles.VIEWER,
+        }),
         new EntityNotFoundError('User not found'),
       );
       assert.strictEqual((await fixture.find<Grant>('Grant', {})).length, 0);
@@ -208,16 +278,16 @@ describe('GrantsService', () => {
       const applicationC = await createApplication();
       const userId = await createUser();
 
-      await grantsService.assignRole(
+      await grantsService.assignRole({
         userId,
-        applicationA._id.toString(),
-        GrantRoles.ADMIN,
-      );
-      await grantsService.assignRole(
+        applicationId: applicationA._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+      await grantsService.assignRole({
         userId,
-        applicationB._id.toString(),
-        GrantRoles.VIEWER,
-      );
+        applicationId: applicationB._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
 
       const roleA = await grantsService.findByUserAndApplication(
         userId,
@@ -242,11 +312,11 @@ describe('GrantsService', () => {
       const userId = await createUser();
       const otherUserId = await createUser();
 
-      await grantsService.assignRole(
+      await grantsService.assignRole({
         userId,
-        application._id.toString(),
-        GrantRoles.ADMIN,
-      );
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
 
       const grant = await grantsService.findByUserAndApplication(
         otherUserId,
@@ -259,7 +329,7 @@ describe('GrantsService', () => {
     test('should reject invalid ids', async () => {
       await assert.rejects(
         grantsService.findByUserAndApplication('bad-id', 'bad-id'),
-        new InvalidArgumentError('Invalid ID format'),
+        new InvalidArgumentError('userId format is invalid'),
       );
     });
   });
@@ -270,16 +340,16 @@ describe('GrantsService', () => {
       const applicationB = await createApplication();
       const userId = await createUser();
 
-      await grantsService.assignRole(
+      await grantsService.assignRole({
         userId,
-        applicationA._id.toString(),
-        GrantRoles.ADMIN,
-      );
-      await grantsService.assignRole(
+        applicationId: applicationA._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+      await grantsService.assignRole({
         userId,
-        applicationB._id.toString(),
-        GrantRoles.EDITOR,
-      );
+        applicationId: applicationB._id.toString(),
+        role: GrantRoles.EDITOR,
+      });
 
       const grants = await grantsService.listByUser(userId);
 
@@ -289,7 +359,7 @@ describe('GrantsService', () => {
     test('should reject an invalid user id', async () => {
       await assert.rejects(
         grantsService.listByUser('bad-id'),
-        new InvalidArgumentError('Invalid ID format'),
+        new InvalidArgumentError('userId format is invalid'),
       );
     });
   });

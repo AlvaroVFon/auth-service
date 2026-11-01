@@ -6,6 +6,6 @@ export const assertObjectId = (value: string, name: string = 'ID'): void => {
     throw new InvalidArgumentError(`${name} is required`);
   }
   if (!OBJECTID_REGEX.test(value)) {
-    throw new InvalidArgumentError('Invalid ID format');
+    throw new InvalidArgumentError(`${name} format is invalid`);
   }
 };

@@ -9,7 +9,7 @@ import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { assertObjectId } from '../common/validators/object-id';
 import type { UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
-import type { GrantsPort } from './grants.port';
+import type { AssignRoleInput, GrantsPort } from './grants.port';
 
 export class GrantsService implements GrantsPort {
   constructor(
@@ -18,11 +18,8 @@ export class GrantsService implements GrantsPort {
     private readonly usersService: UsersPort,
   ) {}
 
-  async assignRole(
-    userId: string,
-    applicationId: string,
-    role: GrantRoles,
-  ): Promise<Grant> {
+  async assignRole(input: AssignRoleInput): Promise<Grant> {
+    const { userId, applicationId, role } = input;
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
     if (!Object.values(GrantRoles).includes(role)) {
@@ -77,22 +74,22 @@ export class GrantsService implements GrantsPort {
       applicationId: new Types.ObjectId(applicationId),
     };
     const update = { $set: { role } };
+    const options = {
+      upsert: true,
+      returnDocument: 'after',
+      setDefaultsOnInsert: true,
+    } as const;
 
     try {
-      return await this.grantModel.findOneAndUpdate(filter, update, {
-        upsert: true,
-        returnDocument: 'after',
-        setDefaultsOnInsert: true,
-      });
+      return await this.grantModel.findOneAndUpdate(filter, update, options);
     } catch (error) {
       if (!isDuplicateKeyError(error)) {
         throw error;
       }
 
-      // A concurrent writer inserted the pair first: converge on its grant.
-      return this.grantModel.findOneAndUpdate(filter, update, {
-        returnDocument: 'after',
-      });
+      // A concurrent writer inserted the pair first: retry the upsert so we
+      // converge on its grant (or recreate it if it was removed meanwhile).
+      return this.grantModel.findOneAndUpdate(filter, update, options);
     }
   }
 }

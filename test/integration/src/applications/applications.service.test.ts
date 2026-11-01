@@ -159,7 +159,7 @@ describe('ApplicationsService', () => {
     test('should reject an invalid id', async () => {
       await assert.rejects(
         applicationsService.findById('bad-id'),
-        new InvalidArgumentError('Invalid ID format'),
+        new InvalidArgumentError('ID format is invalid'),
       );
     });
   });

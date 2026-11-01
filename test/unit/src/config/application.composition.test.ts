@@ -51,7 +51,11 @@ describe('application composition wiring', () => {
     assert.ok(composition.applications);
     assert.ok(composition.grants);
     await assert.rejects(
-      composition.grants.assignRole('bad', 'bad', GrantRoles.VIEWER),
+      composition.grants.assignRole({
+        userId: 'bad',
+        applicationId: 'bad',
+        role: GrantRoles.VIEWER,
+      }),
       InvalidArgumentError,
     );
   });
