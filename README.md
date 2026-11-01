@@ -42,3 +42,13 @@ app.set('trust proxy', true);
 ```
 
 Without this setting, IP/UA session tracking will record the proxy's IP address instead of the actual client IP. For production, consider setting a specific hop count (`trust proxy: 1` for a single proxy) instead of `true` for tighter security.
+
+### CORS
+
+Set `CORS_ORIGINS` to a comma-separated list of allowed browser origins. When unset, no origin is allowed:
+
+```sh
+CORS_ORIGINS=http://localhost:5173,https://auth.home.example
+```
+
+Every response also gets the standard `helmet` security headers and the `X-Powered-By` header is removed.

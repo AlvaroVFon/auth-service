@@ -30,6 +30,7 @@ import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.a
 import { TenantsModel } from '../tenants/tenants.schema';
 import { TenantsService } from '../tenants/tenants.service';
 import { UsersModule } from '../users/users.module';
+import { resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { GlobalMiddlewares } from './middlewares.config';
@@ -53,6 +54,7 @@ export interface ApplicationCompositionOptions {
   lockoutDurationMs?: number;
   publicAppUrl?: string;
   rateLimitConfig?: AuthRateLimitConfig;
+  corsOrigins?: string[];
 }
 
 const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
@@ -160,7 +162,12 @@ export const createApplicationComposition = (
     authModule,
     initialize(app, requestLogger = logger): void {
       HttpLoggerInterceptor.initialize(app, requestLogger);
-      GlobalMiddlewares.initialize(app, ['/auth/logout']);
+      GlobalMiddlewares.initialize(
+        app,
+        ['/auth/logout'],
+        options.corsOrigins ??
+          resolveCorsOrigins(getStringEnvVariable('CORS_ORIGINS')),
+      );
       usersModule.initialize(app);
       authModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);

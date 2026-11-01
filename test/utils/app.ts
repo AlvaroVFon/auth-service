@@ -18,6 +18,7 @@ const mailer = {
 const composition = createApplicationComposition({
   logger: silentLogger,
   mailer,
+  corsOrigins: ['http://allowed.test'],
   jwtSecret: getStringEnvVariable('JWT_SECRET'),
   jwtExpiresIn: parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10),
   refreshTokenExpiresIn: parseInt(
