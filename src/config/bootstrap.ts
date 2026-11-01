@@ -12,7 +12,7 @@ if (fs.existsSync('.env')) {
   process.loadEnvFile('.env');
 }
 
-const composition = createApplicationComposition();
+export const composition = createApplicationComposition();
 
 export const bootstrap = async (overrides: BootstrapOverrides = {}) => {
   const logger = overrides.logger ?? composition.logger;

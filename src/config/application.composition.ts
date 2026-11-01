@@ -18,6 +18,7 @@ import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
+import { HealthModule } from '../health';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
@@ -33,6 +34,7 @@ import { UsersModule } from '../users/users.module';
 import { Database } from './database.config';
 import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { GlobalMiddlewares } from './middlewares.config';
+import { resolveTrustProxy } from './trust-proxy.config';
 
 export interface ApplicationComposition {
   readonly logger: LoggerInterface;
@@ -53,6 +55,7 @@ export interface ApplicationCompositionOptions {
   lockoutDurationMs?: number;
   publicAppUrl?: string;
   rateLimitConfig?: AuthRateLimitConfig;
+  trustProxy?: boolean | number;
 }
 
 const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
@@ -97,6 +100,7 @@ export const createApplicationComposition = (
   const logger = options.logger ?? new WinstonLogger();
   const database =
     options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
+  const healthModule = new HealthModule(logger);
   const cryptoService = new CryptoService();
   const jwtService = new JwtService(
     options.jwtSecret ?? getStringEnvVariable('JWT_SECRET'),
@@ -159,8 +163,14 @@ export const createApplicationComposition = (
     usersModule,
     authModule,
     initialize(app, requestLogger = logger): void {
+      app.set(
+        'trust proxy',
+        options.trustProxy ??
+          resolveTrustProxy(getStringEnvVariable('TRUST_PROXY')),
+      );
       HttpLoggerInterceptor.initialize(app, requestLogger);
       GlobalMiddlewares.initialize(app, ['/auth/logout']);
+      healthModule.initialize(app);
       usersModule.initialize(app);
       authModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);

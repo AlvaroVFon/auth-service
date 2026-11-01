@@ -35,10 +35,17 @@ pnpm dev
 
 ### Trust Proxy
 
-When running behind a reverse proxy (e.g., Nginx, Cloudflare, AWS ALB), you **must** enable Express trust proxy so that `req.ip` reflects the real client IP from `X-Forwarded-For`:
+When running behind a reverse proxy (e.g., Nginx, Cloudflare, AWS ALB), you **must** enable Express trust proxy so that `req.ip` reflects the real client IP from `X-Forwarded-For`. Set the `TRUST_PROXY` environment variable to the number of proxy hops (`1` for a single reverse proxy) or `true`:
 
-```ts
-app.set('trust proxy', true);
+```sh
+TRUST_PROXY=1
 ```
 
-Without this setting, IP/UA session tracking will record the proxy's IP address instead of the actual client IP. For production, consider setting a specific hop count (`trust proxy: 1` for a single proxy) instead of `true` for tighter security.
+The default is `false`. Without this setting, IP/UA session tracking will record the proxy's IP address instead of the actual client IP. Prefer a specific hop count over `true` for tighter security.
+
+### Health checks
+
+- `GET /health` — liveness, does not depend on MongoDB.
+- `GET /ready` — readiness, returns `503` when MongoDB is not connected.
+
+On `SIGTERM` or `SIGINT` the server stops accepting connections, finishes in-flight requests and closes the database connection.
