@@ -7,8 +7,11 @@ import { HealthRouter } from './health.router';
 export class HealthModule {
   private readonly controller: HealthController;
 
-  constructor(private readonly logger: LoggerInterface) {
-    this.controller = new HealthController();
+  constructor(
+    private readonly logger: LoggerInterface,
+    getReadyState: () => number,
+  ) {
+    this.controller = new HealthController(getReadyState);
   }
 
   initialize(app: Application): void {

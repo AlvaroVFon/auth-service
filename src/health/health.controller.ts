@@ -1,11 +1,7 @@
 import type { Request, Response } from 'express';
-import mongoose from 'mongoose';
 
 export class HealthController {
-  constructor(
-    private readonly getReadyState: () => number = () =>
-      mongoose.connection.readyState,
-  ) {}
+  constructor(private readonly getReadyState: () => number) {}
 
   check = (_req: Request, res: Response): void => {
     res.status(200).json({ status: 'ok' });

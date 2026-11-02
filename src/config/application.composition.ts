@@ -18,7 +18,7 @@ import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
-import { HealthModule } from '../health';
+import { HealthModule, isHealthProbe } from '../health';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
@@ -100,7 +100,7 @@ export const createApplicationComposition = (
   const logger = options.logger ?? new WinstonLogger();
   const database =
     options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
-  const healthModule = new HealthModule(logger);
+  const healthModule = new HealthModule(logger, () => database.getReadyState());
   const cryptoService = new CryptoService();
   const jwtService = new JwtService(
     options.jwtSecret ?? getStringEnvVariable('JWT_SECRET'),
@@ -168,7 +168,9 @@ export const createApplicationComposition = (
         options.trustProxy ??
           resolveTrustProxy(getStringEnvVariable('TRUST_PROXY')),
       );
-      HttpLoggerInterceptor.initialize(app, requestLogger);
+      HttpLoggerInterceptor.initialize(app, requestLogger, (request) =>
+        isHealthProbe(request.path),
+      );
       GlobalMiddlewares.initialize(app, ['/auth/logout']);
       healthModule.initialize(app);
       usersModule.initialize(app);
