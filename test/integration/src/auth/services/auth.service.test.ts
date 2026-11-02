@@ -17,6 +17,7 @@ import { Holder } from '../../../../../src/holders/holders.interface';
 import { HoldersModel } from '../../../../../src/holders/holders.schema';
 import { HoldersService } from '../../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
+import { JwtKeyring } from '../../../../../src/libs/jwt';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
 import { LoggerInterface } from '../../../../../src/libs/logger/logger.interface';
@@ -30,6 +31,7 @@ import {
   generateRandomEmail,
 } from '../../../../fixtures/defaults';
 import { DEFAULT_HOLDER } from '../../../../fixtures/defaults/holders.default';
+import { createRsaKeyPair } from '../../../../helpers/jwt-keyring.helper';
 
 describe('Auth Service', () => {
   let authService: AuthService;
@@ -74,9 +76,13 @@ describe('Auth Service', () => {
     );
 
     jwtService = new JwtService(
-      jwtSecret!,
+      new JwtKeyring([{ ...createRsaKeyPair(), active: true }]),
       jwtExpiresIn,
       refreshTokenExpiresIn,
+      {
+        issuer: 'auth-service',
+        ...(jwtSecret === undefined ? {} : { legacySecret: jwtSecret }),
+      },
     );
     codeService = new CodesService(CodesModel);
     holdersService = new HoldersService(

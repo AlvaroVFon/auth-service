@@ -47,7 +47,7 @@
 - **Env loading**: `process.loadEnvFile()` (Node.js native, not dotenv)
 - **`.env` is gitignored**; `.env.test` is committed
 - **External services via docker-compose**: MongoDB (27017), MailHog (SMTP 1025, web UI 8025)
-- **Key env vars**: `MONGO_URI`, `JWT_SECRET`, `JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`, `SMTP_*`, `TEMPLATES_PATH`, `CODE_LENGTH`, `CODE_EXPIRATION_MS`
+- **Key env vars**: `MONGO_URI`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_KEY_ID`, `JWT_RETIRED_PUBLIC_KEYS`, `JWT_ISSUER`, `JWT_ALLOW_EPHEMERAL_KEYS` (local/test only), `JWT_SECRET` (legacy HS256 only), `JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`, `SMTP_*`, `TEMPLATES_PATH`, `CODE_LENGTH`, `CODE_EXPIRATION_MS`
 
 ## TypeScript
 

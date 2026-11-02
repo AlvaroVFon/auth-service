@@ -1,6 +1,6 @@
-import { Roles } from '../../common/enums/roles.enum';
 import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
 import { EntityNotFoundError } from '../../common/exceptions/base.exception';
+import type { TokenRole } from '../../libs/jwt';
 import { JwtService, TokenPair, TokenTypes } from '../../libs/jwt';
 import { RefreshTokenService } from './refresh-token.service';
 import { RequestContext } from './request-context.type';
@@ -13,7 +13,7 @@ export class SessionService {
 
   async create(
     userId: string,
-    role: Roles,
+    role: TokenRole,
     ctx?: RequestContext,
   ): Promise<TokenPair> {
     const session = this.jwtService.signTokenPair(userId, role);
@@ -26,7 +26,7 @@ export class SessionService {
 
   async rotate(
     userId: string,
-    role: Roles,
+    role: TokenRole,
     refreshToken: string,
     ctx?: RequestContext,
   ): Promise<TokenPair> {

@@ -10,6 +10,7 @@ import { CodesService } from '../auth/codes/codes.service';
 import { AuthController } from '../auth/controllers/auth.controller';
 import { AuthMailer } from '../auth/services/auth-mailer';
 import { AuthService } from '../auth/services/auth.service';
+import { ApplicationTokenService } from '../auth/tokens/application-token.service';
 import { BlacklistService } from '../auth/tokens/blacklist.service';
 import { BlacklistedTokenModel } from '../auth/tokens/blacklisted-token.schema';
 import { RefreshTokenModel } from '../auth/tokens/refresh-token.schema';
@@ -25,7 +26,9 @@ import { GrantsService } from '../grants/grants.service';
 import { HealthModule, isHealthProbe } from '../health';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
+import { JwksModule } from '../jwks';
 import { CryptoService } from '../libs/crypto/crypto.service';
+import { JwtKeyring } from '../libs/jwt';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
 import { LoggerInterface } from '../libs/logger/logger.interface';
@@ -36,6 +39,7 @@ import { UsersModule } from '../users/users.module';
 import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
+import { JwtConfig, resolveJwtConfig } from './jwt.config';
 import { GlobalMiddlewares } from './middlewares.config';
 import { resolveTrustProxy } from './trust-proxy.config';
 
@@ -46,6 +50,8 @@ export interface ApplicationComposition {
   readonly grants: GrantsPort;
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
+  readonly jwtKeyring: JwtKeyring;
+  readonly applicationTokens: ApplicationTokenService;
   initialize(app: Application, logger?: LoggerInterface): void;
 }
 
@@ -53,7 +59,9 @@ export interface ApplicationCompositionOptions {
   logger?: LoggerInterface;
   mailer?: MailerInterface;
   database?: Database;
+  jwtConfig?: JwtConfig;
   jwtSecret?: string;
+  jwtIssuer?: string;
   jwtExpiresIn?: number;
   refreshTokenExpiresIn?: number;
   maxLoginAttempts?: number;
@@ -108,11 +116,37 @@ export const createApplicationComposition = (
     options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
   const healthModule = new HealthModule(logger, () => database.getReadyState());
   const cryptoService = new CryptoService();
+  const jwtConfig =
+    options.jwtConfig ??
+    resolveJwtConfig({
+      env: {
+        ...process.env,
+        ...(options.jwtSecret === undefined
+          ? {}
+          : { JWT_SECRET: options.jwtSecret }),
+        ...(options.jwtIssuer === undefined
+          ? {}
+          : { JWT_ISSUER: options.jwtIssuer }),
+      },
+    });
   const jwtService = new JwtService(
-    options.jwtSecret ?? getStringEnvVariable('JWT_SECRET'),
+    jwtConfig.keyring,
     resolveAccessTokenTtl(options),
     resolveRefreshTokenTtl(options),
+    {
+      issuer: jwtConfig.issuer,
+      ...(jwtConfig.legacySecret === undefined
+        ? {}
+        : { legacySecret: jwtConfig.legacySecret }),
+      logger,
+    },
   );
+  if (jwtConfig.ephemeral) {
+    logger.warn(
+      'JWT keys are ephemeral: tokens and JWKS will differ between instances and restarts',
+    );
+  }
+  const jwksModule = new JwksModule(logger, () => jwtConfig.keyring.getJwks());
   const blacklistService = new BlacklistService(BlacklistedTokenModel);
   const authenticationMiddleware = new AuthenticationMiddleware(
     jwtService,
@@ -150,6 +184,12 @@ export const createApplicationComposition = (
     applicationsService,
     usersModule.service,
   );
+  const applicationTokenService = new ApplicationTokenService(
+    jwtService,
+    applicationsService,
+    grantsService,
+    usersModule.service,
+  );
   const sessionService = new SessionService(jwtService, refreshTokenService);
   const authService = new AuthService(
     usersModule.service,
@@ -174,6 +214,8 @@ export const createApplicationComposition = (
     grants: grantsService,
     usersModule,
     authModule,
+    jwtKeyring: jwtConfig.keyring,
+    applicationTokens: applicationTokenService,
     initialize(app, requestLogger = logger): void {
       app.set(
         'trust proxy',
@@ -199,6 +241,7 @@ export const createApplicationComposition = (
       );
       GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
       healthModule.initialize(app);
+      jwksModule.initialize(app);
       usersModule.initialize(app);
       authModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
