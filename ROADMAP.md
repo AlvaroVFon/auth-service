@@ -12,7 +12,8 @@ Objetivo: sesiones largas y seguras sin comprometer la seguridad.
 
 - [x] **Refresh tokens:** colección `RefreshToken`, rotación de un solo uso vía
       `replacedByJti`, `POST /auth/refresh` que solo necesita el refresh token.
-- [x] **Logout y revocación:** `POST /auth/logout` revoca los refresh tokens del usuario.
+- [x] **Logout y revocación:** `POST /auth/logout` revoca las sesiones del llamante para
+      la aplicación del token (todas si el token no tiene audiencia).
 - [x] **Blacklist de access tokens:** `BlacklistedToken` con TTL; los tokens revocados
       dejan de aceptarse antes de expirar.
 - [x] **Información de sesión:** cada refresh token guarda IP, user-agent, aplicación y
@@ -33,8 +34,9 @@ Objetivo: sesiones largas y seguras sin comprometer la seguridad.
 
 ## Fase 3: Blindaje de Seguridad (Hardening) — 100% Completada
 
-- [x] **Rate limiting:** límite global y límites por ruta (`login`, `signup`,
-      `forgot-password`, `refresh`, `mfa/verify`) configurables por entorno.
+- [x] **Rate limiting:** límite global fijo de 100 req / 15 min y límites por ruta
+      (`login`, `signup`, `forgot-password`, `refresh`, `mfa/verify`) configurables por
+      entorno.
 - [x] **Bloqueo de cuentas:** `loginAttempts` / `lockoutUntil` con actualizaciones
       atómicas, aplicado también a los códigos MFA inválidos.
 - [x] **Auditoría:** `AuditEvent` con eventos de autenticación y permisos, TTL por

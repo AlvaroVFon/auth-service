@@ -166,24 +166,24 @@ Every route is declared in a module router and mounted by
 
 ### Authentication and sessions
 
-| Method   | Route                       | Access        | Notes                                                                     |
-| -------- | --------------------------- | ------------- | ------------------------------------------------------------------------- |
-| `POST`   | `/auth/signup`              | Public        | Rate-limited; creates a holder and mails a code.                          |
-| `POST`   | `/auth/verify`              | Public        | Holder -> user with the emailed code.                                     |
-| `POST`   | `/auth/login`               | Public        | Rate-limited; optional `application`, returns MFA challenge when enabled. |
-| `POST`   | `/auth/refresh`             | Public        | Rate-limited; rotates the refresh token alone.                            |
-| `POST`   | `/auth/logout`              | Authenticated | Revokes the caller's refresh tokens.                                      |
-| `POST`   | `/auth/forgot-password`     | Public        | Rate-limited; never reveals whether the email exists.                     |
-| `POST`   | `/auth/reset-password`      | Public        | `userId` + emailed code.                                                  |
-| `GET`    | `/auth/me`                  | Authenticated | Identity, audience/app and token role.                                    |
-| `POST`   | `/auth/introspect`          | Authenticated | Answers `active` only for the caller's own tokens.                        |
-| `GET`    | `/auth/sessions`            | Authenticated | Active device sessions.                                                   |
-| `DELETE` | `/auth/sessions/:sessionId` | Authenticated | Revokes one session; repeating it is a no-op.                             |
-| `DELETE` | `/auth/sessions`            | Authenticated | Revokes every session of the caller.                                      |
-| `POST`   | `/auth/mfa/enroll`          | Authenticated | Rate-limited; returns `secret` and `otpauthUrl`.                          |
-| `POST`   | `/auth/mfa/activate`        | Authenticated | Confirms the first code and returns recovery codes.                       |
-| `POST`   | `/auth/mfa/verify`          | Public        | Rate-limited; exchanges the challenge for tokens.                         |
-| `POST`   | `/auth/mfa/disable`         | Authenticated | Password + TOTP/recovery code.                                            |
+| Method   | Route                       | Access        | Notes                                                                                    |
+| -------- | --------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
+| `POST`   | `/auth/signup`              | Public        | Rate-limited; creates a holder and mails a code.                                         |
+| `POST`   | `/auth/verify`              | Public        | Holder -> user with the emailed code.                                                    |
+| `POST`   | `/auth/login`               | Public        | Rate-limited; optional `application`, returns MFA challenge when enabled.                |
+| `POST`   | `/auth/refresh`             | Public        | Rate-limited; rotates the refresh token alone.                                           |
+| `POST`   | `/auth/logout`              | Authenticated | Revokes the caller's sessions for the token's application (every session when unscoped). |
+| `POST`   | `/auth/forgot-password`     | Public        | Rate-limited; never reveals whether the email exists.                                    |
+| `POST`   | `/auth/reset-password`      | Public        | `userId` + emailed code.                                                                 |
+| `GET`    | `/auth/me`                  | Authenticated | Identity, audience/app and token role.                                                   |
+| `POST`   | `/auth/introspect`          | Authenticated | Answers `active` only for the caller's own tokens.                                       |
+| `GET`    | `/auth/sessions`            | Authenticated | Active device sessions.                                                                  |
+| `DELETE` | `/auth/sessions/:sessionId` | Authenticated | Revokes one session; repeating it is a no-op.                                            |
+| `DELETE` | `/auth/sessions`            | Authenticated | Revokes every session of the caller.                                                     |
+| `POST`   | `/auth/mfa/enroll`          | Authenticated | Rate-limited; returns `secret` and `otpauthUrl`.                                         |
+| `POST`   | `/auth/mfa/activate`        | Authenticated | Confirms the first code and returns recovery codes.                                      |
+| `POST`   | `/auth/mfa/verify`          | Public        | Rate-limited; exchanges the challenge for tokens.                                        |
+| `POST`   | `/auth/mfa/disable`         | Authenticated | Password + TOTP/recovery code.                                                           |
 
 ### Links
 
