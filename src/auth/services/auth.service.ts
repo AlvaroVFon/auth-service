@@ -5,7 +5,10 @@ import {
 } from '../../common/constants/regex';
 import { normalizeEmail } from '../../common/email';
 import { Roles } from '../../common/enums/roles.enum';
-import { ForbiddenError } from '../../common/exceptions/auth.exceptions';
+import {
+  ForbiddenError,
+  UnauthorizedError,
+} from '../../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -13,6 +16,7 @@ import {
 import { AlreadyGeneratedCodeError } from '../../common/exceptions/codes.exceptions';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
+import { JwtService, TokenTypes } from '../../libs/jwt';
 import type { TokenRole } from '../../libs/jwt';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
 import { User, UsersPort } from '../../users';
@@ -33,6 +37,7 @@ export class AuthService {
     private readonly blacklistService: TokenBlacklistPort,
     private readonly holdersService: HoldersPort,
     private readonly applicationTokens: ApplicationTokenService,
+    private readonly jwtService: JwtService,
     private readonly logger: LoggerInterface,
   ) {}
 
@@ -296,18 +301,20 @@ export class AuthService {
   }
 
   async refreshToken(
-    userId: string,
     refreshToken: string,
     ctx?: RequestContext,
-    audience?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    if (OBJECTID_REGEX.test(userId) === false) {
-      throw new InvalidArgumentError('userId is not a valid ObjectId');
-    }
     if (!refreshToken) {
       throw new InvalidArgumentError('refreshToken is required');
     }
 
+    const claims = this.jwtService.verifyToken(refreshToken);
+
+    if (claims.type !== TokenTypes.REFRESH || !claims.userId || !claims.jti) {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    const userId = claims.userId;
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new EntityNotFoundError('User not found');
@@ -315,6 +322,7 @@ export class AuthService {
 
     this.assertVerified(user);
 
+    const audience = claims.aud;
     let role: TokenRole = user.role;
 
     if (audience === undefined) {
@@ -346,13 +354,7 @@ export class AuthService {
       }
     }
 
-    const session = await this.sessionService.rotate(
-      userId,
-      role,
-      refreshToken,
-      ctx,
-      audience,
-    );
+    const session = await this.sessionService.rotate(claims, role, ctx);
 
     return {
       accessToken: session.accessToken,

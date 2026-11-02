@@ -90,6 +90,10 @@ const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
     ),
     max: getNumberEnvVariable('RATE_LIMIT_FORGOT_PASSWORD_MAX', 3),
   },
+  refresh: {
+    windowMs: getNumberEnvVariable('RATE_LIMIT_REFRESH_WINDOW_MS', 900000),
+    max: getNumberEnvVariable('RATE_LIMIT_REFRESH_MAX', 60),
+  },
 });
 
 export const resolveAccessTokenTtl = (
@@ -209,6 +213,7 @@ export const createApplicationComposition = (
     blacklistService,
     holdersService,
     applicationTokenService,
+    jwtService,
     logger,
   );
   const profileService = new ProfileService(

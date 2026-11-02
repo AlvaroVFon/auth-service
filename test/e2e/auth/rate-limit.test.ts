@@ -12,6 +12,7 @@ const FORGOT_PASSWORD_MAX = parseInt(
   process.env.RATE_LIMIT_FORGOT_PASSWORD_MAX ?? '3',
   10,
 );
+const REFRESH_MAX = parseInt(process.env.RATE_LIMIT_REFRESH_MAX ?? '60', 10);
 
 const RATE_LIMIT_MESSAGE = 'Too many requests, please try again later.';
 
@@ -164,6 +165,22 @@ describe('E2E Auth Rate Limiting', () => {
 
     const response = await request(app)
       .post('/auth/forgot-password')
+      .send(payload)
+      .expect(429);
+
+    assert.strictEqual(response.body.error, RATE_LIMIT_MESSAGE);
+  });
+
+  // ---- Requirement: POST /auth/refresh returns 429 after exceeding its limit ----
+  test('POST /auth/refresh returns 429 after exceeding its rate limit', async () => {
+    const payload = { refreshToken: 'invalid-refresh-token' };
+
+    for (let i = 0; i < REFRESH_MAX; i++) {
+      await request(app).post('/auth/refresh').send(payload);
+    }
+
+    const response = await request(app)
+      .post('/auth/refresh')
       .send(payload)
       .expect(429);
 

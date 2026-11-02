@@ -70,13 +70,10 @@ export class AuthController {
 
   @Catch()
   async refreshToken(req: Request, res: Response): Promise<void> {
-    const userId = req.user?.id as string;
     const refreshToken = req.body.refreshToken;
     const tokens = await this.authService.refreshToken(
-      userId,
       refreshToken,
       this.buildRequestContext(req),
-      req.user?.audience,
     );
 
     res.status(200).json(tokens);
