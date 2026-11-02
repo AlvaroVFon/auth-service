@@ -38,6 +38,109 @@ docker-compose up -d
 pnpm dev
 ```
 
+`.env.example` (versioned) already contains safe values for a local machine: MongoDB on
+`localhost:27017`, MailHog on `localhost:1025`, ephemeral JWT keys and a local MFA
+encryption key. Copy it and the service starts as-is, with `GET /health` answering.
+
+Variables are read once at startup (`process.loadEnvFile()` in `src/config/bootstrap.ts`
+loads `.env` when it exists) and missing numeric or string settings fall back to the
+defaults below. `MONGO_URI` is the only variable with no default: without it the process
+exits with an `InvalidArgumentError`. See [Environment variables](#environment-variables)
+for the purpose, default value and production requirement of each one.
+
+### Environment variables
+
+#### Application
+
+| Variable         | Purpose                                                       | Default                  | Required in production   |
+| ---------------- | ------------------------------------------------------------- | ------------------------ | ------------------------ |
+| `NODE_ENV`       | Runtime mode; `production` rejects ephemeral JWT keys.        | `development`            | Recommended              |
+| `HOST`           | Interface the HTTP server binds to.                           | `localhost`              | No                       |
+| `PORT`           | HTTP port.                                                    | `3000`                   | No                       |
+| `APP_NAME`       | Product name used in emails and authenticator entries.        | `Auth Service`           | No                       |
+| `PUBLIC_APP_URL` | Base URL of the SPA that receives invitation and reset links. | `https://ourservice.com` | Yes                      |
+| `TRUST_PROXY`    | `false`, `true` or a non-negative proxy hop count.            | `false`                  | Yes behind a proxy       |
+| `CORS_ORIGINS`   | Comma-separated allowed browser origins; empty rejects all.   | Empty                    | Yes with browser clients |
+
+#### Database
+
+| Variable    | Purpose                    | Default | Required in production |
+| ----------- | -------------------------- | ------- | ---------------------- |
+| `MONGO_URI` | MongoDB connection string. | None    | Yes                    |
+
+#### JWT
+
+| Variable                   | Purpose                                                              | Default             | Required in production |
+| -------------------------- | -------------------------------------------------------------------- | ------------------- | ---------------------- |
+| `JWT_PRIVATE_KEY`          | RS256 private key in PEM; `\n` escapes are accepted.                 | None                | Yes                    |
+| `JWT_PUBLIC_KEY`           | RS256 public key in PEM; derived from the private key when omitted.  | Derived             | No                     |
+| `JWT_KEY_ID`               | `kid` published in the JWKS; used to rotate keys.                    | RFC 7638 thumbprint | No                     |
+| `JWT_ISSUER`               | `iss` claim of every token.                                          | `auth-service`      | No                     |
+| `JWT_ALLOW_EPHEMERAL_KEYS` | Generates in-memory keys when no PEM is configured; local/test only. | `false`             | No (must be false)     |
+| `JWT_RETIRED_PUBLIC_KEYS`  | JSON array of `{"kid","publicKey"}` entries accepted while rotating. | `[]`                | No                     |
+| `JWT_SECRET`               | Legacy HS256 secret to verify old tokens without audience.           | None                | No                     |
+| `JWT_EXPIRATION`           | Access token TTL in seconds.                                         | `3600`              | No                     |
+| `JWT_REFRESH_EXPIRATION`   | Refresh token TTL in seconds.                                        | `86400`             | No                     |
+| `JWT_REFRESH_EXPIRES_IN`   | Legacy alias of `JWT_REFRESH_EXPIRATION`; keep unset.                | `86400`             | No                     |
+
+#### SMTP and templates
+
+| Variable         | Purpose                                       | Default                     | Required in production     |
+| ---------------- | --------------------------------------------- | --------------------------- | -------------------------- |
+| `SMTP_HOST`      | SMTP server host (`localhost` for MailHog).   | Empty                       | Yes for email flows        |
+| `SMTP_PORT`      | SMTP server port; `465` enables TLS.          | `0`                         | Yes for email flows        |
+| `SMTP_USER`      | SMTP username; empty disables authentication. | Empty                       | Depends on the SMTP server |
+| `SMTP_PASS`      | SMTP password.                                | Empty                       | Depends on the SMTP server |
+| `MAIL_FROM`      | `From` address of outgoing mail.              | `no-reply@auth-service.com` | No                         |
+| `TEMPLATES_PATH` | Directory with the Handlebars templates.      | Empty                       | Yes                        |
+
+#### Codes, holders and account security
+
+| Variable               | Purpose                                           | Default   | Required in production |
+| ---------------------- | ------------------------------------------------- | --------- | ---------------------- |
+| `CODE_LENGTH`          | Digits of the email verification code.            | `6`       | No                     |
+| `CODE_EXPIRATION_MS`   | Verification code TTL in milliseconds.            | `3600000` | No                     |
+| `HOLDER_EXPIRATION_MS` | TTL of a pre-verification holder account.         | `3600000` | No                     |
+| `MAX_LOGIN_ATTEMPTS`   | Failed logins (and MFA codes) before the lockout. | `5`       | No                     |
+| `LOCKOUT_DURATION_MS`  | Lockout duration in milliseconds.                 | `900000`  | No                     |
+| `BCRYPT_SALT_ROUNDS`   | Password hashing cost.                            | `10`      | No                     |
+
+#### Sessions and rate limiting
+
+| Variable                               | Purpose                                         | Default   | Required in production |
+| -------------------------------------- | ----------------------------------------------- | --------- | ---------------------- |
+| `MAX_SESSIONS_PER_USER`                | Sessions kept per user; the oldest are revoked. | `50`      | No                     |
+| `RATE_LIMIT_LOGIN_WINDOW_MS`           | Login rate-limit window.                        | `900000`  | No                     |
+| `RATE_LIMIT_LOGIN_MAX`                 | Login requests allowed per window.              | `5`       | No                     |
+| `RATE_LIMIT_SIGNUP_WINDOW_MS`          | Signup rate-limit window.                       | `3600000` | No                     |
+| `RATE_LIMIT_SIGNUP_MAX`                | Signup requests allowed per window.             | `3`       | No                     |
+| `RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS` | Forgot-password rate-limit window.              | `3600000` | No                     |
+| `RATE_LIMIT_FORGOT_PASSWORD_MAX`       | Forgot-password requests per window.            | `3`       | No                     |
+| `RATE_LIMIT_REFRESH_WINDOW_MS`         | Token refresh rate-limit window.                | `900000`  | No                     |
+| `RATE_LIMIT_REFRESH_MAX`               | Refresh requests allowed per window.            | `60`      | No                     |
+| `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification rate-limit window.             | `900000`  | No                     |
+| `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window.           | `10`      | No                     |
+
+#### Links, audit, MFA and Telegram
+
+| Variable                            | Purpose                                                                                | Default     | Required in production |
+| ----------------------------------- | -------------------------------------------------------------------------------------- | ----------- | ---------------------- |
+| `INVITATION_LINK_EXPIRATION_MS`     | Invitation link TTL.                                                                   | `604800000` | No                     |
+| `PASSWORD_RESET_LINK_EXPIRATION_MS` | Password-reset link TTL.                                                               | `3600000`   | No                     |
+| `AUDIT_RETENTION_DAYS`              | Audit event retention through the TTL index.                                           | `90`        | No                     |
+| `MFA_SECRET_ENCRYPTION_KEY`         | Base64-encoded 32-byte key that encrypts TOTP secrets; empty stores them as plaintext. | `Empty`     | Yes                    |
+| `MFA_CHALLENGE_EXPIRATION`          | MFA challenge TTL in seconds.                                                          | `300`       | No                     |
+| `TELEGRAM_BOT_TOKEN`                | Bot token; empty disables Telegram notifications.                                      | `Empty`     | No                     |
+| `TELEGRAM_OWNER_CHAT_ID`            | Owner fallback chat id for link notifications.                                         | None        | No                     |
+| `TELEGRAM_TIMEOUT_MS`               | Telegram delivery timeout in milliseconds.                                             | `3000`      | No                     |
+
+#### Owner bootstrap
+
+| Variable         | Purpose                                                  | Default | Required in production |
+| ---------------- | -------------------------------------------------------- | ------- | ---------------------- |
+| `OWNER_EMAIL`    | Email of the single owner provisioned at startup.        | None    | No                     |
+| `OWNER_PASSWORD` | Initial owner password; set together with `OWNER_EMAIL`. | None    | No                     |
+
 ## Deployment
 
 ### Production image
@@ -54,10 +157,16 @@ The build stage typechecks (`pnpm build`) and bundles `src/index.ts` with esbuil
 copied into the final image. The container runs as the `node` user (not root) and has a
 `HEALTHCHECK` against `/health`.
 
-Copy `.env.example` to `.env` and fill it in before starting. `MONGO_URI` and
-`JWT_PRIVATE_KEY` are required: if either is missing the process exits with a clear
-`InvalidArgumentError` instead of starting partially. Ephemeral JWT keys are rejected
-when `NODE_ENV=production`.
+The image already defines `NODE_ENV=production`, `HOST=0.0.0.0` and
+`TEMPLATES_PATH=./src/mail/templates`, and `--env-file .env` overrides any of them that
+the file sets. `.env.example` targets local development, so a production `.env` must set
+`NODE_ENV=production`, real `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`, a real
+`MFA_SECRET_ENCRYPTION_KEY`, production `PUBLIC_APP_URL`/`CORS_ORIGINS` and either omit
+`HOST` or set `HOST=0.0.0.0`.
+
+`MONGO_URI` and `JWT_PRIVATE_KEY` are required: if either is missing the process exits
+with a clear `InvalidArgumentError` instead of starting partially. Ephemeral JWT keys are
+rejected when `NODE_ENV=production`.
 
 ### Trust Proxy
 
