@@ -11,7 +11,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Password reset flow
 - Account lockout after failed login attempts
 - Per-route rate limiting
-- Role-based authorization (user / admin)
+- Role-based authorization: a single `owner` administers the home while legacy `ADMIN` no longer authorizes
 - Home applications with per-user roles (viewer, editor, admin)
 - Login scoped to a concrete application (audience + grant role)
 - Session profile (`GET /auth/me`) and token introspection (`POST /auth/introspect`)
@@ -20,6 +20,10 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Shareable, single-use invitation and password-reset links (no SMTP required)
 - Owner-only audit log of authentication and permission events
 - TOTP multi-factor authentication with single-use recovery codes
+- Telegram delivery of invitation and reset links
+- Case-insensitive email normalization and enumeration-safe auth errors
+- Readiness and liveness probes, published JWKS and graceful shutdown
+- CORS allowlist, `helmet` headers and configurable trust proxy
 
 ## Getting Started
 
@@ -46,7 +50,8 @@ Variables are read once at startup (`process.loadEnvFile()` in `src/config/boots
 loads `.env` when it exists) and missing numeric or string settings fall back to the
 defaults below. `MONGO_URI` is the only variable with no default: without it the process
 exits with an `InvalidArgumentError`. See [Environment variables](#environment-variables)
-for the purpose, default value and production requirement of each one.
+for the purpose, default value and production requirement of each one, and
+[API reference](#api-reference) for every route and its access level.
 
 ### Environment variables
 
@@ -140,6 +145,77 @@ for the purpose, default value and production requirement of each one.
 | ---------------- | -------------------------------------------------------- | ------- | ---------------------- |
 | `OWNER_EMAIL`    | Email of the single owner provisioned at startup.        | None    | No                     |
 | `OWNER_PASSWORD` | Initial owner password; set together with `OWNER_EMAIL`. | None    | No                     |
+
+## API reference
+
+Every route is declared in a module router and mounted by
+`createApplicationComposition().initialize(app)`. Access levels:
+
+- **Public**: no token required.
+- **Authenticated**: any valid access token, from the owner or from an application user.
+- **Owner**: the global owner only (`/users`, the application catalog, audit and reset links).
+- **App admin**: the owner or the `admin` of the application in the path.
+
+### Probes and keys
+
+| Method | Route                    | Access | Notes                                         |
+| ------ | ------------------------ | ------ | --------------------------------------------- |
+| `GET`  | `/health`                | Public | Liveness; never touches MongoDB.              |
+| `GET`  | `/ready`                 | Public | `503` until the database connection is ready. |
+| `GET`  | `/.well-known/jwks.json` | Public | Public keys for RS256 verification.           |
+
+### Authentication and sessions
+
+| Method   | Route                       | Access        | Notes                                                                     |
+| -------- | --------------------------- | ------------- | ------------------------------------------------------------------------- |
+| `POST`   | `/auth/signup`              | Public        | Rate-limited; creates a holder and mails a code.                          |
+| `POST`   | `/auth/verify`              | Public        | Holder -> user with the emailed code.                                     |
+| `POST`   | `/auth/login`               | Public        | Rate-limited; optional `application`, returns MFA challenge when enabled. |
+| `POST`   | `/auth/refresh`             | Public        | Rate-limited; rotates the refresh token alone.                            |
+| `POST`   | `/auth/logout`              | Authenticated | Revokes the caller's refresh tokens.                                      |
+| `POST`   | `/auth/forgot-password`     | Public        | Rate-limited; never reveals whether the email exists.                     |
+| `POST`   | `/auth/reset-password`      | Public        | `userId` + emailed code.                                                  |
+| `GET`    | `/auth/me`                  | Authenticated | Identity, audience/app and token role.                                    |
+| `POST`   | `/auth/introspect`          | Authenticated | Answers `active` only for the caller's own tokens.                        |
+| `GET`    | `/auth/sessions`            | Authenticated | Active device sessions.                                                   |
+| `DELETE` | `/auth/sessions/:sessionId` | Authenticated | Revokes one session; repeating it is a no-op.                             |
+| `DELETE` | `/auth/sessions`            | Authenticated | Revokes every session of the caller.                                      |
+| `POST`   | `/auth/mfa/enroll`          | Authenticated | Rate-limited; returns `secret` and `otpauthUrl`.                          |
+| `POST`   | `/auth/mfa/activate`        | Authenticated | Confirms the first code and returns recovery codes.                       |
+| `POST`   | `/auth/mfa/verify`          | Public        | Rate-limited; exchanges the challenge for tokens.                         |
+| `POST`   | `/auth/mfa/disable`         | Authenticated | Password + TOTP/recovery code.                                            |
+
+### Links
+
+| Method | Route                                      | Access    | Notes                                        |
+| ------ | ------------------------------------------ | --------- | -------------------------------------------- |
+| `POST` | `/applications/:applicationId/invitations` | App admin | Single-use invitation for an email and role. |
+| `POST` | `/auth/invitations/accept`                 | Public    | Sets the password and grants the role.       |
+| `POST` | `/auth/password-reset-links`               | Owner     | Generates a shareable reset link.            |
+| `POST` | `/auth/password-reset-links/accept`        | Public    | Consumes the link and rotates the password.  |
+
+### Users, applications and grants
+
+| Method   | Route                                         | Access    | Notes                                                    |
+| -------- | --------------------------------------------- | --------- | -------------------------------------------------------- |
+| `POST`   | `/users`                                      | Owner     | Creates a verified user directly.                        |
+| `GET`    | `/users`                                      | Owner     | Lists users.                                             |
+| `GET`    | `/users/:id`                                  | Owner     | Reads one user.                                          |
+| `PATCH`  | `/users/:id`                                  | Owner     | Updates profile, role or `telegramChatId`.               |
+| `DELETE` | `/users/:id`                                  | Owner     | Deletes the user and cascades its grants; not the owner. |
+| `POST`   | `/applications`                               | Owner     | Creates an application (name, slug, audience).           |
+| `GET`    | `/applications`                               | Owner     | Lists applications.                                      |
+| `GET`    | `/applications/:id`                           | Owner     | Reads one application.                                   |
+| `PUT`    | `/applications/:applicationId/grants`         | App admin | Upserts the role of a user in the application.           |
+| `GET`    | `/applications/:applicationId/grants`         | App admin | Lists the application grants.                            |
+| `GET`    | `/applications/:applicationId/grants/:userId` | App admin | Reads one grant.                                         |
+| `DELETE` | `/applications/:applicationId/grants/:userId` | App admin | Revokes a grant.                                         |
+
+### Audit
+
+| Method | Route           | Access | Notes                                                        |
+| ------ | --------------- | ------ | ------------------------------------------------------------ |
+| `GET`  | `/audit-events` | Owner  | Filters by `userId`, `applicationId`, `event`, `from`, `to`. |
 
 ## Deployment
 

@@ -1,81 +1,113 @@
 # Roadmap: Auth-Service Evolution
 
-Este documento detalla el plan para fortalecer el servicio de autenticación actual, transformándolo en una solución robusta y profesional antes de organizar el acceso por aplicación dentro del hogar.
+Este documento describe el estado real del servicio de autenticación y lo que queda
+pendiente. El hogar es único; lo que varía es el acceso de cada usuario a cada
+aplicación.
 
 ---
 
-## Fase 1: Sesiones y Gestión de Tokens (Robustez) — ~60% Completada
+## Fase 1: Sesiones y Gestión de Tokens (Robustez) — 100% Completada
 
-El objetivo es permitir sesiones largas y seguras sin comprometer la seguridad.
+Objetivo: sesiones largas y seguras sin comprometer la seguridad.
 
-- [x] **Implementación de Refresh Tokens:**
-  - [x] Colección `RefreshToken` para persistir tokens de larga duración.
-  - [x] Rotación de tokens (un uso por token, reemplazo vía `replacedByJti`).
-  - [x] Endpoint `POST /auth/refresh` expuesto y funcional (solo requiere el refresh token).
-- [x] **Logout / Revocación:**
-  - [x] Endpoint `POST /auth/logout` expuesto y funcional — revoca todos los refresh tokens activos del usuario.
-- [ ] **Blacklist de Access Tokens:** No implementada. Dependencia actual en tokens de corta duración (1h).
-- [ ] **Información de Sesión:** No se registra IP ni User-Agent en login ni en refresh tokens.
+- [x] **Refresh tokens:** colección `RefreshToken`, rotación de un solo uso vía
+      `replacedByJti`, `POST /auth/refresh` que solo necesita el refresh token.
+- [x] **Logout y revocación:** `POST /auth/logout` revoca los refresh tokens del usuario.
+- [x] **Blacklist de access tokens:** `BlacklistedToken` con TTL; los tokens revocados
+      dejan de aceptarse antes de expirar.
+- [x] **Información de sesión:** cada refresh token guarda IP, user-agent, aplicación y
+      última actividad; `GET /auth/sessions`, `DELETE /auth/sessions/:sessionId` y
+      `DELETE /auth/sessions`; `MAX_SESSIONS_PER_USER` revoca las sesiones más antiguas.
+- [x] **Perfil e introspección:** `GET /auth/me` y `POST /auth/introspect` acotados al
+      propio llamante y a su aplicación.
 
 ## Fase 2: Recuperación y Experiencia de Usuario — 100% Completada
 
-- [x] **Flujo "Forgot Password":**
-  - [x] Endpoint `POST /auth/forgot-password` (envío de código por email).
-  - [x] `sendPasswordResetEmail()` en `MailerInterface`.
-  - [x] Template `reset_password.hbs`.
-  - [x] Endpoint `POST /auth/reset-password` (público, validación por `userId` + `code`).
-- [x] **Verificación de Email:**
-  - [x] Flujo Holder → User al verificar email.
+- [x] **Flujo forgot password:** `POST /auth/forgot-password` (código por email, sin
+      revelar si la cuenta existe) y `POST /auth/reset-password`.
+- [x] **Verificación de email:** flujo holder -> user con `POST /auth/verify`.
+- [x] **Enlaces compartibles de un solo uso:** invitaciones y resets generados por API,
+      hasheados en reposo, con expiración configurable, sin depender de SMTP.
+- [x] **Plantillas:** handlebars para verificación, reset e invitación.
 
-## Fase 3: Blindaje de Seguridad (Hardening) — ~15% Completada
+## Fase 3: Blindaje de Seguridad (Hardening) — 100% Completada
 
-- [x] **Rate Limiting:**
-  - [x] `express-rate-limit` instalado.
-  - [x] Middleware global aplicado (100 req / 15 min).
-  - [ ] Políticas estrictas diferenciadas por ruta (`/auth/login`, `/auth/signup`, `/auth/forgot-password`).
-- [ ] **Bloqueo de Cuentas (Account Lockout):**
-  - [ ] Campos `loginAttempts` / `lockoutUntil` en el schema `User`.
-  - [ ] Contador de intentos fallidos en `auth.service.ts`.
-  - [ ] Bloqueo temporal tras X intentos fallidos consecutivos.
+- [x] **Rate limiting:** límite global y límites por ruta (`login`, `signup`,
+      `forgot-password`, `refresh`, `mfa/verify`) configurables por entorno.
+- [x] **Bloqueo de cuentas:** `loginAttempts` / `lockoutUntil` con actualizaciones
+      atómicas, aplicado también a los códigos MFA inválidos.
+- [x] **Auditoría:** `AuditEvent` con eventos de autenticación y permisos, TTL por
+      `AUDIT_RETENTION_DAYS` y consulta owner en `GET /audit-events`; nunca guarda
+      secretos, tokens ni enlaces.
+- [x] **Endurecimiento HTTP:** `helmet`, allowlist de CORS validada al arranque,
+      `TRUST_PROXY` con validación estricta, validación de body y apagado ordenado ante
+      `SIGTERM`/`SIGINT`.
+- [x] **MFA TOTP:** enrolamiento, activación, verificación con challenge de corta vida,
+      códigos de recuperación de un solo uso y secretos cifrados con AES-256-GCM.
 
 ## Fase 4: Autenticación Social (OAuth2) — 0% Completada
 
-- [ ] **Login con Google:** No implementado.
-- [ ] **Login con GitHub:** No implementado.
+- [ ] **Login con Google:** no implementado.
+- [ ] **Login con GitHub:** no implementado.
 
-## Fase 5: Aplicaciones del Hogar y Permisos por App — ~30% Completada
+## Fase 5: Aplicaciones del Hogar y Permisos por App — 100% del alcance entregado
 
-El hogar es único; lo que varía es el acceso de cada usuario a cada aplicación.
-
-- [x] **Retirada del modelo de tenants:** schema, login por `tenantSecret`, servicio y token eliminados (#38).
-- [x] **Catálogo de aplicaciones:** `Application` con `name`, `slug`, `audience` y `active` (#38).
-- [x] **Permisos por par usuario-aplicación:** `Grant` con rol `viewer`, `editor` o `admin` (#38).
-- [x] **API de administración:** alta de apps, asignación y revocación de permisos, bootstrap del owner (#41).
-- [x] **Tokens con audiencia por app:** RS256 + JWKS (#39) y login contra una app concreta con el rol del grant (#40).
+- [x] **Retirada del modelo de tenants:** schema, login por `tenantSecret`, servicio y
+      token eliminados.
+- [x] **Catálogo de aplicaciones:** `Application` con `name`, `slug`, `audience` y
+      `active`, administrado por el owner.
+- [x] **Permisos por par usuario-aplicación:** `Grant` con rol `viewer`, `editor` o
+      `admin`; owner global y admin de app como autorizadores.
+- [x] **Bootstrap del owner:** idempotente desde `OWNER_EMAIL`/`OWNER_PASSWORD` en el
+      arranque o con `pnpm bootstrap:owner`.
+- [x] **Tokens con audiencia por app:** RS256 con JWKS y claves retiradas para rotar;
+      login contra una app concreta con el rol del grant.
+- [ ] **Ciclo de vida de aplicaciones:** no hay `PATCH`/`DELETE /applications`; crear,
+      activar o desactivar exige tocar la base de datos.
 
 ---
 
 ## Cobertura de Tests
 
-- **Unitarios:** Auth service, refresh tokens, JWT, crypto, users, holders, codes, applications, grants, config, env.
-- **E2E:** Login, signup, logout, refresh, verify email, forgot-password, reset-password, retirada de tenant-login, CRUD users.
-- Los tests usan `node --test` con `tsx` y base de datos aislada por proceso (`auth_db_test_${pid}`).
+- **Total:** 708 tests en verde con `node --test` y `tsx`.
+  - 226 unitarios (`pnpm test:unit`, sin MongoDB): configuración, JWT/keyring,
+    criptografía, mailer, plantillas, códigos, validadores y composición.
+  - 304 de integración (`pnpm test:integration`, con MongoDB): servicios de usuarios,
+    auth, holders, applications, grants, links, audit y tokens.
+  - 178 e2e (`pnpm test:e2e`, con MongoDB): flujos HTTP completos de signup, login,
+    refresh, logout, verificación, reset, sesiones, MFA, invitaciones, auditoría,
+    owner bootstrap, CORS y cascada de borrado.
+- Base de datos aislada por proceso (`auth_db_test_${pid}`), sembrada y vaciada por
+  `test/setup.db.ts`; `pnpm test:coverage` genera el informe con la cobertura nativa de
+  Node.
 
 ---
 
 ## Próximos Pasos Inmediatos
 
-El backlog priorizado vive en GitHub (issues #38–#53). Orden inmediato:
+El backlog de implementación está cerrado: no quedan issues de funcionalidad abiertos.
+Los siguientes candidatos, por orden de valor:
 
-1. Preparar la imagen Docker de producción y entorno (#48).
-2. Notificaciones por Telegram (#51) y MFA (#52).
+1. **OAuth2** (Fase 4): Google y GitHub como proveedores adicionales.
+2. **Ciclo de vida de aplicaciones:** `PATCH`/`DELETE /applications` y activación/
+   desactivación sin tocar MongoDB.
+3. **Escalado horizontal:** stores compartidos para rate limiting y blacklist de access
+   tokens (hoy en memoria por instancia).
+4. **Operación:** métricas y trazas además de los logs de winston.
 
 ---
 
 ## Consideraciones Técnicas
 
 - **Stack:** Express 5 + Mongoose (MongoDB) + TypeScript (ESM via `tsx`).
-- **Tokens:** JWT con `jti` (UUID). Access: 1h. Refresh: configurable (JWT_REFRESH_EXPIRATION). Rotación completa.
-- **Rate Limiting:** `express-rate-limit` v8 global. Pendiente granularidad por endpoint.
-- **Aplicaciones del hogar:** `Application` (slug + audience) y `Grant` por par usuario-aplicación con rol `viewer`/`editor`/`admin`. Owner único para administrar el catálogo y los permisos. Sin multi-hogar ni roles globales de autorización.
-- **Prioridad:** Primero robustez y funcionalidad core (Fases 1-3), luego tokens por aplicación y OAuth2.
+- **Tokens:** JWT RS256 con `jti`; access 1h y refresh 24h por defecto
+  (`JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`), rotación completa. JWKS en
+  `/.well-known/jwks.json` y `JWT_RETIRED_PUBLIC_KEYS` para rotar sin cortar sesiones.
+  `JWT_SECRET` solo verifica tokens HS256 heredados sin audiencia.
+- **Rate limiting:** `express-rate-limit` con store en memoria; los límites se reinician
+  al reiniciar y no se comparten entre instancias.
+- **Aplicaciones del hogar:** `Application` (slug + audience) y `Grant` por par
+  usuario-aplicación con rol `viewer`/`editor`/`admin`. Owner único para el catálogo y
+  `/users`; cada admin administra solo su aplicación. Sin multi-hogar.
+- **Configuración:** todas las variables, sus valores por defecto y su obligatoriedad en
+  producción están en el README (`## Environment variables`).
