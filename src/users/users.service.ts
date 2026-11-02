@@ -40,7 +40,7 @@ export class UsersService implements UsersPort {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
-    return this.usersModel.create(data);
+    return this.usersModel.create({ ...data, verified: data.verified ?? true });
   }
 
   async createVerifiedUser(input: {

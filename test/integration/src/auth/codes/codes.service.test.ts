@@ -10,6 +10,7 @@ import {
   InvalidCodeError,
 } from '../../../../../src/common/exceptions/codes.exceptions';
 import fixture from '../../../../fixtures';
+import { assertTtlIndex } from '../../../../helpers/assert-ttl-index';
 import { CodesFactory } from '../../../../helpers/factories/codes.factory';
 
 describe('Codes Service', () => {
@@ -297,5 +298,11 @@ describe('Codes Service', () => {
         new InvalidArgumentError('code is required'),
       );
     });
+  });
+});
+
+describe('Code TTL', () => {
+  test('should create a TTL index on the collection', async () => {
+    await assertTtlIndex(CodesModel, 'expiresAt');
   });
 });
