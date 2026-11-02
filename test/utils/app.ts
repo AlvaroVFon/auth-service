@@ -1,12 +1,16 @@
 import express, { Application } from 'express';
 
-import { createApplicationComposition } from '../../src/config/application.composition';
+import {
+  ApplicationCompositionOptions,
+  createApplicationComposition,
+} from '../../src/config/application.composition';
 import {
   getNumberEnvVariable,
   getStringEnvVariable,
 } from '../../src/config/env.config';
 import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
 import { silentLogger } from '../mocks/logger.mock';
+import { testDatabase } from '../setup.db';
 
 let app: Application;
 
@@ -15,9 +19,11 @@ const mailer = {
   sendMailWithTemplate: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
 
-const composition = createApplicationComposition({
+const createBaseTestOptions = (): ApplicationCompositionOptions => ({
   logger: silentLogger,
   mailer,
+  database: testDatabase,
+  trustProxy: 1,
   jwtSecret: getStringEnvVariable('JWT_SECRET'),
   jwtExpiresIn: parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10),
   refreshTokenExpiresIn: parseInt(
@@ -45,12 +51,27 @@ const composition = createApplicationComposition({
   },
 });
 
+const composition = createApplicationComposition({
+  ...createBaseTestOptions(),
+  corsOrigins: ['HTTP://ALLOWED.TEST/'],
+});
+
 export const createAppTestInstance = async () => {
   app = express();
   app.set('trust proxy', 1);
   composition.initialize(app);
 
   return app;
+};
+
+export const createAppTestInstanceFromEnvironment = (): Application => {
+  const environmentApp = express();
+  environmentApp.set('trust proxy', 1);
+  createApplicationComposition(createBaseTestOptions()).initialize(
+    environmentApp,
+  );
+
+  return environmentApp;
 };
 
 export const getTestAppInstance = async () => {

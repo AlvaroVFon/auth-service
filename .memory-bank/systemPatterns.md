@@ -5,7 +5,7 @@
 - **Stack:** Express 5 + Mongoose (MongoDB) + TypeScript (ESM via `tsx`)
 - **Entry point:** `src/index.ts` → `src/config/bootstrap.ts`
 - **Manual DI in `bootstrap.ts`:** All services and modules are instantiated and wired there. New services/config must be added to bootstrap.
-- **Module pattern:** Feature modules (`users/`, `auth/`) with `{module,controller,router,service,interface,schema}` files.
+- **Module pattern:** Feature modules (`users/`, `auth/`) with `{module,controller,router,service,interface,schema}` files; domain modules without HTTP surface (`applications/`, `grants/`) expose a port, a service and a schema.
 
 ## Key Patterns
 

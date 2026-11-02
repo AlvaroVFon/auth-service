@@ -4,6 +4,7 @@ import {
   PASSWORD_REGEX,
 } from '../../common/constants/regex';
 import { normalizeEmail } from '../../common/email';
+import { ForbiddenError } from '../../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -76,6 +77,12 @@ export class AuthService {
     }
   }
 
+  private assertVerified(user: { verified: boolean }): void {
+    if (!user.verified) {
+      throw new ForbiddenError('Email is not verified');
+    }
+  }
+
   async login(
     credentials: Credentials,
     ctx?: RequestContext,
@@ -94,6 +101,8 @@ export class AuthService {
       email,
       credentials.password,
     );
+
+    this.assertVerified(user);
 
     const session = await this.sessionService.create(
       user._id.toString(),
@@ -271,6 +280,8 @@ export class AuthService {
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
+
+    this.assertVerified(user);
 
     const session = await this.sessionService.rotate(
       userId,

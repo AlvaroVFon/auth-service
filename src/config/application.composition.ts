@@ -1,13 +1,14 @@
 import { Application } from 'express';
 
+import type { ApplicationsPort } from '../applications';
+import { ApplicationModel } from '../applications/applications.schema';
+import { ApplicationsService } from '../applications/applications.service';
 import { AuthModule } from '../auth';
 import type { AuthRateLimitConfig } from '../auth';
 import { CodesModel } from '../auth/codes/codes.schema';
 import { CodesService } from '../auth/codes/codes.service';
 import { AuthController } from '../auth/controllers/auth.controller';
-import { AuthTenantController } from '../auth/controllers/auth.tenant.controller';
 import { AuthMailer } from '../auth/services/auth-mailer';
-import { AuthTenantService } from '../auth/services/auth-tenant.service';
 import { AuthService } from '../auth/services/auth.service';
 import { BlacklistService } from '../auth/tokens/blacklist.service';
 import { BlacklistedTokenModel } from '../auth/tokens/blacklisted-token.schema';
@@ -18,6 +19,10 @@ import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
+import type { GrantsPort } from '../grants';
+import { GrantModel } from '../grants/grants.schema';
+import { GrantsService } from '../grants/grants.service';
+import { HealthModule, isHealthProbe } from '../health';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 import { CryptoService } from '../libs/crypto/crypto.service';
@@ -27,16 +32,18 @@ import { LoggerInterface } from '../libs/logger/logger.interface';
 import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
-import { TenantsModel } from '../tenants/tenants.schema';
-import { TenantsService } from '../tenants/tenants.service';
 import { UsersModule } from '../users/users.module';
+import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { GlobalMiddlewares } from './middlewares.config';
+import { resolveTrustProxy } from './trust-proxy.config';
 
 export interface ApplicationComposition {
   readonly logger: LoggerInterface;
   readonly database: Database;
+  readonly applications: ApplicationsPort;
+  readonly grants: GrantsPort;
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
   initialize(app: Application, logger?: LoggerInterface): void;
@@ -53,6 +60,8 @@ export interface ApplicationCompositionOptions {
   lockoutDurationMs?: number;
   publicAppUrl?: string;
   rateLimitConfig?: AuthRateLimitConfig;
+  corsOrigins?: string[];
+  trustProxy?: boolean | number;
 }
 
 const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
@@ -97,6 +106,7 @@ export const createApplicationComposition = (
   const logger = options.logger ?? new WinstonLogger();
   const database =
     options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
+  const healthModule = new HealthModule(logger, () => database.getReadyState());
   const cryptoService = new CryptoService();
   const jwtService = new JwtService(
     options.jwtSecret ?? getStringEnvVariable('JWT_SECRET'),
@@ -125,8 +135,7 @@ export const createApplicationComposition = (
   );
   const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
   const holdersService = new HoldersService(HoldersModel, cryptoService);
-  const tenantsService = new TenantsService(TenantsModel);
-  const authTenantService = new AuthTenantService(tenantsService, jwtService);
+  const applicationsService = new ApplicationsService(ApplicationModel);
   const usersModule = new UsersModule(
     cryptoService,
     authenticationMiddleware,
@@ -135,6 +144,11 @@ export const createApplicationComposition = (
     options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
+  );
+  const grantsService = new GrantsService(
+    GrantModel,
+    applicationsService,
+    usersModule.service,
   );
   const sessionService = new SessionService(jwtService, refreshTokenService);
   const authService = new AuthService(
@@ -148,7 +162,6 @@ export const createApplicationComposition = (
   );
   const authModule = new AuthModule({
     authController: new AuthController(authService),
-    authTenantController: new AuthTenantController(authTenantService),
     authenticationMiddleware,
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
     logger,
@@ -157,11 +170,35 @@ export const createApplicationComposition = (
   return {
     logger,
     database,
+    applications: applicationsService,
+    grants: grantsService,
     usersModule,
     authModule,
     initialize(app, requestLogger = logger): void {
-      HttpLoggerInterceptor.initialize(app, requestLogger);
-      GlobalMiddlewares.initialize(app, ['/auth/logout']);
+      app.set(
+        'trust proxy',
+        options.trustProxy ??
+          resolveTrustProxy(getStringEnvVariable('TRUST_PROXY')),
+      );
+
+      const corsOrigins =
+        options.corsOrigins === undefined
+          ? resolveCorsOrigins(getStringEnvVariable('CORS_ORIGINS'))
+          : normalizeCorsOrigins(options.corsOrigins);
+
+      if (corsOrigins.length === 0) {
+        requestLogger.warn(
+          'CORS_ORIGINS is not configured: every browser origin will be rejected',
+        );
+      } else {
+        requestLogger.info(`CORS allowed origins: ${corsOrigins.join(', ')}`);
+      }
+
+      HttpLoggerInterceptor.initialize(app, requestLogger, (request) =>
+        isHealthProbe(request.path),
+      );
+      GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
+      healthModule.initialize(app);
       usersModule.initialize(app);
       authModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
