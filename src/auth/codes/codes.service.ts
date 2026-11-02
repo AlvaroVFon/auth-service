@@ -32,12 +32,7 @@ export class CodesService {
       throw new InvalidArgumentError('Invalid codeType');
     }
 
-    const existingCode = await this.codeModel.findOne({
-      subjectId: new Types.ObjectId(subjectId),
-      type,
-      used: false,
-      expiresAt: { $gt: new Date() },
-    });
+    const existingCode = await this.findValidCode(subjectId, type);
 
     if (existingCode) {
       throw new AlreadyGeneratedCodeError(
@@ -50,6 +45,28 @@ export class CodesService {
       expiresAt: new Date(Date.now() + this.codeExpirationMs),
       subjectId: new Types.ObjectId(subjectId),
       type,
+    });
+  }
+
+  async findValidCode(subjectId: string, type: CodeType): Promise<Code | null> {
+    if (!subjectId) {
+      throw new InvalidArgumentError('subjectId is required');
+    }
+    if (!OBJECTID_REGEX.test(subjectId)) {
+      throw new InvalidArgumentError('Invalid subjectId');
+    }
+    if (!type) {
+      throw new InvalidArgumentError('codeType is required');
+    }
+    if (!Object.values(CodeType).includes(type)) {
+      throw new InvalidArgumentError('Invalid codeType');
+    }
+
+    return this.codeModel.findOne({
+      subjectId: new Types.ObjectId(subjectId),
+      type,
+      used: false,
+      expiresAt: { $gt: new Date() },
     });
   }
 

@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
+
+interface Rename {
+  id: Types.ObjectId;
+  to: string;
+}
 
 const run = async () => {
   if (fs.existsSync('.env')) {
@@ -15,33 +20,55 @@ const run = async () => {
     throw new Error('MONGO_URI is required');
   }
 
+  const apply = process.argv.includes('--apply');
+
   await mongoose.connect(uri);
 
   const seen = new Set<string>();
-  let updated = 0;
-  let removed = 0;
-  const holders = await HoldersModel.find().sort({ createdAt: -1 }).exec();
+  const deletions: Types.ObjectId[] = [];
+  const renames: Rename[] = [];
+  const cursor = HoldersModel.find().sort({ createdAt: -1 }).cursor();
 
-  for (const holder of holders) {
+  for await (const holder of cursor) {
     const email = normalizeEmail(holder.email);
 
     if (seen.has(email)) {
-      await holder.deleteOne();
-      removed += 1;
+      deletions.push(holder._id);
+      console.log(
+        `DELETE ${holder._id.toString()} "${holder.email}" (duplicate of "${email}")`,
+      );
       continue;
     }
 
     seen.add(email);
 
     if (email !== holder.email) {
-      holder.email = email;
-      await holder.save();
-      updated += 1;
+      renames.push({ id: holder._id, to: email });
+      console.log(
+        `UPDATE ${holder._id.toString()} "${holder.email}" -> "${email}"`,
+      );
     }
   }
 
+  if (!apply) {
+    console.log(
+      `Dry run: ${renames.length} updates and ${deletions.length} deletions planned. Re-run with --apply to execute.`,
+    );
+    return;
+  }
+
+  // Delete duplicates before renaming survivors: the unique email index would
+  // reject a rename while an older document still holds the canonical value.
+  if (deletions.length > 0) {
+    await HoldersModel.deleteMany({ _id: { $in: deletions } });
+  }
+
+  for (const rename of renames) {
+    await HoldersModel.updateOne({ _id: rename.id }, { email: rename.to });
+  }
+
   console.log(
-    `Holder email backfill finished: ${updated} updated, ${removed} duplicates removed`,
+    `Holder email backfill finished: ${renames.length} updated, ${deletions.length} duplicates removed`,
   );
 };
 

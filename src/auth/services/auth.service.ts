@@ -8,12 +8,13 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
+import { AlreadyGeneratedCodeError } from '../../common/exceptions/codes.exceptions';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
-import { UsersPort } from '../../users';
+import { User, UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
-import { CodeType } from '../codes/code.interface';
+import { Code, CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
 import { RequestContext } from '../tokens/request-context.type';
 import { SessionService } from '../tokens/session.service';
@@ -29,6 +30,51 @@ export class AuthService {
     private readonly holdersService: HoldersPort,
     private readonly logger: LoggerInterface,
   ) {}
+
+  private async resolveResetPasswordCode(userId: string): Promise<Code> {
+    try {
+      return await this.codeService.create(userId, CodeType.RESET_PASSWORD);
+    } catch (error) {
+      if (!(error instanceof AlreadyGeneratedCodeError)) {
+        throw error;
+      }
+
+      const existingCode = await this.codeService.findValidCode(
+        userId,
+        CodeType.RESET_PASSWORD,
+      );
+
+      if (!existingCode) {
+        throw error;
+      }
+
+      return existingCode;
+    }
+  }
+
+  private async sendResetPasswordEmail(user: User, code: Code): Promise<void> {
+    try {
+      await this.authMailer.sendResetPasswordEmail(
+        user.email,
+        user._id.toString(),
+        code.code,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to send password reset email for user ${user._id.toString()}`,
+        error,
+      );
+
+      try {
+        await this.codeService.deleteById(code._id.toString());
+      } catch (deleteError) {
+        this.logger.warn(
+          `Failed to clean up password reset code for user ${user._id.toString()}`,
+          deleteError,
+        );
+      }
+    }
+  }
 
   async login(
     credentials: Credentials,
@@ -137,18 +183,13 @@ export class AuthService {
     }
 
     try {
-      const code = await this.codeService.create(
-        user._id.toString(),
-        CodeType.RESET_PASSWORD,
-      );
-
-      void this.authMailer
-        .sendResetPasswordEmail(user.email, user._id.toString(), code.code)
-        .catch((error: unknown) => {
-          this.logger.warn('Failed to send password reset email', error);
-        });
+      const code = await this.resolveResetPasswordCode(user._id.toString());
+      void this.sendResetPasswordEmail(user, code);
     } catch (error) {
-      this.logger.warn('Failed to create password reset code', error);
+      this.logger.warn(
+        `Failed to prepare password reset code for user ${user._id.toString()}`,
+        error,
+      );
     }
   }
 

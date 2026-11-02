@@ -710,9 +710,33 @@ describe('Auth Service', () => {
       assert.strictEqual(lastCall?.arguments[1], user._id.toString());
     });
 
+    test('should resend an existing valid reset code', async () => {
+      const email = generateRandomEmail('forgot-resend');
+      const user = await fixture.create<UserInterface>('User', { email });
+      const mailCalls = () =>
+        (
+          mockAuthMailer.sendResetPasswordEmail as unknown as {
+            mock: { calls: { arguments: unknown[] }[] };
+          }
+        ).mock.calls;
+
+      await authService.forgotPassword(email);
+      const code = await fixture.findOne<Code>('Code', {
+        subjectId: user._id.toString(),
+        used: false,
+      });
+      const callsBefore = mailCalls().length;
+
+      await authService.forgotPassword(email);
+      const calls = mailCalls();
+
+      assert.strictEqual(calls.length, callsBefore + 1);
+      assert.strictEqual(calls[calls.length - 1]?.arguments[2], code!.code);
+    });
+
     test('should not fail when the reset email cannot be sent', async () => {
       const email = generateRandomEmail('forgot-mail-failure');
-      await fixture.create<UserInterface>('User', { email });
+      const user = await fixture.create<UserInterface>('User', { email });
       const mailMock = mockAuthMailer.sendResetPasswordEmail as unknown as {
         mock: { mockImplementation(fn: () => Promise<void>): void };
       };
@@ -723,8 +747,23 @@ describe('Auth Service', () => {
 
       try {
         await assert.doesNotReject(authService.forgotPassword(email));
-        await new Promise((resolve) => setImmediate(resolve));
 
+        const subjectId = user._id.toString();
+        const codeRemoved = async () =>
+          (await fixture.findOne<Code>('Code', {
+            subjectId,
+            used: false,
+          })) === null;
+
+        for (
+          let attempt = 0;
+          attempt < 20 && !(await codeRemoved());
+          attempt++
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+
+        assert.ok(await codeRemoved());
         assert.ok(
           (
             mockLogger.warn as unknown as {

@@ -299,3 +299,48 @@ describe('Codes Service', () => {
     });
   });
 });
+
+describe('Code lookup', () => {
+  let codesService: CodesService;
+
+  before(() => {
+    codesService = new CodesService(CodesModel);
+  });
+
+  test('should return the active code for a subject', async () => {
+    const subjectId = new Types.ObjectId().toString();
+    const created = await codesService.create(subjectId, CodeType.SIGNUP);
+
+    const found = await codesService.findValidCode(subjectId, CodeType.SIGNUP);
+
+    assert.strictEqual(found?._id.toString(), created._id.toString());
+  });
+
+  test('should ignore expired codes', async () => {
+    const subjectId = new Types.ObjectId().toString();
+    await fixture.create<Code>('Code', {
+      subjectId: new Types.ObjectId(subjectId),
+      type: CodeType.SIGNUP,
+      used: false,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    const found = await codesService.findValidCode(subjectId, CodeType.SIGNUP);
+
+    assert.strictEqual(found, null);
+  });
+
+  test('should ignore used codes', async () => {
+    const subjectId = new Types.ObjectId().toString();
+    await fixture.create<Code>('Code', {
+      subjectId: new Types.ObjectId(subjectId),
+      type: CodeType.SIGNUP,
+      used: true,
+      expiresAt: new Date(Date.now() + 1000),
+    });
+
+    const found = await codesService.findValidCode(subjectId, CodeType.SIGNUP);
+
+    assert.strictEqual(found, null);
+  });
+});
