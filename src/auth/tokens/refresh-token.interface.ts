@@ -6,6 +6,7 @@ export interface RefreshToken {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
   jti: string;
+  audience: string | null;
   expiresAt: Date;
   revokedAt: Date | null;
   replacedByJti: string | null;

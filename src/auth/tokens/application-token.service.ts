@@ -5,7 +5,7 @@ import { assertObjectId } from '../../common/validators/object-id';
 import type { GrantsPort } from '../../grants';
 import { GrantRoles } from '../../grants';
 import { JwtService } from '../../libs/jwt';
-import type { UsersPort } from '../../users';
+import type { User, UsersPort } from '../../users';
 
 export interface IssuedApplicationToken {
   accessToken: string;
@@ -51,6 +51,7 @@ export class ApplicationTokenService {
   async resolveAccess(
     userId: string,
     applicationIdentifier: string,
+    loadedUser?: User,
   ): Promise<ApplicationAccess> {
     assertObjectId(userId, 'userId');
 
@@ -62,14 +63,38 @@ export class ApplicationTokenService {
       applicationIdentifier,
     );
 
-    return this.authorize(userId, application);
+    return this.authorize(userId, application, loadedUser);
+  }
+
+  /**
+   * Resolves access from an audience claim. The value is unambiguous, so it
+   * must never fall back to a slug lookup: another application's slug could
+   * otherwise match the audience and yield a role for the wrong application.
+   */
+  async resolveAccessByAudience(
+    userId: string,
+    audience: string,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    assertObjectId(userId, 'userId');
+
+    if (!audience || !audience.trim()) {
+      throw new InvalidArgumentError('Audience is required');
+    }
+
+    const application = await this.applicationsService.findByAudience(
+      audience.trim(),
+    );
+
+    return this.authorize(userId, application, loadedUser);
   }
 
   private async authorize(
     userId: string,
     application: Application | null,
+    loadedUser?: User,
   ): Promise<ApplicationAccess> {
-    const user = await this.usersService.findById(userId);
+    const user = loadedUser ?? (await this.usersService.findById(userId));
 
     // Collapse "missing user", "inactive application" and "no grant" into one
     // response so the caller cannot use this path to enumerate ids.

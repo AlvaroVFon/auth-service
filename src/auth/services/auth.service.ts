@@ -13,6 +13,7 @@ import {
 import { AlreadyGeneratedCodeError } from '../../common/exceptions/codes.exceptions';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
+import type { TokenRole } from '../../libs/jwt';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
 import { User, UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
@@ -117,6 +118,7 @@ export class AuthService {
       const access = await this.applicationTokens.resolveAccess(
         userId,
         application,
+        user,
       );
       const session = await this.sessionService.create(
         userId,
@@ -313,10 +315,22 @@ export class AuthService {
 
     this.assertVerified(user);
 
-    const role =
-      audience === undefined
-        ? user.role
-        : (await this.applicationTokens.resolveAccess(userId, audience)).role;
+    let role: TokenRole = user.role;
+
+    if (audience === undefined) {
+      // Global tokens are owner-only. Refresh tokens issued before the
+      // application scoping must not keep minting global tokens for users.
+      if (user.role !== Roles.OWNER) {
+        throw new ForbiddenError('An application is required');
+      }
+    } else {
+      const access = await this.applicationTokens.resolveAccessByAudience(
+        userId,
+        audience,
+        user,
+      );
+      role = access.role;
+    }
 
     const session = await this.sessionService.rotate(
       userId,
@@ -336,6 +350,7 @@ export class AuthService {
     userId: string,
     accessJti?: string,
     accessExpiresAt?: Date,
+    audience?: string,
   ): Promise<void> {
     if (!userId) {
       throw new InvalidArgumentError('userId is required');
@@ -348,6 +363,8 @@ export class AuthService {
       await this.blacklistService.blacklist(accessJti, accessExpiresAt);
     }
 
-    await this.sessionService.revokeAll(userId);
+    // An application-scoped token may only revoke sessions of its own
+    // audience; otherwise any app could terminate sessions of every other app.
+    await this.sessionService.revokeAll(userId, audience);
   }
 }

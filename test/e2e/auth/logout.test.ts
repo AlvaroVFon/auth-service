@@ -59,6 +59,7 @@ describe('E2E Auth Logout', () => {
       refreshToken: loginResponse.body.refreshToken,
       email: signupCredentials.email,
       application: application.slug,
+      userId: String(user!._id),
     };
   }
 
@@ -152,6 +153,32 @@ describe('E2E Auth Logout', () => {
 
     assert.strictEqual(response.body.message, 'Refresh token has been revoked');
     assert.strictEqual(response.body.code, 'UNAUTHORIZED');
+  });
+
+  test('should not revoke sessions from another application', async () => {
+    const { accessToken, email, userId } = await signupAndLogin();
+    const other = await createApplicationAccess(userId);
+
+    const otherLogin = await request(app)
+      .post('/auth/login')
+      .send({
+        email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: other.application.slug,
+      })
+      .expect(200);
+
+    await request(app)
+      .post('/auth/logout')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(204);
+
+    // The token for the other application must survive the scoped logout.
+    await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${otherLogin.body.accessToken}`)
+      .send({ refreshToken: otherLogin.body.refreshToken })
+      .expect(200);
   });
 
   test('should be able to login again after logout', async () => {

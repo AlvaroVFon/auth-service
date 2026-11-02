@@ -16,6 +16,7 @@ export class RefreshTokenService {
     jti: string,
     expiresAt: Date,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<RefreshToken> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
@@ -27,6 +28,7 @@ export class RefreshTokenService {
     return this.refreshTokenModel.create({
       userId,
       jti,
+      audience: audience ?? null,
       expiresAt,
       revokedAt: null,
       replacedByJti: null,
@@ -61,13 +63,17 @@ export class RefreshTokenService {
     }
   }
 
-  async revokeAllByUserId(userId: string): Promise<void> {
+  async revokeAllByUserId(userId: string, audience?: string): Promise<void> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
     }
 
     await this.refreshTokenModel.updateMany(
-      { userId, revokedAt: null },
+      {
+        userId,
+        revokedAt: null,
+        ...(audience === undefined ? {} : { audience }),
+      },
       { revokedAt: new Date() },
     );
   }

@@ -20,7 +20,7 @@ export class SessionService {
     const session = this.jwtService.signTokenPair(userId, role, audience);
 
     await this.refreshTokenService.revokeAllByUserId(userId);
-    await this.persistRefreshToken(userId, session, ctx);
+    await this.persistRefreshToken(userId, session, ctx, audience);
 
     return session;
   }
@@ -66,25 +66,27 @@ export class SessionService {
       }
       throw error;
     }
-    await this.persistRefreshToken(userId, session, ctx);
+    await this.persistRefreshToken(userId, session, ctx, audience);
 
     return session;
   }
 
-  async revokeAll(userId: string): Promise<void> {
-    await this.refreshTokenService.revokeAllByUserId(userId);
+  async revokeAll(userId: string, audience?: string): Promise<void> {
+    await this.refreshTokenService.revokeAllByUserId(userId, audience);
   }
 
   private async persistRefreshToken(
     userId: string,
     session: TokenPair,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<void> {
     await this.refreshTokenService.create(
       userId,
       session.refreshTokenId,
       session.refreshExpiresAt,
       ctx,
+      audience,
     );
   }
 }

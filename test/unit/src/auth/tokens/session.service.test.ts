@@ -46,7 +46,13 @@ describe('SessionService', () => {
     assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists
       refreshTokenService.create.mock.calls[0].arguments,
-      [claims.userId, pair.refreshTokenId, pair.refreshExpiresAt, context],
+      [
+        claims.userId,
+        pair.refreshTokenId,
+        pair.refreshExpiresAt,
+        context,
+        undefined,
+      ],
     );
   });
 
@@ -66,6 +72,17 @@ describe('SessionService', () => {
       // @ts-expect-error mock.calls exists
       jwtService.signTokenPair.mock.calls[0].arguments,
       [claims.userId, claims.role, 'app-aud'],
+    );
+    assert.deepStrictEqual(
+      // @ts-expect-error mock.calls exists
+      refreshTokenService.create.mock.calls[0].arguments,
+      [
+        claims.userId,
+        pair.refreshTokenId,
+        pair.refreshExpiresAt,
+        context,
+        'app-aud',
+      ],
     );
   });
 

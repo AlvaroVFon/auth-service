@@ -86,7 +86,7 @@ export class ApplicationsService implements ApplicationsPort {
       slug: value.toLowerCase(),
     });
 
-    return bySlug ?? this.applicationModel.findOne({ audience: value });
+    return bySlug ?? (await this.findByAudience(value));
   }
 
   async findAll(): Promise<Application[]> {

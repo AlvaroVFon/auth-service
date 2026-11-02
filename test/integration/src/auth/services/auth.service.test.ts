@@ -1146,6 +1146,11 @@ describe('Auth Service', () => {
 
     test('should revoke refresh tokens issued before a password reset', async () => {
       const user = await fixture.create<UserInterface>('User');
+      await fixture.updateOne<UserInterface>(
+        'User',
+        { _id: user._id },
+        { role: Roles.OWNER },
+      );
       const refreshToken = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,
@@ -1273,6 +1278,31 @@ describe('Auth Service', () => {
   });
 
   describe('refreshToken()', () => {
+    const makeOwner = (
+      userId: Types.ObjectId | string = DEFAULT_USER_ID,
+    ): Promise<void> =>
+      fixture.updateOne<UserInterface>(
+        'User',
+        { _id: userId },
+        { role: Roles.OWNER },
+      );
+
+    test('should reject a global refresh token from a non-owner', async () => {
+      const refreshToken = jwtService.signTokenPair(
+        DEFAULT_USER_ID.toString(),
+        Roles.USER,
+      ).refreshToken;
+
+      await assert.rejects(
+        authService.refreshToken(DEFAULT_USER_ID.toString(), refreshToken),
+        {
+          name: 'ForbiddenError',
+          message: 'An application is required',
+          code: 'FORBIDDEN',
+        },
+      );
+    });
+
     test('should throw an error if invalid userId is provided', async () => {
       await assert.rejects(
         async () =>
@@ -1298,6 +1328,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if JWT is invalid', async () => {
+      await makeOwner();
       await assert.rejects(
         async () =>
           await authService.refreshToken(
@@ -1311,6 +1342,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if no stored token is found for the jti', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1331,6 +1363,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if stored token has been revoked', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1397,6 +1430,7 @@ describe('Auth Service', () => {
     });
 
     test('should succeed with valid userId and refreshToken', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1573,6 +1607,7 @@ describe('Auth Service', () => {
     });
 
     test('should reject a reused (already revoked) refresh token', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1606,6 +1641,7 @@ describe('Auth Service', () => {
 
     test('should allow only one concurrent refresh rotation', async () => {
       const user = await fixture.create<UserInterface>('User');
+      await makeOwner(user._id);
       const refreshToken = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,
