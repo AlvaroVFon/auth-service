@@ -85,7 +85,7 @@ export class UsersController {
   @Catch()
   async deleteUser(req: Request, res: Response): Promise<void> {
     const id = req.params.id as string;
-    await this.userService.deleteOneById(id);
+    await this.userService.deleteOneById(id, req.user?.id);
 
     res.status(204).json();
   }

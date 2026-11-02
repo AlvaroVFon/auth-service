@@ -2,6 +2,12 @@ import { Application } from 'express';
 
 import type { ApplicationsPort } from '../applications';
 import { ApplicationsModule } from '../applications/applications.module';
+import {
+  AuditController,
+  AuditModule,
+  AuditService,
+  createAuditEventModel,
+} from '../audit';
 import { AuthModule } from '../auth';
 import type { AuthRateLimitConfig } from '../auth';
 import { CodesModel } from '../auth/codes/codes.schema';
@@ -64,6 +70,7 @@ export interface ApplicationComposition {
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
   readonly linksModule: LinksModule;
+  readonly auditModule: AuditModule;
   readonly ownerBootstrap: OwnerBootstrapService;
   readonly jwtKeyring: JwtKeyring;
   readonly applicationTokens: ApplicationTokenService;
@@ -131,6 +138,7 @@ export const createApplicationComposition = (
   options: ApplicationCompositionOptions = {},
 ): ApplicationComposition => {
   const logger = options.logger ?? new WinstonLogger();
+  const auditService = new AuditService(createAuditEventModel(), logger);
   const database =
     options.database ?? new Database(requireEnvVariable('MONGO_URI'), logger);
   const healthModule = new HealthModule(logger, () => database.getReadyState());
@@ -209,6 +217,7 @@ export const createApplicationComposition = (
     applicationsModule.service,
     usersModule.service,
     authenticationMiddleware,
+    auditService,
     logger,
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
@@ -233,6 +242,7 @@ export const createApplicationComposition = (
     holdersService,
     applicationTokenService,
     jwtService,
+    auditService,
     logger,
   );
   const profileService = new ProfileService(
@@ -279,6 +289,12 @@ export const createApplicationComposition = (
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
     logger,
   });
+  const auditModule = new AuditModule({
+    auditController: new AuditController(auditService),
+    authenticationMiddleware,
+    authorizationMiddleware,
+    logger,
+  });
 
   return {
     logger,
@@ -288,6 +304,7 @@ export const createApplicationComposition = (
     usersModule,
     authModule,
     linksModule,
+    auditModule,
     ownerBootstrap,
     jwtKeyring: jwtConfig.keyring,
     applicationTokens: applicationTokenService,
@@ -322,6 +339,7 @@ export const createApplicationComposition = (
       usersModule.initialize(app);
       authModule.initialize(app);
       linksModule.initialize(app);
+      auditModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },
   };

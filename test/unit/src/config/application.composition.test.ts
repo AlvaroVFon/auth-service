@@ -79,6 +79,7 @@ describe('application composition wiring', () => {
     assert.ok(composition.jwtKeyring.getJwks().length >= 1);
     assert.ok(composition.applicationTokens);
     assert.ok(composition.linksModule);
+    assert.ok(composition.auditModule);
     await assert.rejects(
       composition.grants.assignRole({
         userId: 'bad',

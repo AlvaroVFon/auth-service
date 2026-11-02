@@ -18,6 +18,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Refresh rotation with the refresh token alone, even after the access token expired
 - Independent device sessions with listing and selective revocation
 - Shareable, single-use invitation and password-reset links (no SMTP required)
+- Owner-only audit log of authentication and permission events
 
 ## Getting Started
 
@@ -133,6 +134,19 @@ POST /auth/password-reset-links/accept     { "token": "...", "newPassword": "...
 Links are hashed at rest, expire (`INVITATION_LINK_EXPIRATION_MS`, default 7 days;
 `PASSWORD_RESET_LINK_EXPIRATION_MS`, default 1 hour) and can be used only once.
 `/auth/forgot-password` stays available and never reveals whether an email exists.
+
+### Audit log
+
+The service records login successes/failures, lockouts, refreshes, logouts, session
+revocations and grant changes in the `AuditEvent` collection. Events carry identifiers
+and request metadata only (never passwords, tokens, codes or links) and are kept for
+`AUDIT_RETENTION_DAYS` (default 90) through a TTL index.
+
+The owner can query them:
+
+```
+GET /audit-events?userId=...&applicationId=...&event=login.succeeded&from=2026-01-01&to=2026-02-01
+```
 
 ### JWT signing keys
 
