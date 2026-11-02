@@ -9,6 +9,7 @@ import { normalizeEmail } from '../common/email';
 import { Roles } from '../common/enums/roles.enum';
 import {
   AccountLockedError,
+  ForbiddenError,
   InvalidCredentialsError,
 } from '../common/exceptions/auth.exceptions';
 import {
@@ -259,8 +260,20 @@ export class UsersService implements UsersPort {
       throw new EntityNotFoundError('User not found');
     }
 
-    await this.grantsCleaner?.deleteByUser(id);
+    if (user.role === Roles.OWNER) {
+      throw new ForbiddenError('The owner cannot be deleted');
+    }
+
+    if (!this.grantsCleaner) {
+      throw new Error('User grants cleaner is not configured');
+    }
+
     await this.usersModel.findByIdAndDelete(id);
+
+    // Best effort: MongoDB standalone deployments cannot wrap both writes in a
+    // transaction, so grants are cleaned after the user is gone. If the cleanup
+    // fails the error surfaces, but the deletion is not rolled back.
+    await this.grantsCleaner.deleteByUser(id);
 
     return user;
   }

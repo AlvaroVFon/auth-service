@@ -1,5 +1,7 @@
 import { Types } from 'mongoose';
 
+import { Roles } from '../../../../src/common/enums/roles.enum';
+import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
   EntityAlreadyExistsError,
   EntityNotFoundError,
@@ -19,6 +21,7 @@ describe('UsersService', () => {
 
   before(() => {
     usersService = new UsersService(User, new CryptoService());
+    usersService.setGrantsCleaner({ deleteByUser: async () => {} });
   });
 
   describe('UsersService Initialization', () => {
@@ -556,6 +559,44 @@ describe('UsersService', () => {
             'Invalid ID format',
           );
         }
+      });
+
+      test('should reject deleting the owner', async () => {
+        const owner = await usersService.createOwner(
+          'owner-delete@example.com',
+          'StrongOwner123!',
+        );
+
+        await assert.rejects(
+          usersService.deleteOneById(owner._id.toString()),
+          ForbiddenError,
+        );
+
+        const stillThere = await fixture.findById<UserInterface>(
+          'User',
+          owner._id.toString(),
+        );
+        assert.ok(stillThere);
+        assert.strictEqual(stillThere?.role, Roles.OWNER);
+      });
+
+      test('should refuse to delete when no grants cleaner is configured', async () => {
+        const unconfigured = new UsersService(User, new CryptoService());
+        const user = await fixture.create<UserInterface>(
+          'User',
+          UserFactory.generate(),
+        );
+
+        await assert.rejects(
+          unconfigured.deleteOneById(user._id.toString()),
+          /grants cleaner is not configured/,
+        );
+
+        const stillThere = await fixture.findById<UserInterface>(
+          'User',
+          user._id.toString(),
+        );
+        assert.ok(stillThere);
       });
 
       test('should delete a user by id', async () => {

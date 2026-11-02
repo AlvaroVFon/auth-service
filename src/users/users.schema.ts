@@ -54,8 +54,6 @@ const userSchema = new Schema<UserInterface>(
   },
 );
 
-export const User = model<UserInterface>('User', userSchema);
-
 userSchema.index(
   { role: 1 },
   {
@@ -64,4 +62,4 @@ userSchema.index(
   },
 );
 
-export { userSchema };
+export const User = model<UserInterface>('User', userSchema);

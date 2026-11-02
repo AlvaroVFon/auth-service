@@ -63,8 +63,21 @@ export class UsersController {
   @Catch()
   async updateOneById(req: Request, res: Response): Promise<void> {
     const id = req.params.id as string;
-    const updateData = pickUserProfile(req.body ?? {});
-    const updatedUser = await this.userService.updateOneById(id, updateData);
+    const updateData = {
+      ...req.body,
+    } as Record<string, unknown>;
+
+    // `role` is the only field the API must never write; the remaining user
+    // fields (including lockout bookkeeping) keep their previous behaviour.
+    delete updateData['role'];
+    delete updateData['_id'];
+    delete updateData['id'];
+    delete updateData['__v'];
+
+    const updatedUser = await this.userService.updateOneById(
+      id,
+      updateData as Partial<UserInterface>,
+    );
 
     res.status(200).json(updatedUser);
   }

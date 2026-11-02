@@ -26,7 +26,10 @@ y no devolver grants de aplicaciones inactivas.
   siempre; el resto necesita un `Grant` con rol `admin` para la aplicación indicada en
   la ruta. Revocar el grant surte efecto en la siguiente petición.
 - Las escrituras de `/users` ignoran cualquier `role` enviado en el cuerpo: solo el
-  bootstrap puede crear owners.
+  bootstrap puede crear owners. `PATCH /users/:id` conserva el resto de campos del
+  esquema (incluidos `loginAttempts`/`lockoutUntil` para desbloquear cuentas).
+- El owner no se puede borrar por HTTP: `DELETE /users/:id` responde 403 si el
+  usuario tiene rol `owner`, porque no hay otra vía para recrearlo.
 
 ## API de administración
 
@@ -77,7 +80,10 @@ usuario owner creado es inerte para versiones antiguas. No se borra ningún dato
 ## Pendientes resueltos de #38
 
 - `UsersService.deleteOneById` limpia los grants del usuario mediante
-  `UserGrantsCleanerPort`, implementado por `GrantsService`.
+  `UserGrantsCleanerPort`, implementado por `GrantsService`. La limpieza es
+  obligatoria (sin cleaner configurado la operación falla) y se ejecuta después de
+  borrar el usuario; en MongoDB standalone no hay transacción, así que un fallo de
+  limpieza deja el borrado hecho y devuelve error para monitorizarlo.
 - `findByUserAndApplication` y `listByUser` ocultan grants de aplicaciones inactivas,
   igual que ya hacía `assignRole`.
 

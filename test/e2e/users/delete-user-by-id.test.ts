@@ -1,6 +1,7 @@
 import { Application } from 'express';
 import request from 'supertest';
 
+import { Roles } from '../../../src/common/enums/roles.enum';
 import { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import { generateRandomEmail } from '../../fixtures/defaults';
@@ -35,6 +36,25 @@ describe('Delete User By ID E2E Test', () => {
 
     assert.equal(deletedUser, null);
     assert.deepStrictEqual(deleteResponse.body, {});
+  });
+
+  test('should reject deleting the owner', async () => {
+    const owner = await fixture.create<User>('User', {
+      email: generateRandomEmail('ownerself'),
+      password: 'Delete@1234',
+      role: Roles.OWNER,
+    });
+
+    await request(app)
+      .delete(`/users/${owner._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .expect(403);
+
+    const stillThere = await fixture.findById<User>(
+      'User',
+      owner._id.toString(),
+    );
+    assert.ok(stillThere);
   });
 
   test('should return 404 when deleting a non-existent user', async () => {

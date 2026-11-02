@@ -60,6 +60,26 @@ describe('E2E Test - Update User By ID', () => {
     assert.ok(response.body.message.includes('Request body is required'));
   });
 
+  test('should keep administrative lockout fields writable', async () => {
+    const user = await fixture.create<User>('User', {
+      email: generateRandomEmail('unlock'),
+      password: 'password123',
+      loginAttempts: 5,
+      lockoutUntil: new Date(Date.now() + 600000),
+    });
+
+    const unlocked = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ loginAttempts: 0, lockoutUntil: null })
+      .expect(200);
+
+    assert.strictEqual(unlocked.body.loginAttempts, undefined);
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.loginAttempts, 0);
+    assert.strictEqual(stored?.lockoutUntil, null);
+  });
+
   test('should ignore a role supplied in the update body', async () => {
     const user = await fixture.create<User>('User', {
       email: generateRandomEmail('roleupdate'),
