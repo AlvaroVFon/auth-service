@@ -281,6 +281,27 @@ describe('JwtService', () => {
     });
   });
 
+  describe('MFA challenge', () => {
+    test('should not verify as an access token for the application audience', () => {
+      const challenge = jwtService.signMfaChallenge(userId, {
+        application: 'app-slug',
+        audience: 'app-aud',
+      });
+
+      const claims = jwtService.verifyMfaChallenge(challenge);
+
+      assert.strictEqual(claims.type, TokenTypes.MFA);
+      assert.strictEqual(claims.aud, 'auth-service:mfa');
+      assert.strictEqual(claims.targetAudience, 'app-aud');
+      assert.strictEqual(claims.role, undefined);
+
+      assert.throws(
+        () => jwtService.verifyToken(challenge, { audience: 'app-aud' }),
+        (error: unknown) => (error as Error).name === 'InvalidTokenError',
+      );
+    });
+  });
+
   describe('tenant token removal', () => {
     test('should not expose tenant token generation', () => {
       assert.strictEqual(

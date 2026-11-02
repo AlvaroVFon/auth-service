@@ -18,7 +18,7 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
-import { CryptoService } from '../libs/crypto';
+import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
 import type { UserGrantsCleanerPort, UsersPort } from './users.port';
 
@@ -30,6 +30,7 @@ export class UsersService implements UsersPort {
     private readonly cryptoService: CryptoService,
     private readonly maxLoginAttempts: number = 5,
     private readonly lockoutDurationMs: number = 900000,
+    private readonly mfaCipher?: SecretCipher,
   ) {}
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
@@ -150,6 +151,11 @@ export class UsersService implements UsersPort {
     }
 
     const user = await this.usersModel.findById(id);
+
+    if (user) {
+      this.decryptMfaSecrets(user);
+    }
+
     return user;
   }
 
@@ -230,6 +236,130 @@ export class UsersService implements UsersPort {
 
     if (!user) {
       throw new EntityNotFoundError('User not found');
+    }
+  }
+
+  async setMfaPendingSecret(id: string, secret: string): Promise<void> {
+    const user = await this.usersModel.findByIdAndUpdate(id, {
+      $set: { mfaPendingSecret: this.encryptMfaSecret(secret) },
+    });
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+  }
+
+  async activateMfa(
+    id: string,
+    secret: string,
+    recoveryCodeHashes: string[],
+  ): Promise<boolean> {
+    const user = await this.usersModel.findOneAndUpdate(
+      { _id: id, mfaEnabled: { $ne: true } },
+      {
+        $set: {
+          mfaEnabled: true,
+          mfaSecret: this.encryptMfaSecret(secret),
+          mfaRecoveryCodes: recoveryCodeHashes,
+          mfaFailedAttempts: 0,
+          mfaLockoutUntil: null,
+        },
+        $unset: { mfaPendingSecret: '' },
+      },
+      { returnDocument: 'after' },
+    );
+
+    return user !== null;
+  }
+
+  async disableMfa(id: string): Promise<void> {
+    const user = await this.usersModel.findByIdAndUpdate(id, {
+      $set: {
+        mfaEnabled: false,
+        mfaFailedAttempts: 0,
+        mfaLockoutUntil: null,
+      },
+      $unset: {
+        mfaSecret: '',
+        mfaPendingSecret: '',
+        mfaRecoveryCodes: '',
+        mfaLastUsedStep: '',
+      },
+    });
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+  }
+
+  async recordFailedMfa(id: string): Promise<boolean> {
+    const user = await this.usersModel.findByIdAndUpdate(
+      id,
+      { $inc: { mfaFailedAttempts: 1 } },
+      { returnDocument: 'after' },
+    );
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    if ((user.mfaFailedAttempts ?? 0) < this.maxLoginAttempts) {
+      return false;
+    }
+
+    await this.usersModel.findByIdAndUpdate(id, {
+      $set: {
+        mfaLockoutUntil: new Date(Date.now() + this.lockoutDurationMs),
+      },
+    });
+
+    return true;
+  }
+
+  async recordMfaStep(id: string, step: number): Promise<boolean> {
+    const result = await this.usersModel.updateOne(
+      {
+        _id: id,
+        $or: [
+          { mfaLastUsedStep: { $exists: false } },
+          { mfaLastUsedStep: { $lt: step } },
+        ],
+      },
+      { $set: { mfaLastUsedStep: step } },
+    );
+
+    return result.modifiedCount === 1;
+  }
+
+  async resetMfaFailures(id: string): Promise<void> {
+    await this.usersModel.findByIdAndUpdate(id, {
+      $set: { mfaFailedAttempts: 0, mfaLockoutUntil: null },
+    });
+  }
+
+  async consumeMfaRecoveryCode(id: string, codeHash: string): Promise<boolean> {
+    const result = await this.usersModel.updateOne(
+      { _id: id, mfaRecoveryCodes: codeHash },
+      { $pull: { mfaRecoveryCodes: codeHash } },
+    );
+
+    return result.modifiedCount === 1;
+  }
+
+  private encryptMfaSecret(secret: string): string {
+    return this.mfaCipher ? this.mfaCipher.encrypt(secret) : secret;
+  }
+
+  private decryptMfaSecrets(user: UserInterface): void {
+    if (!this.mfaCipher) {
+      return;
+    }
+
+    if (user.mfaSecret) {
+      user.mfaSecret = this.mfaCipher.decrypt(user.mfaSecret);
+    }
+    if (user.mfaPendingSecret) {
+      user.mfaPendingSecret = this.mfaCipher.decrypt(user.mfaPendingSecret);
     }
   }
 

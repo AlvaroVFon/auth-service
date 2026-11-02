@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { Catch } from '../../common/decorators/catch.decorator';
 import { InvalidCredentialsError } from '../../common/exceptions/auth.exceptions';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
+import { MfaService } from '../mfa';
 import { AuthService } from '../services/auth.service';
 import { ProfileService, TokenIdentity } from '../services/profile.service';
 import { RequestContext } from '../tokens/request-context.type';
@@ -11,6 +12,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly profileService: ProfileService,
+    private readonly mfaService: MfaService,
   ) {}
 
   private buildRequestContext(req: Request): RequestContext {
@@ -58,6 +60,54 @@ export class AuthController {
     );
 
     res.status(200).json(tokens);
+  }
+
+  @Catch()
+  async verifyMfa(req: Request, res: Response): Promise<void> {
+    const { mfaToken, code } = req.body as {
+      mfaToken: string;
+      code: string;
+    };
+    const tokens = await this.authService.verifyMfa(
+      mfaToken,
+      code,
+      this.buildRequestContext(req),
+    );
+
+    res.status(200).json(tokens);
+  }
+
+  @Catch()
+  async enrollMfa(req: Request, res: Response): Promise<void> {
+    const { password } = req.body as { password: string };
+    const enrollment = await this.mfaService.enroll(
+      req.user?.id as string,
+      password,
+    );
+
+    res.status(200).json(enrollment);
+  }
+
+  @Catch()
+  async activateMfa(req: Request, res: Response): Promise<void> {
+    const { code } = req.body as { code: string };
+    const activation = await this.mfaService.activate(
+      req.user?.id as string,
+      code,
+    );
+
+    res.status(200).json(activation);
+  }
+
+  @Catch()
+  async disableMfa(req: Request, res: Response): Promise<void> {
+    const { password, code } = req.body as {
+      password: string;
+      code: string;
+    };
+    await this.mfaService.disable(req.user?.id as string, password, code);
+
+    res.status(204).send();
   }
 
   @Catch()

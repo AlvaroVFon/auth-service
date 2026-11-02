@@ -4,9 +4,14 @@ import { Application } from '../../../../../src/applications/applications.interf
 import { ApplicationModel } from '../../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../../src/applications/applications.service';
 import type { AuditPort } from '../../../../../src/audit';
+import {
+  LoginResult,
+  TokenPairResponse,
+} from '../../../../../src/auth/auth.interface';
 import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
 import { CodesService } from '../../../../../src/auth/codes/codes.service';
+import { MfaService } from '../../../../../src/auth/mfa';
 import { AuthMailer } from '../../../../../src/auth/services/auth-mailer';
 import { AuthService } from '../../../../../src/auth/services/auth.service';
 import { ApplicationTokenService } from '../../../../../src/auth/tokens/application-token.service';
@@ -71,6 +76,18 @@ describe('Auth Service', () => {
     record: mock.fn(() => Promise.resolve()),
     list: mock.fn(() => Promise.resolve([])),
   } as unknown as AuditPort;
+
+  const mockMfaService = {
+    enroll: mock.fn(() => Promise.resolve({})),
+    activate: mock.fn(() => Promise.resolve({ recoveryCodes: [] })),
+    verify: mock.fn(() => Promise.resolve()),
+    disable: mock.fn(() => Promise.resolve()),
+  } as unknown as MfaService;
+
+  const asTokens = (result: LoginResult): TokenPairResponse => {
+    assert.ok('accessToken' in result);
+    return result as TokenPairResponse;
+  };
 
   const mockLogger: LoggerInterface = {
     info: mock.fn(),
@@ -137,6 +154,7 @@ describe('Auth Service', () => {
       applicationTokens,
       jwtService,
       mockAuditService,
+      mockMfaService,
       mockLogger,
     );
   });
@@ -172,10 +190,10 @@ describe('Auth Service', () => {
       });
 
       assert.ok(result);
-      assert.strictEqual(typeof result.accessToken, 'string');
-      assert.strictEqual(typeof result.refreshToken, 'string');
-      assert.ok(JWT_REGEX.test(result.accessToken));
-      assert.ok(JWT_REGEX.test(result.refreshToken));
+      assert.strictEqual(typeof asTokens(result).accessToken, 'string');
+      assert.strictEqual(typeof asTokens(result).refreshToken, 'string');
+      assert.ok(JWT_REGEX.test(asTokens(result).accessToken));
+      assert.ok(JWT_REGEX.test(asTokens(result).refreshToken));
     });
 
     test('should scope tokens to the application and grant role (AC-1)', async () => {
@@ -191,10 +209,10 @@ describe('Auth Service', () => {
         application: DEFAULT_APPLICATION.slug,
       });
 
-      const access = jwtService.verifyToken(result.accessToken, {
+      const access = jwtService.verifyToken(asTokens(result).accessToken, {
         audience: DEFAULT_APPLICATION.audience,
       });
-      const refresh = jwtService.verifyToken(result.refreshToken, {
+      const refresh = jwtService.verifyToken(asTokens(result).refreshToken, {
         audience: DEFAULT_APPLICATION.audience,
       });
 
@@ -211,7 +229,7 @@ describe('Auth Service', () => {
         application: DEFAULT_APPLICATION.audience,
       });
 
-      const access = jwtService.verifyToken(result.accessToken, {
+      const access = jwtService.verifyToken(asTokens(result).accessToken, {
         audience: DEFAULT_APPLICATION.audience,
       });
 
@@ -277,13 +295,13 @@ describe('Auth Service', () => {
       });
 
       assert.strictEqual(
-        jwtService.verifyToken(tokensA.accessToken, {
+        jwtService.verifyToken(asTokens(tokensA).accessToken, {
           audience: appA.audience,
         }).role,
         GrantRoles.VIEWER,
       );
       assert.strictEqual(
-        jwtService.verifyToken(tokensB.accessToken, {
+        jwtService.verifyToken(asTokens(tokensB).accessToken, {
           audience: appB.audience,
         }).role,
         GrantRoles.ADMIN,
@@ -318,7 +336,7 @@ describe('Auth Service', () => {
         password: 'password123',
       });
 
-      const access = jwtService.verifyToken(result.accessToken);
+      const access = jwtService.verifyToken(asTokens(result).accessToken);
 
       assert.strictEqual(access.aud, undefined);
       assert.strictEqual(access.role, Roles.OWNER);
@@ -348,7 +366,7 @@ describe('Auth Service', () => {
         application: DEFAULT_APPLICATION.slug,
       });
 
-      assert.ok(result.accessToken);
+      assert.ok(asTokens(result).accessToken);
     });
 
     test('should throw an error for non existing email', async () => {
@@ -455,6 +473,7 @@ describe('Auth Service', () => {
         applicationTokens,
         jwtService,
         mockAuditService,
+        mockMfaService,
         mockLogger,
       );
     });
@@ -505,8 +524,8 @@ describe('Auth Service', () => {
       });
 
       assert.ok(result);
-      assert.strictEqual(typeof result.accessToken, 'string');
-      assert.strictEqual(typeof result.refreshToken, 'string');
+      assert.strictEqual(typeof asTokens(result).accessToken, 'string');
+      assert.strictEqual(typeof asTokens(result).refreshToken, 'string');
 
       const updatedUser = await fixture.findOne<UserInterface>('User', {
         email,
@@ -589,8 +608,8 @@ describe('Auth Service', () => {
       });
 
       assert.ok(result);
-      assert.strictEqual(typeof result.accessToken, 'string');
-      assert.strictEqual(typeof result.refreshToken, 'string');
+      assert.strictEqual(typeof asTokens(result).accessToken, 'string');
+      assert.strictEqual(typeof asTokens(result).refreshToken, 'string');
     });
 
     test('should check lockout before comparing password', async () => {
@@ -1451,7 +1470,9 @@ describe('Auth Service', () => {
         application: DEFAULT_APPLICATION.slug,
       });
 
-      const refreshed = await authService.refreshToken(login.refreshToken);
+      const refreshed = await authService.refreshToken(
+        asTokens(login).refreshToken,
+      );
 
       const access = jwtService.verifyToken(refreshed.accessToken, {
         audience: DEFAULT_APPLICATION.audience,
@@ -1477,7 +1498,9 @@ describe('Auth Service', () => {
         { role: GrantRoles.ADMIN },
       );
 
-      const refreshed = await authService.refreshToken(login.refreshToken);
+      const refreshed = await authService.refreshToken(
+        asTokens(login).refreshToken,
+      );
 
       assert.strictEqual(
         jwtService.verifyToken(refreshed.accessToken, {
@@ -1495,10 +1518,13 @@ describe('Auth Service', () => {
       });
       await fixture.deleteOne<Grant>('Grant', { userId: DEFAULT_USER_ID });
 
-      await assert.rejects(authService.refreshToken(login.refreshToken), {
-        name: 'ForbiddenError',
-        message: 'User has no access to this application',
-      });
+      await assert.rejects(
+        authService.refreshToken(asTokens(login).refreshToken),
+        {
+          name: 'ForbiddenError',
+          message: 'User has no access to this application',
+        },
+      );
 
       await grantsService.assignRole({
         userId: DEFAULT_USER_ID.toString(),
@@ -1507,10 +1533,13 @@ describe('Auth Service', () => {
       });
 
       // Restoring the grant must not resurrect the revoked session.
-      await assert.rejects(authService.refreshToken(login.refreshToken), {
-        name: 'UnauthorizedError',
-        message: 'Refresh token has been revoked',
-      });
+      await assert.rejects(
+        authService.refreshToken(asTokens(login).refreshToken),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
+        },
+      );
     });
 
     test('should reject a refresh when the application is inactive', async () => {
@@ -1525,10 +1554,13 @@ describe('Auth Service', () => {
         { active: false },
       );
 
-      await assert.rejects(authService.refreshToken(login.refreshToken), {
-        name: 'ForbiddenError',
-        message: 'User has no access to this application',
-      });
+      await assert.rejects(
+        authService.refreshToken(asTokens(login).refreshToken),
+        {
+          name: 'ForbiddenError',
+          message: 'User has no access to this application',
+        },
+      );
 
       await fixture.updateOne<Application>(
         'Application',
@@ -1536,10 +1568,13 @@ describe('Auth Service', () => {
         { active: true },
       );
 
-      await assert.rejects(authService.refreshToken(login.refreshToken), {
-        name: 'UnauthorizedError',
-        message: 'Refresh token has been revoked',
-      });
+      await assert.rejects(
+        authService.refreshToken(asTokens(login).refreshToken),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
+        },
+      );
     });
 
     test('should reject a reused (already revoked) refresh token', async () => {

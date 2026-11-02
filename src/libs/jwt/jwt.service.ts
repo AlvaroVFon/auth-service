@@ -22,10 +22,15 @@ const DEFAULT_ISSUER = 'auth-service';
 const RSA_ALGORITHM = 'RS256';
 const LEGACY_ALGORITHM = 'HS256';
 
+// Reserved audience for MFA challenges. External verifiers checking the
+// application audience must never accept a challenge as an access token.
+const MFA_CHALLENGE_AUDIENCE = 'auth-service:mfa';
+
 export class JwtService {
   private readonly issuer: string;
   private readonly legacySecret: string | undefined;
   private readonly logger: LoggerInterface | undefined;
+  readonly mfaChallengeExpiresIn: number;
 
   constructor(
     private readonly keyring: JwtKeyring,
@@ -44,6 +49,7 @@ export class JwtService {
     this.issuer = options.issuer ?? DEFAULT_ISSUER;
     this.legacySecret = options.legacySecret;
     this.logger = options.logger;
+    this.mfaChallengeExpiresIn = options.mfaChallengeExpiresIn ?? 300;
   }
 
   signTokenPair(userId: string, role: TokenRole, audience?: string): TokenPair {
@@ -79,6 +85,43 @@ export class JwtService {
       { userId, role, type: TokenTypes.ACCESS, aud: audience },
       this.expiresIn,
     );
+  }
+
+  signMfaChallenge(
+    userId: string,
+    options: { application?: string; audience?: string } = {},
+  ): string {
+    return this.signUserToken(
+      {
+        userId,
+        type: TokenTypes.MFA,
+        aud: MFA_CHALLENGE_AUDIENCE,
+        ...(options.application === undefined
+          ? {}
+          : { app: options.application }),
+        ...(options.audience === undefined
+          ? {}
+          : { targetAudience: options.audience }),
+      },
+      this.mfaChallengeExpiresIn,
+    );
+  }
+
+  verifyMfaChallenge(token: string): TokenClaims {
+    const claims = this.verifyToken(token);
+
+    if (
+      claims.type !== TokenTypes.MFA ||
+      claims.aud !== MFA_CHALLENGE_AUDIENCE ||
+      !claims.userId ||
+      !claims.jti
+    ) {
+      throw new InvalidTokenError(
+        'InvalidTokenError: Token is not an MFA challenge',
+      );
+    }
+
+    return claims;
   }
 
   verifyToken(token: string, options: VerifyTokenOptions = {}): TokenClaims {

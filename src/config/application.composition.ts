@@ -13,6 +13,7 @@ import type { AuthRateLimitConfig } from '../auth';
 import { CodesModel } from '../auth/codes/codes.schema';
 import { CodesService } from '../auth/codes/codes.service';
 import { AuthController } from '../auth/controllers/auth.controller';
+import { MfaService } from '../auth/mfa';
 import { AuthMailer } from '../auth/services/auth-mailer';
 import { AuthService } from '../auth/services/auth.service';
 import { ProfileService } from '../auth/services/profile.service';
@@ -33,7 +34,7 @@ import { HealthModule, isHealthProbe } from '../health';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 import { JwksModule } from '../jwks';
-import { CryptoService } from '../libs/crypto/crypto.service';
+import { CryptoService, SecretCipher } from '../libs/crypto';
 import { JwtKeyring } from '../libs/jwt';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
@@ -120,6 +121,10 @@ const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
     windowMs: getNumberEnvVariable('RATE_LIMIT_REFRESH_WINDOW_MS', 900000),
     max: getNumberEnvVariable('RATE_LIMIT_REFRESH_MAX', 60),
   },
+  mfaVerify: {
+    windowMs: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_WINDOW_MS', 900000),
+    max: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_MAX', 10),
+  },
 });
 
 export const resolveAccessTokenTtl = (
@@ -149,6 +154,8 @@ export const createApplicationComposition = (
     options.database ?? new Database(requireEnvVariable('MONGO_URI'), logger);
   const healthModule = new HealthModule(logger, () => database.getReadyState());
   const cryptoService = new CryptoService();
+  const mfaSecretKey = getStringEnvVariable('MFA_SECRET_ENCRYPTION_KEY', '');
+  const mfaCipher = mfaSecretKey ? new SecretCipher(mfaSecretKey) : null;
   const jwtConfig =
     options.jwtConfig ??
     resolveJwtConfig({
@@ -171,6 +178,10 @@ export const createApplicationComposition = (
       ...(jwtConfig.legacySecret === undefined
         ? {}
         : { legacySecret: jwtConfig.legacySecret }),
+      mfaChallengeExpiresIn: getNumberEnvVariable(
+        'MFA_CHALLENGE_EXPIRATION',
+        300,
+      ),
       logger,
     },
   );
@@ -217,6 +228,7 @@ export const createApplicationComposition = (
     options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
+    mfaCipher ?? undefined,
   );
   const grantsModule = new GrantsModule(
     GrantModel,
@@ -261,6 +273,12 @@ export const createApplicationComposition = (
     refreshTokenService,
     getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
   );
+  const mfaService = new MfaService(
+    usersModule.service,
+    cryptoService,
+    sessionService,
+    getStringEnvVariable('APP_NAME', 'Auth Service'),
+  );
   const authService = new AuthService(
     usersModule.service,
     authMailer,
@@ -271,6 +289,7 @@ export const createApplicationComposition = (
     applicationTokenService,
     jwtService,
     auditService,
+    mfaService,
     logger,
   );
   const profileService = new ProfileService(
@@ -314,7 +333,7 @@ export const createApplicationComposition = (
     logger,
   });
   const authModule = new AuthModule({
-    authController: new AuthController(authService, profileService),
+    authController: new AuthController(authService, profileService, mfaService),
     authenticationMiddleware,
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
     logger,
