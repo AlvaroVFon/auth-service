@@ -7,12 +7,13 @@ on:
 jobs:
   review:
     permissions:
+      checks: write
       contents: read
       pull-requests: write
       id-token: write
-    uses: AlvaroVFon/ci/.github/workflows/code-review.yml@v6
+    uses: AlvaroVFon/ci/.github/workflows/code-review.yml@v7
     with:
       model: opencode-go/deepseek-v4.1-flash
-      skills-ref: 15b5fd22917f57919ced83c99d44343bdc04d148
-      ci-ref: v6
+      skills-ref: e575db0c6c3cfd386140df62a674b9f06a3525b2
+      ci-ref: v7
       oidc-client-id: sk_2ab82e91-c827-4f23-8105-6a017ad0241a
