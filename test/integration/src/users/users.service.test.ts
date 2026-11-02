@@ -592,6 +592,18 @@ describe('UsersService email normalization', () => {
     assert.strictEqual(found!.email, 'ana@example.com');
   });
 
+  test('should not mutate the caller input', async () => {
+    const data = {
+      email: '  Ana@Example.COM ',
+      password: 'StrongPassword123!',
+    };
+
+    await usersService.create(data);
+
+    assert.strictEqual(data.email, '  Ana@Example.COM ');
+    assert.strictEqual(data.password, 'StrongPassword123!');
+  });
+
   test('should not create two users with the same email in different casing', async () => {
     await usersService.create({
       email: 'ana@example.com',

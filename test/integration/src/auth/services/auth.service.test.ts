@@ -158,6 +158,21 @@ describe('Auth Service', () => {
       );
     });
 
+    test('should reject a non-string email as invalid input', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.login({
+            email: 123 as unknown as string,
+            password: 'password123',
+          }),
+        {
+          name: 'InvalidArgumentError',
+          message: 'Invalid email or password',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
     test('should throw an error for invalid password', async () => {
       mockCryptoService.compareString = mock.fn(async () => false);
       await assert.rejects(
@@ -619,6 +634,17 @@ describe('Auth Service', () => {
     test('should throw an error for invalid email format', async () => {
       await assert.rejects(
         async () => await authService.forgotPassword('invalid-email-format'),
+        {
+          name: 'InvalidArgumentError',
+          message: 'email has invalid format',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should reject a non-string email as invalid input', async () => {
+      await assert.rejects(
+        async () => await authService.forgotPassword(123 as unknown as string),
         {
           name: 'InvalidArgumentError',
           message: 'email has invalid format',

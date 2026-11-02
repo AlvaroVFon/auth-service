@@ -37,15 +37,14 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Password is required to create a user');
     }
 
-    data.email = email;
-    data.password = await this.cryptoService.hashString(data.password);
+    const password = await this.cryptoService.hashString(data.password);
 
     const existingUser = await this.usersModel.findOne({ email });
     if (existingUser) {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
-    return this.usersModel.create(data);
+    return this.usersModel.create({ ...data, email, password });
   }
 
   async createVerifiedUser(input: {

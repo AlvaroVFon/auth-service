@@ -1,2 +1,2 @@
-export const normalizeEmail = (email: string): string =>
-  email.trim().toLowerCase();
+export const normalizeEmail = (email: unknown): string =>
+  typeof email === 'string' ? email.trim().toLowerCase() : '';
