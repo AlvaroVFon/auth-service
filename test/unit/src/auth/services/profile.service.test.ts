@@ -169,5 +169,27 @@ describe('ProfileService', () => {
 
       assert.deepStrictEqual(result, { active: false });
     });
+
+    test('should propagate blacklist failures instead of reporting inactive', async () => {
+      isBlacklisted.mock.mockImplementation(async () => {
+        throw new Error('blacklist unavailable');
+      });
+
+      await assert.rejects(
+        service.introspect('token', caller),
+        /blacklist unavailable/,
+      );
+    });
+
+    test('should propagate user lookup failures instead of reporting inactive', async () => {
+      findById.mock.mockImplementation(async () => {
+        throw new Error('database unavailable');
+      });
+
+      await assert.rejects(
+        service.introspect('token', caller),
+        /database unavailable/,
+      );
+    });
   });
 });

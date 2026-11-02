@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import { Catch } from '../../common/decorators/catch.decorator';
+import { InvalidCredentialsError } from '../../common/exceptions/auth.exceptions';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { AuthService } from '../services/auth.service';
 import { ProfileService, TokenIdentity } from '../services/profile.service';
@@ -22,15 +23,17 @@ export class AuthController {
   private buildIdentity(req: Request): TokenIdentity {
     const user = req.user;
 
-    if (!user) {
-      throw new InvalidArgumentError('Authentication required');
+    // authenticateAny always sets both fields; failing with a 401 keeps the
+    // status honest if the middleware contract is ever broken.
+    if (!user?.expiresAt) {
+      throw new InvalidCredentialsError('Authentication required');
     }
 
     return {
       id: user.id,
       role: user.role,
       ...(user.audience === undefined ? {} : { audience: user.audience }),
-      ...(user.expiresAt === undefined ? {} : { expiresAt: user.expiresAt }),
+      expiresAt: user.expiresAt,
     };
   }
 

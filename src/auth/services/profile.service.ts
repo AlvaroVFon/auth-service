@@ -1,13 +1,13 @@
 import { EntityNotFoundError } from '../../common/exceptions/base.exception';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
-import { JwtService, TokenRole, TokenTypes } from '../../libs/jwt';
+import { JwtService, TokenClaims, TokenRole, TokenTypes } from '../../libs/jwt';
 import { UsersPort } from '../../users';
 
 export interface TokenIdentity {
   id: string;
   role: TokenRole;
   audience?: string;
-  expiresAt?: Date;
+  expiresAt: Date;
 }
 
 export interface UserProfile {
@@ -47,7 +47,7 @@ export class ProfileService {
       email: user.email,
       application: identity.audience ?? null,
       role: identity.role,
-      expiresAt: identity.expiresAt ?? new Date(),
+      expiresAt: identity.expiresAt,
     };
   }
 
@@ -55,47 +55,57 @@ export class ProfileService {
     token: string,
     caller: TokenIdentity,
   ): Promise<TokenIntrospectionResult> {
-    try {
-      const claims = this.jwtService.verifyToken(token);
+    const claims = this.verify(token);
 
-      if (
-        claims.type !== TokenTypes.ACCESS ||
-        !claims.userId ||
-        !claims.jti ||
-        !claims.role ||
-        typeof claims.exp !== 'number'
-      ) {
-        return { active: false };
-      }
-
-      // A caller can only introspect its own tokens, and never across apps.
-      if (claims.userId !== caller.id) {
-        return { active: false };
-      }
-
-      if ((claims.aud ?? null) !== (caller.audience ?? null)) {
-        return { active: false };
-      }
-
-      if (await this.blacklistService.isBlacklisted(claims.jti)) {
-        return { active: false };
-      }
-
-      const user = await this.usersService.findById(claims.userId);
-
-      if (!user) {
-        return { active: false };
-      }
-
-      return {
-        active: true,
-        id: claims.userId,
-        application: claims.aud ?? null,
-        role: claims.role,
-        expiresAt: new Date(claims.exp * 1000),
-      };
-    } catch {
+    if (
+      !claims ||
+      claims.type !== TokenTypes.ACCESS ||
+      !claims.userId ||
+      !claims.jti ||
+      !claims.role ||
+      typeof claims.exp !== 'number'
+    ) {
       return { active: false };
+    }
+
+    // A caller can only introspect its own tokens, and never across apps.
+    if (claims.userId !== caller.id) {
+      return { active: false };
+    }
+
+    if ((claims.aud ?? null) !== (caller.audience ?? null)) {
+      return { active: false };
+    }
+
+    if (await this.blacklistService.isBlacklisted(claims.jti)) {
+      return { active: false };
+    }
+
+    const user = await this.usersService.findById(claims.userId);
+
+    if (!user) {
+      return { active: false };
+    }
+
+    return {
+      active: true,
+      id: claims.userId,
+      application: claims.aud ?? null,
+      role: claims.role,
+      expiresAt: new Date(claims.exp * 1000),
+    };
+  }
+
+  /**
+   * Only signature/expiry failures collapse to an inactive token. Blacklist
+   * and user lookups run outside the catch so an infrastructure outage is not
+   * silently reported as a revoked token.
+   */
+  private verify(token: string): TokenClaims | null {
+    try {
+      return this.jwtService.verifyToken(token);
+    } catch {
+      return null;
     }
   }
 }
