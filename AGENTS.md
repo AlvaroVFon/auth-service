@@ -47,9 +47,64 @@
 ## Environment
 
 - **Env loading**: `process.loadEnvFile()` (Node.js native, not dotenv)
-- **`.env` is gitignored**; `.env.test` is committed
+- **`.env` is gitignored**; `.env.test` and `.env.example` are committed
 - **External services via docker-compose**: MongoDB (27017), MailHog (SMTP 1025, web UI 8025)
-- **Key env vars**: `MONGO_URI`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_KEY_ID`, `JWT_RETIRED_PUBLIC_KEYS`, `JWT_ISSUER`, `JWT_ALLOW_EPHEMERAL_KEYS` (local/test only), `JWT_SECRET` (legacy HS256 only), `JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`, `OWNER_EMAIL`, `OWNER_PASSWORD`, `SMTP_*`, `TEMPLATES_PATH`, `CODE_LENGTH`, `CODE_EXPIRATION_MS`
+- **Local setup**: `cp .env.example .env` starts the service without editing it; `MONGO_URI` is the only variable without a default
+- **Canonical reference**: the tables below mirror `README.md#environment-variables`; update both when adding a variable (the `#60` doc sweep re-checks them)
+
+| Variable                               | Purpose                                             | Default                     | Required in production |
+| -------------------------------------- | --------------------------------------------------- | --------------------------- | ---------------------- |
+| `NODE_ENV`                             | Runtime mode; `production` rejects ephemeral keys   | `development`               | Recommended            |
+| `HOST`                                 | HTTP bind interface                                 | `localhost`                 | No                     |
+| `PORT`                                 | HTTP port                                           | `3000`                      | No                     |
+| `APP_NAME`                             | Product name in emails and authenticator entries    | `Auth Service`              | No                     |
+| `PUBLIC_APP_URL`                       | Base URL for invite/reset links                     | `https://ourservice.com`    | Yes                    |
+| `TRUST_PROXY`                          | `false`, `true` or proxy hop count                  | `false`                     | Yes behind a proxy     |
+| `CORS_ORIGINS`                         | Comma-separated allowed browser origins             | Empty (rejects all)         | Yes with browsers      |
+| `MONGO_URI`                            | MongoDB connection string                           | None                        | Yes                    |
+| `JWT_PRIVATE_KEY`                      | RS256 private key (PEM, `\n` escapes allowed)       | None                        | Yes                    |
+| `JWT_PUBLIC_KEY`                       | RS256 public key                                    | Derived from private key    | No                     |
+| `JWT_KEY_ID`                           | `kid` published in the JWKS                         | RFC 7638 thumbprint         | No                     |
+| `JWT_ISSUER`                           | `iss` claim of every token                          | `auth-service`              | No                     |
+| `JWT_ALLOW_EPHEMERAL_KEYS`             | In-memory keys when no PEM is set (local/test only) | `false`                     | No (must be false)     |
+| `JWT_RETIRED_PUBLIC_KEYS`              | Retired `{kid, publicKey}` entries used in rotation | `[]`                        | No                     |
+| `JWT_SECRET`                           | Legacy HS256 secret, no-audience tokens only        | None                        | No                     |
+| `JWT_EXPIRATION`                       | Access token TTL (seconds)                          | `3600`                      | No                     |
+| `JWT_REFRESH_EXPIRATION`               | Refresh token TTL (seconds)                         | `86400`                     | No                     |
+| `JWT_REFRESH_EXPIRES_IN`               | Legacy alias of `JWT_REFRESH_EXPIRATION`            | `86400`                     | No                     |
+| `SMTP_HOST`                            | SMTP host (`localhost` for MailHog)                 | Empty                       | Yes for email flows    |
+| `SMTP_PORT`                            | SMTP port; `465` enables TLS                        | `0`                         | Yes for email flows    |
+| `SMTP_USER`                            | SMTP username; empty disables auth                  | Empty                       | Depends on server      |
+| `SMTP_PASS`                            | SMTP password                                       | Empty                       | Depends on server      |
+| `MAIL_FROM`                            | `From` address of outgoing mail                     | `no-reply@auth-service.com` | No                     |
+| `TEMPLATES_PATH`                       | Directory with the Handlebars templates             | Empty                       | Yes                    |
+| `CODE_LENGTH`                          | Digits of the verification code                     | `6`                         | No                     |
+| `CODE_EXPIRATION_MS`                   | Verification code TTL (ms)                          | `3600000`                   | No                     |
+| `HOLDER_EXPIRATION_MS`                 | Holder account TTL (ms)                             | `3600000`                   | No                     |
+| `MAX_LOGIN_ATTEMPTS`                   | Failed logins/MFA codes before lockout              | `5`                         | No                     |
+| `LOCKOUT_DURATION_MS`                  | Lockout duration (ms)                               | `900000`                    | No                     |
+| `BCRYPT_SALT_ROUNDS`                   | Password hashing cost                               | `10`                        | No                     |
+| `MAX_SESSIONS_PER_USER`                | Sessions kept per user                              | `50`                        | No                     |
+| `RATE_LIMIT_LOGIN_WINDOW_MS`           | Login rate-limit window (ms)                        | `900000`                    | No                     |
+| `RATE_LIMIT_LOGIN_MAX`                 | Login requests per window                           | `5`                         | No                     |
+| `RATE_LIMIT_SIGNUP_WINDOW_MS`          | Signup rate-limit window (ms)                       | `3600000`                   | No                     |
+| `RATE_LIMIT_SIGNUP_MAX`                | Signup requests per window                          | `3`                         | No                     |
+| `RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS` | Forgot-password window (ms)                         | `3600000`                   | No                     |
+| `RATE_LIMIT_FORGOT_PASSWORD_MAX`       | Forgot-password requests per window                 | `3`                         | No                     |
+| `RATE_LIMIT_REFRESH_WINDOW_MS`         | Refresh rate-limit window (ms)                      | `900000`                    | No                     |
+| `RATE_LIMIT_REFRESH_MAX`               | Refresh requests per window                         | `60`                        | No                     |
+| `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification window (ms)                        | `900000`                    | No                     |
+| `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window                | `10`                        | No                     |
+| `INVITATION_LINK_EXPIRATION_MS`        | Invitation link TTL (ms)                            | `604800000`                 | No                     |
+| `PASSWORD_RESET_LINK_EXPIRATION_MS`    | Password-reset link TTL (ms)                        | `3600000`                   | No                     |
+| `AUDIT_RETENTION_DAYS`                 | Audit event retention (TTL index)                   | `90`                        | No                     |
+| `MFA_SECRET_ENCRYPTION_KEY`            | Base64 32-byte key for TOTP secrets at rest         | Empty (plaintext)           | Yes                    |
+| `MFA_CHALLENGE_EXPIRATION`             | MFA challenge TTL (seconds)                         | `300`                       | No                     |
+| `TELEGRAM_BOT_TOKEN`                   | Bot token; empty disables notifications             | Empty                       | No                     |
+| `TELEGRAM_OWNER_CHAT_ID`               | Owner fallback chat id                              | None                        | No                     |
+| `TELEGRAM_TIMEOUT_MS`                  | Telegram delivery timeout (ms)                      | `3000`                      | No                     |
+| `OWNER_EMAIL`                          | Owner email provisioned at startup                  | None                        | No                     |
+| `OWNER_PASSWORD`                       | Owner initial password (paired with `OWNER_EMAIL`)  | None                        | No                     |
 
 ## TypeScript
 
