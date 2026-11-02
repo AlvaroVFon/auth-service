@@ -56,7 +56,7 @@ JWT_KEY_ID="2026-11"
 JWT_ISSUER=auth-service
 ```
 
-`JWT_PUBLIC_KEY` is derived from the private key when omitted, and `JWT_KEY_ID` defaults to the RFC 7638 thumbprint of the public key. In development and tests an ephemeral key pair is generated when no keys are configured; production refuses to start without `JWT_PRIVATE_KEY`.
+`JWT_PUBLIC_KEY` is derived from the private key when omitted, and `JWT_KEY_ID` defaults to the RFC 7638 thumbprint of the public key. When no keys are configured the service refuses to start unless `JWT_ALLOW_EPHEMERAL_KEYS=true` is set explicitly, which is only appropriate for local development and tests: every process generates its own pair, so tokens and JWKS differ between replicas. `JWT_PUBLIC_KEY` without `JWT_PRIVATE_KEY` is always rejected.
 
 To rotate, add the previous public keys to `JWT_RETIRED_PUBLIC_KEYS` as JSON on every instance, deploy the new active key, wait for the maximum refresh-token TTL and then remove the retired entries:
 

@@ -5,6 +5,7 @@ import { assertObjectId } from '../../common/validators/object-id';
 import type { GrantsPort } from '../../grants';
 import { GrantRoles } from '../../grants';
 import { JwtService } from '../../libs/jwt';
+import type { UsersPort } from '../../users';
 
 export interface IssuedApplicationToken {
   accessToken: string;
@@ -17,6 +18,7 @@ export class ApplicationTokenService {
     private readonly jwtService: JwtService,
     private readonly applicationsService: ApplicationsPort,
     private readonly grantsService: GrantsPort,
+    private readonly usersService: UsersPort,
   ) {}
 
   async issueAccessToken(
@@ -31,6 +33,11 @@ export class ApplicationTokenService {
 
     if (!application) {
       throw new EntityNotFoundError('Application not found');
+    }
+
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
     }
 
     const grant = await this.grantsService.findByUserAndApplication(

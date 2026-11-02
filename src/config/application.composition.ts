@@ -182,6 +182,7 @@ export const createApplicationComposition = (
     jwtService,
     applicationsService,
     grantsService,
+    usersModule.service,
   );
   const sessionService = new SessionService(jwtService, refreshTokenService);
   const authService = new AuthService(

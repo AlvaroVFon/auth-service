@@ -27,14 +27,16 @@ describe('ApplicationTokenService', () => {
   let applicationsService: ApplicationsService;
   let grantsService: GrantsService;
   let jwtService: JwtService;
+  let usersService: UsersService;
   let service: ApplicationTokenService;
 
   before(() => {
     applicationsService = new ApplicationsService(ApplicationModel);
+    usersService = new UsersService(User, new CryptoService());
     grantsService = new GrantsService(
       GrantModel,
       applicationsService,
-      new UsersService(User, new CryptoService()),
+      usersService,
     );
     jwtService = new JwtService(
       new JwtKeyring([{ ...createRsaKeyPair(), active: true }]),
@@ -46,6 +48,7 @@ describe('ApplicationTokenService', () => {
       jwtService,
       applicationsService,
       grantsService,
+      usersService,
     );
   });
 
@@ -113,6 +116,21 @@ describe('ApplicationTokenService', () => {
     await assert.rejects(
       service.issueAccessToken(userId, String(application._id)),
       EntityNotFoundError,
+    );
+  });
+
+  test('should reject a deleted user even if the grant survived', async () => {
+    const { userId, application } = await createUserAndApplication();
+    await grantsService.assignRole({
+      userId,
+      applicationId: String(application._id),
+      role: GrantRoles.VIEWER,
+    });
+    await fixture.deleteOne('User', { _id: userId });
+
+    await assert.rejects(
+      service.issueAccessToken(userId, String(application._id)),
+      new EntityNotFoundError('User not found'),
     );
   });
 

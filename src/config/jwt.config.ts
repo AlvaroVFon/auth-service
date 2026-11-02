@@ -13,7 +13,6 @@ export interface JwtConfig {
 
 export interface ResolveJwtConfigOptions {
   env?: NodeJS.ProcessEnv;
-  production?: boolean;
 }
 
 interface RetiredKeyEntry {
@@ -92,16 +91,26 @@ export const resolveJwtConfig = (
   options: ResolveJwtConfigOptions = {},
 ): JwtConfig => {
   const env = options.env ?? process.env;
-  const production = options.production ?? env.NODE_ENV === 'production';
   const privateKey = readPem(env, 'JWT_PRIVATE_KEY');
   const publicKey = readPem(env, 'JWT_PUBLIC_KEY');
   const kid = env.JWT_KEY_ID?.trim();
   const issuer = env.JWT_ISSUER?.trim() || DEFAULT_ISSUER;
   const legacySecret = env.JWT_SECRET?.trim() || undefined;
   const retiredKeys = parseRetiredKeys(env.JWT_RETIRED_PUBLIC_KEYS);
+  const allowEphemeralKeys =
+    env.JWT_ALLOW_EPHEMERAL_KEYS?.trim().toLowerCase() === 'true';
 
-  if (!privateKey && production) {
-    throw new InvalidArgumentError('JWT_PRIVATE_KEY is required in production');
+  if (!privateKey) {
+    if (publicKey) {
+      throw new InvalidArgumentError(
+        'JWT_PUBLIC_KEY requires JWT_PRIVATE_KEY to be configured',
+      );
+    }
+    if (!allowEphemeralKeys) {
+      throw new InvalidArgumentError(
+        'JWT_PRIVATE_KEY is required; set JWT_ALLOW_EPHEMERAL_KEYS=true only for local or test environments',
+      );
+    }
   }
 
   const signingPair = privateKey

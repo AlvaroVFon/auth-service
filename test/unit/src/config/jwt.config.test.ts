@@ -17,7 +17,6 @@ describe('resolveJwtConfig', () => {
         JWT_ISSUER: 'home-auth',
         JWT_SECRET: 'legacy-secret',
       }),
-      production: true,
     });
 
     assert.strictEqual(config.issuer, 'home-auth');
@@ -34,7 +33,6 @@ describe('resolveJwtConfig', () => {
         JWT_PRIVATE_KEY: pair.privateKey.replace(/\n/g, '\\n'),
         JWT_PUBLIC_KEY: pair.publicKey.replace(/\n/g, '\\n'),
       }),
-      production: true,
     });
 
     assert.ok(config.keyring.getSigningKey().privateKey);
@@ -52,7 +50,6 @@ describe('resolveJwtConfig', () => {
           { kid: 'old-key', publicKey: retired.publicKey },
         ]),
       }),
-      production: true,
     });
 
     assert.ok(config.keyring.getPublicKey('old-key'));
@@ -70,7 +67,6 @@ describe('resolveJwtConfig', () => {
             JWT_PUBLIC_KEY: pair.publicKey,
             JWT_RETIRED_PUBLIC_KEYS: '{not-json',
           }),
-          production: true,
         }),
       InvalidArgumentError,
     );
@@ -91,22 +87,47 @@ describe('resolveJwtConfig', () => {
               { kid: 'same', publicKey: retired.publicKey },
             ]),
           }),
-          production: true,
         }),
       InvalidArgumentError,
     );
   });
 
-  test('should fail fast in production without configured keys', () => {
+  test('should fail when no keys are configured and ephemeral keys are not allowed', () => {
     assert.throws(
-      () => resolveJwtConfig({ env: env({}), production: true }),
+      () => resolveJwtConfig({ env: env({}) }),
+      InvalidArgumentError,
+    );
+    assert.throws(
+      () =>
+        resolveJwtConfig({
+          env: env({ JWT_ALLOW_EPHEMERAL_KEYS: '1' }),
+        }),
       InvalidArgumentError,
     );
   });
 
-  test('should reuse a generated key pair outside production', () => {
-    const first = resolveJwtConfig({ env: env({}), production: false });
-    const second = resolveJwtConfig({ env: env({}), production: false });
+  test('should reject a public key without a private key', () => {
+    const pair = createRsaKeyPair();
+
+    assert.throws(
+      () =>
+        resolveJwtConfig({
+          env: env({
+            JWT_PUBLIC_KEY: pair.publicKey,
+            JWT_ALLOW_EPHEMERAL_KEYS: 'true',
+          }),
+        }),
+      InvalidArgumentError,
+    );
+  });
+
+  test('should reuse a generated key pair when ephemeral keys are allowed', () => {
+    const first = resolveJwtConfig({
+      env: env({ JWT_ALLOW_EPHEMERAL_KEYS: 'true' }),
+    });
+    const second = resolveJwtConfig({
+      env: env({ JWT_ALLOW_EPHEMERAL_KEYS: 'true' }),
+    });
 
     assert.strictEqual(
       first.keyring.getSigningKey().kid,
