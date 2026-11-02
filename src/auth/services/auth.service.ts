@@ -23,9 +23,16 @@ import { JwtService, TokenTypes } from '../../libs/jwt';
 import type { TokenRole } from '../../libs/jwt';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
 import { User, UsersPort } from '../../users';
-import { Credentials, SignupCredentials } from '../auth.interface';
+import {
+  Credentials,
+  LoginResult,
+  MfaChallengeResponse,
+  SignupCredentials,
+  TokenPairResponse,
+} from '../auth.interface';
 import { Code, CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
+import { MfaService } from '../mfa';
 import { ApplicationTokenService } from '../tokens/application-token.service';
 import { RequestContext } from '../tokens/request-context.type';
 import { SessionService, SessionView } from '../tokens/session.service';
@@ -42,6 +49,7 @@ export class AuthService {
     private readonly applicationTokens: ApplicationTokenService,
     private readonly jwtService: JwtService,
     private readonly auditService: AuditPort,
+    private readonly mfaService: MfaService,
     private readonly logger: LoggerInterface,
   ) {}
 
@@ -99,7 +107,7 @@ export class AuthService {
   async login(
     credentials: Credentials,
     ctx?: RequestContext,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  ): Promise<LoginResult> {
     if (!credentials.email || !credentials.password) {
       throw new InvalidArgumentError('Email and password are required');
     }
@@ -158,6 +166,15 @@ export class AuthService {
         applicationId = access.application._id.toString();
         audience = access.application.audience;
 
+        if (user.mfaEnabled) {
+          return this.buildMfaChallenge(
+            userId,
+            access.role,
+            application,
+            access.application.audience,
+          );
+        }
+
         const session = await this.sessionService.create(
           userId,
           access.role,
@@ -185,6 +202,10 @@ export class AuthService {
       // account must prove a grant on the application it wants a token for.
       if (user.role !== Roles.OWNER) {
         throw new ForbiddenError('An application is required');
+      }
+
+      if (user.mfaEnabled) {
+        return this.buildMfaChallenge(userId, user.role);
       }
 
       const session = await this.sessionService.create(userId, user.role, ctx);
@@ -249,6 +270,87 @@ export class AuthService {
     return {
       ...(ctx?.ipAddress === undefined ? {} : { ipAddress: ctx.ipAddress }),
       ...(ctx?.userAgent === undefined ? {} : { userAgent: ctx.userAgent }),
+    };
+  }
+
+  async verifyMfa(
+    mfaToken: string,
+    code: string,
+    ctx?: RequestContext,
+  ): Promise<TokenPairResponse> {
+    if (!mfaToken) {
+      throw new InvalidArgumentError('mfaToken is required');
+    }
+    if (!code) {
+      throw new InvalidArgumentError('code is required');
+    }
+
+    const claims = this.jwtService.verifyMfaChallenge(mfaToken);
+    const userId = claims.userId as string;
+    const user = await this.usersService.findById(userId);
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    this.assertVerified(user);
+    await this.mfaService.verify(userId, code);
+
+    const application = claims.app;
+
+    if (application !== undefined) {
+      const access = await this.applicationTokens.resolveAccess(
+        userId,
+        application,
+      );
+
+      if (
+        claims.aud !== undefined &&
+        claims.aud !== access.application.audience
+      ) {
+        throw new UnauthorizedError('Invalid MFA challenge');
+      }
+
+      const session = await this.sessionService.create(
+        userId,
+        access.role,
+        ctx,
+        access.application.audience,
+      );
+
+      return {
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      };
+    }
+
+    if (user.role !== Roles.OWNER) {
+      throw new ForbiddenError('An application is required');
+    }
+
+    const session = await this.sessionService.create(userId, user.role, ctx);
+
+    return {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+    };
+  }
+
+  private buildMfaChallenge(
+    userId: string,
+    role: TokenRole,
+    application?: string,
+    audience?: string,
+  ): MfaChallengeResponse {
+    const challengeToken = this.jwtService.signMfaChallenge(userId, role, {
+      ...(application === undefined ? {} : { application }),
+      ...(audience === undefined ? {} : { audience }),
+    });
+
+    return {
+      mfaRequired: true,
+      challengeToken,
+      expiresIn: this.jwtService.mfaChallengeExpiresIn,
     };
   }
 

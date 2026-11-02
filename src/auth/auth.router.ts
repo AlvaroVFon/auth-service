@@ -21,6 +21,10 @@ export interface AuthRateLimitConfig {
     windowMs: number;
     max: number;
   };
+  mfaVerify: {
+    windowMs: number;
+    max: number;
+  };
 }
 
 export class AuthRouter {
@@ -49,6 +53,10 @@ export class AuthRouter {
     const refreshRateLimiter = createRateLimiter(
       this.rateLimitConfig.refresh.windowMs,
       this.rateLimitConfig.refresh.max,
+    );
+    const mfaVerifyRateLimiter = createRateLimiter(
+      this.rateLimitConfig.mfaVerify.windowMs,
+      this.rateLimitConfig.mfaVerify.max,
     );
 
     this.app.post(
@@ -89,6 +97,30 @@ export class AuthRouter {
       '/auth/logout',
       this.authenticationMiddleware.authenticateAny,
       this.authController.logout.bind(this.authController),
+    );
+
+    this.app.post(
+      '/auth/mfa/verify',
+      mfaVerifyRateLimiter,
+      this.authController.verifyMfa.bind(this.authController),
+    );
+
+    this.app.post(
+      '/auth/mfa/enroll',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.enrollMfa.bind(this.authController),
+    );
+
+    this.app.post(
+      '/auth/mfa/activate',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.activateMfa.bind(this.authController),
+    );
+
+    this.app.post(
+      '/auth/mfa/disable',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.disableMfa.bind(this.authController),
     );
 
     this.app.get(

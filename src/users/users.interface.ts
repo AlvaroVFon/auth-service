@@ -12,4 +12,10 @@ export interface User {
   loginAttempts?: number;
   lockoutUntil?: Date | null;
   telegramChatId?: string;
+  mfaEnabled?: boolean;
+  mfaSecret?: string;
+  mfaPendingSecret?: string;
+  mfaRecoveryCodes?: string[];
+  mfaFailedAttempts?: number;
+  mfaLockoutUntil?: Date | null;
 }

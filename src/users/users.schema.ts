@@ -43,6 +43,12 @@ const userSchema = new Schema<UserInterface>(
       trim: true,
       match: /^-?\d{1,20}$/,
     },
+    mfaEnabled: { type: Boolean, default: false },
+    mfaSecret: { type: String },
+    mfaPendingSecret: { type: String },
+    mfaRecoveryCodes: { type: [String], default: [] },
+    mfaFailedAttempts: { type: Number, default: 0 },
+    mfaLockoutUntil: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -52,6 +58,11 @@ const userSchema = new Schema<UserInterface>(
         delete ret.password;
         delete ret.loginAttempts;
         delete ret.lockoutUntil;
+        delete ret.mfaSecret;
+        delete ret.mfaPendingSecret;
+        delete ret.mfaRecoveryCodes;
+        delete ret.mfaFailedAttempts;
+        delete ret.mfaLockoutUntil;
         delete ret.__v;
         return ret;
       },

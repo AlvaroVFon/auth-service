@@ -19,5 +19,16 @@ export interface UsersPort {
   findByRole(role: Roles): Promise<User | null>;
   setPassword(id: string, newPassword: string): Promise<void>;
   deleteOneById(id: string, actorId?: string): Promise<User | null>;
+  verifyPassword(id: string, password: string): Promise<boolean>;
+  setMfaPendingSecret(id: string, secret: string): Promise<void>;
+  activateMfa(
+    id: string,
+    secret: string,
+    recoveryCodeHashes: string[],
+  ): Promise<boolean>;
+  disableMfa(id: string): Promise<void>;
+  recordFailedMfa(id: string): Promise<boolean>;
+  resetMfaFailures(id: string): Promise<void>;
+  consumeMfaRecoveryCode(id: string, codeHash: string): Promise<boolean>;
   setGrantsCleaner(cleaner: UserGrantsCleanerPort): void;
 }

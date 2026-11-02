@@ -19,6 +19,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Independent device sessions with listing and selective revocation
 - Shareable, single-use invitation and password-reset links (no SMTP required)
 - Owner-only audit log of authentication and permission events
+- TOTP multi-factor authentication with single-use recovery codes
 
 ## Getting Started
 
@@ -153,12 +154,34 @@ GET /audit-events?userId=...&applicationId=...&event=login.succeeded&from=2026-0
 Set `TELEGRAM_BOT_TOKEN` to deliver invitation and reset links through a Telegram bot.
 `TELEGRAM_OWNER_CHAT_ID` is the owner fallback chat; when it is unset the service uses
 the `telegramChatId` of the owner user. An invitation can include an optional
-`telegramChatId` for the guest, which is copied to the created account. Delivery is
-best effort with `TELEGRAM_TIMEOUT_MS` (default 3000): failures never fail link creation
-and the response still contains the copyable link, with `notification.delivered` set to
-`false`. Configure a user's chat with `PATCH /users/:id { "telegramChatId": "4242" }`
-(owner only). Links, tokens and chat ids are never logged.
+`telegramChatId` for the guest, used only to deliver that invitation and never stored on
+the created account. Delivery is best effort with `TELEGRAM_TIMEOUT_MS` (default 3000):
+failures never fail link creation and the response still contains the copyable link,
+with `notification.delivered` set to `false`. Configure a user's chat with
+`PATCH /users/:id { "telegramChatId": "4242" }` (owner only). Links, tokens and chat ids
+are never logged.
 
+### Multi-factor authentication (TOTP)
+
+Users can enable TOTP from any authenticator app:
+
+```
+POST /auth/mfa/enroll     { "password": "..." }        -> { secret, otpauthUrl }
+POST /auth/mfa/activate   { "code": "123456" }         -> { recoveryCodes: [...] }
+```
+
+Once enabled, `POST /auth/login` returns
+`{ "mfaRequired": true, "challengeToken": "...", "expiresIn": 300 }` instead of tokens.
+Submit the challenge and a TOTP or recovery code to `POST /auth/mfa/verify`
+(`{ "mfaToken": "...", "code": "..." }`) to receive the access and refresh tokens. The
+challenge is a short-lived JWT (`MFA_CHALLENGE_EXPIRATION`) that cannot be used as a
+Bearer token.
+
+`POST /auth/mfa/disable` requires the current password plus a TOTP or recovery code.
+Repeated invalid codes lock the MFA challenge using `MAX_LOGIN_ATTEMPTS` and
+`LOCKOUT_DURATION_MS` with dedicated counters. Recovery codes are returned once, stored
+only as SHA-256 hashes and consumed atomically. TOTP secrets are stored server-side and
+never serialized or logged.
 ### JWT signing keys
 
 Access tokens are signed with RS256. Consumers verify them with the public keys published at `GET /.well-known/jwks.json` (cacheable, never includes private material). Configure the active key with:

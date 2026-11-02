@@ -59,4 +59,34 @@ describe('User schema owner constraint', () => {
       (error: unknown) => (error as Error).name === 'ValidationError',
     );
   });
+
+  test('should persist MFA state but hide secrets in JSON', async () => {
+    const created = await User.create({
+      ...buildUser(Roles.USER, 'mfa'),
+      mfaEnabled: true,
+      mfaSecret: 'SECRET',
+      mfaRecoveryCodes: ['hash-1', 'hash-2'],
+      mfaFailedAttempts: 2,
+      mfaLockoutUntil: new Date(Date.now() + 60_000),
+    });
+
+    const stored = await User.findById(created._id).lean();
+    assert.strictEqual(stored?.mfaEnabled, true);
+    assert.strictEqual(stored?.mfaSecret, 'SECRET');
+    assert.deepStrictEqual(stored?.mfaRecoveryCodes, ['hash-1', 'hash-2']);
+
+    const json = (
+      created as unknown as { toJSON(): Record<string, unknown> }
+    ).toJSON();
+    assert.strictEqual(json.mfaEnabled, true);
+    for (const field of [
+      'mfaSecret',
+      'mfaPendingSecret',
+      'mfaRecoveryCodes',
+      'mfaFailedAttempts',
+      'mfaLockoutUntil',
+    ]) {
+      assert.strictEqual(field in json, false);
+    }
+  });
 });

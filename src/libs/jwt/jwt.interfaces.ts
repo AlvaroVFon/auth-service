@@ -13,6 +13,7 @@ export interface Payload {
   sub?: string;
   iss?: string;
   aud?: string;
+  app?: string;
 }
 
 export interface TokenClaims {
@@ -23,6 +24,7 @@ export interface TokenClaims {
   jti?: string;
   iss?: string;
   aud?: string;
+  app?: string;
   exp: number;
   iat?: number;
 }
@@ -36,6 +38,7 @@ export interface TokenPair {
 
 export interface JwtServiceOptions {
   issuer?: string;
+  mfaChallengeExpiresIn?: number;
   legacySecret?: string;
   logger?: LoggerInterface;
 }

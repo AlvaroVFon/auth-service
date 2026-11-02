@@ -10,6 +10,9 @@ export class UserFactory {
       password: MotherFactory.string(20),
       role: Roles.USER,
       verified: MotherFactory.boolean(),
+      mfaEnabled: false,
+      mfaFailedAttempts: 0,
+      mfaRecoveryCodes: [],
       ...overrides,
     };
   }

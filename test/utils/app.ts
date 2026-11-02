@@ -58,6 +58,10 @@ const createBaseTestOptions = (): ApplicationCompositionOptions => ({
       windowMs: getNumberEnvVariable('RATE_LIMIT_REFRESH_WINDOW_MS', 5000),
       max: getNumberEnvVariable('RATE_LIMIT_REFRESH_MAX', 20),
     },
+    mfaVerify: {
+      windowMs: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_WINDOW_MS', 5000),
+      max: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_MAX', 20),
+    },
   },
 });
 

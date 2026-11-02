@@ -233,6 +233,107 @@ export class UsersService implements UsersPort {
     }
   }
 
+  async verifyPassword(id: string, password: string): Promise<boolean> {
+    const user = await this.findById(id);
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return this.cryptoService.compareString(password, user.password);
+  }
+
+  async setMfaPendingSecret(id: string, secret: string): Promise<void> {
+    const user = await this.usersModel.findByIdAndUpdate(id, {
+      $set: { mfaPendingSecret: secret },
+    });
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+  }
+
+  async activateMfa(
+    id: string,
+    secret: string,
+    recoveryCodeHashes: string[],
+  ): Promise<boolean> {
+    const user = await this.usersModel.findOneAndUpdate(
+      { _id: id, mfaEnabled: { $ne: true } },
+      {
+        $set: {
+          mfaEnabled: true,
+          mfaSecret: secret,
+          mfaRecoveryCodes: recoveryCodeHashes,
+          mfaFailedAttempts: 0,
+          mfaLockoutUntil: null,
+        },
+        $unset: { mfaPendingSecret: '' },
+      },
+      { returnDocument: 'after' },
+    );
+
+    return user !== null;
+  }
+
+  async disableMfa(id: string): Promise<void> {
+    const user = await this.usersModel.findByIdAndUpdate(id, {
+      $set: {
+        mfaEnabled: false,
+        mfaFailedAttempts: 0,
+        mfaLockoutUntil: null,
+      },
+      $unset: {
+        mfaSecret: '',
+        mfaPendingSecret: '',
+        mfaRecoveryCodes: '',
+      },
+    });
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+  }
+
+  async recordFailedMfa(id: string): Promise<boolean> {
+    const user = await this.usersModel.findByIdAndUpdate(
+      id,
+      { $inc: { mfaFailedAttempts: 1 } },
+      { returnDocument: 'after' },
+    );
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    if ((user.mfaFailedAttempts ?? 0) < this.maxLoginAttempts) {
+      return false;
+    }
+
+    await this.usersModel.findByIdAndUpdate(id, {
+      $set: {
+        mfaLockoutUntil: new Date(Date.now() + this.lockoutDurationMs),
+      },
+    });
+
+    return true;
+  }
+
+  async resetMfaFailures(id: string): Promise<void> {
+    await this.usersModel.findByIdAndUpdate(id, {
+      $set: { mfaFailedAttempts: 0, mfaLockoutUntil: null },
+    });
+  }
+
+  async consumeMfaRecoveryCode(id: string, codeHash: string): Promise<boolean> {
+    const result = await this.usersModel.updateOne(
+      { _id: id, mfaRecoveryCodes: codeHash },
+      { $pull: { mfaRecoveryCodes: codeHash } },
+    );
+
+    return result.modifiedCount === 1;
+  }
+
   private isAccountLocked(user: UserInterface): boolean {
     return !!user.lockoutUntil && user.lockoutUntil.getTime() > Date.now();
   }
