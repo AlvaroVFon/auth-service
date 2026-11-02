@@ -43,9 +43,13 @@ TRUST_PROXY=1
 
 The default is `false`. Without this setting, IP/UA session tracking will record the proxy's IP address instead of the actual client IP. Prefer a specific hop count over `true` for tighter security.
 
+Only `true`, `false` or a non-negative integer hop count are accepted. Any other value (for example `10.0.0.0/8`, `1.5`, `1e3` or a typo) aborts startup with an `Invalid TRUST_PROXY value` error instead of silently falling back to `false`.
+
 ### Health checks
 
 - `GET /health` — liveness, does not depend on MongoDB.
 - `GET /ready` — readiness, returns `503` when MongoDB is not connected.
 
-On `SIGTERM` or `SIGINT` the server stops accepting connections, finishes in-flight requests and closes the database connection.
+Both probes are exempt from the global rate limiter and are not written to the request log, so a container health check cannot throttle itself or flood the log. They report the readiness of the injected `Database` connection, not the `mongoose` module singleton.
+
+On `SIGTERM` or `SIGINT` the server stops accepting connections, finishes in-flight requests and closes the database connection. The server close is bounded by a 10s timeout, a second signal forces `exit(1)`, and any failure is logged before the process exits with code `1`.
