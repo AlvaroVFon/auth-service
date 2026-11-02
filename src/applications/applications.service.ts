@@ -66,6 +66,29 @@ export class ApplicationsService implements ApplicationsPort {
     return this.applicationModel.findOne({ slug: slug.trim().toLowerCase() });
   }
 
+  async findByAudience(audience: string): Promise<Application | null> {
+    if (!audience || !audience.trim()) {
+      throw new InvalidArgumentError('Audience is required');
+    }
+
+    return this.applicationModel.findOne({ audience: audience.trim() });
+  }
+
+  async findBySlugOrAudience(identifier: string): Promise<Application | null> {
+    if (!identifier || !identifier.trim()) {
+      throw new InvalidArgumentError('Application identifier is required');
+    }
+
+    const value = identifier.trim();
+
+    // Slug wins when it collides with another application's audience.
+    const bySlug = await this.applicationModel.findOne({
+      slug: value.toLowerCase(),
+    });
+
+    return bySlug ?? this.applicationModel.findOne({ audience: value });
+  }
+
   async findAll(): Promise<Application[]> {
     return this.applicationModel.find();
   }

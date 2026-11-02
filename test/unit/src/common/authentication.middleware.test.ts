@@ -126,6 +126,57 @@ describe('AuthenticationMiddleware', () => {
     assert.ok(error instanceof InvalidCredentialsError);
   });
 
+  describe('authenticateAny', () => {
+    test('should accept a global token', async () => {
+      verifyTokenFn = () => buildPayload();
+      isBlacklistedFn = async () => false;
+      req.headers = { authorization: 'Bearer some-token' };
+
+      await middleware.authenticateAny(req as Request, {} as Response, next);
+
+      assert.strictEqual(next.mock.calls.length, 1);
+      assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+      assert.strictEqual(req.user?.audience, undefined);
+    });
+
+    test('should accept an application token and expose its audience', async () => {
+      verifyTokenFn = () =>
+        buildPayload({ aud: 'app-a', role: GrantRoles.ADMIN });
+      isBlacklistedFn = async () => false;
+      req.headers = { authorization: 'Bearer some-token' };
+
+      await middleware.authenticateAny(req as Request, {} as Response, next);
+
+      assert.strictEqual(next.mock.calls.length, 1);
+      assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+      assert.strictEqual(req.user?.audience, 'app-a');
+      assert.strictEqual(req.user?.role, GrantRoles.ADMIN);
+    });
+
+    test('should reject a refresh token', async () => {
+      verifyTokenFn = () => buildPayload({ type: TokenTypes.REFRESH });
+      req.headers = { authorization: 'Bearer some-token' };
+
+      await middleware.authenticateAny(req as Request, {} as Response, next);
+
+      assert.strictEqual(next.mock.calls.length, 1);
+      const error = next.mock.calls[0]?.arguments[0] as Error;
+      assert.ok(error instanceof InvalidCredentialsError);
+    });
+
+    test('should reject a blacklisted application token', async () => {
+      verifyTokenFn = () => buildPayload({ aud: 'app-a' });
+      isBlacklistedFn = async () => true;
+      req.headers = { authorization: 'Bearer some-token' };
+
+      await middleware.authenticateAny(req as Request, {} as Response, next);
+
+      assert.strictEqual(next.mock.calls.length, 1);
+      const error = next.mock.calls[0]?.arguments[0] as Error;
+      assert.ok(error instanceof InvalidCredentialsError);
+    });
+  });
+
   describe('authenticateForAudience', () => {
     test('should verify with the expected audience and populate req.user', async () => {
       const payload = buildPayload({

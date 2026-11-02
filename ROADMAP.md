@@ -51,7 +51,7 @@ El hogar es único; lo que varía es el acceso de cada usuario a cada aplicació
 - [x] **Catálogo de aplicaciones:** `Application` con `name`, `slug`, `audience` y `active` (#38).
 - [x] **Permisos por par usuario-aplicación:** `Grant` con rol `viewer`, `editor` o `admin` (#38).
 - [x] **API de administración:** alta de apps, asignación y revocación de permisos, bootstrap del owner (#41).
-- [ ] **Tokens con audiencia por app:** RS256 + JWKS y login contra una app concreta (#39, #40).
+- [x] **Tokens con audiencia por app:** RS256 + JWKS (#39) y login contra una app concreta con el rol del grant (#40).
 
 ---
 
@@ -67,11 +67,10 @@ El hogar es único; lo que varía es el acceso de cada usuario a cada aplicació
 
 El backlog priorizado vive en GitHub (issues #38–#53). Orden inmediato:
 
-1. Emitir tokens por aplicación con RS256 y JWKS (#39, en revisión).
-2. Autenticar usuarios contra una app concreta (#40).
-3. Refresh sin access token (#44) y sesiones por dispositivo (#45).
-4. Invitaciones y reset por enlace compartible (#43).
-5. Notificaciones por Telegram (#51), MFA (#52) y auditoría (#53).
+1. Refresh sin access token (#44) y sesiones por dispositivo (#45).
+2. Invitaciones y reset mediante enlace compartible (#43).
+3. Preparar la imagen Docker de producción y entorno (#48).
+4. Notificaciones por Telegram (#51), MFA (#52) y auditoría (#53).
 
 ---
 

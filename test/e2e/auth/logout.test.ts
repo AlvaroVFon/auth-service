@@ -8,6 +8,7 @@ import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
+import { createApplicationAccess } from '../../helpers/application-access';
 import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Logout', () => {
@@ -38,11 +39,18 @@ describe('E2E Auth Logout', () => {
       .send({ code: codeDoc.code })
       .expect(204);
 
+    const user = await fixture.findOne<{ _id: string }>('User', {
+      email: signupCredentials.email,
+    });
+    assert.ok(user);
+    const { application } = await createApplicationAccess(String(user!._id));
+
     const loginResponse = await request(app)
       .post('/auth/login')
       .send({
         email: signupCredentials.email,
         password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
       })
       .expect(200);
 
@@ -50,6 +58,7 @@ describe('E2E Auth Logout', () => {
       accessToken: loginResponse.body.accessToken,
       refreshToken: loginResponse.body.refreshToken,
       email: signupCredentials.email,
+      application: application.slug,
     };
   }
 
@@ -114,7 +123,8 @@ describe('E2E Auth Logout', () => {
   });
 
   test('should revoke refresh tokens after logout', async () => {
-    const { accessToken, refreshToken, email } = await signupAndLogin();
+    const { accessToken, refreshToken, email, application } =
+      await signupAndLogin();
 
     await request(app)
       .post('/auth/logout')
@@ -127,6 +137,7 @@ describe('E2E Auth Logout', () => {
       .send({
         email,
         password: DEFAULT_USER_PLAIN_PASSWORD,
+        application,
       })
       .expect(200);
 
@@ -144,7 +155,7 @@ describe('E2E Auth Logout', () => {
   });
 
   test('should be able to login again after logout', async () => {
-    const { accessToken, email } = await signupAndLogin();
+    const { accessToken, email, application } = await signupAndLogin();
 
     await request(app)
       .post('/auth/logout')
@@ -156,6 +167,7 @@ describe('E2E Auth Logout', () => {
       .send({
         email,
         password: DEFAULT_USER_PLAIN_PASSWORD,
+        application,
       })
       .expect(200);
 

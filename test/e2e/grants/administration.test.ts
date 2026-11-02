@@ -8,7 +8,9 @@ import { User as UserInterface } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import {
   DEFAULT_OWNER_TOKEN,
+  DEFAULT_USER_PLAIN_PASSWORD,
   DEFAULT_USER_TOKEN,
+  generateRandomEmail,
 } from '../../fixtures/defaults';
 import { ApplicationFactory } from '../../helpers/factories/application.factory';
 import { GrantFactory } from '../../helpers/factories/grant.factory';
@@ -125,6 +127,41 @@ describe('E2E Grants administration', () => {
     await request(app)
       .delete(`${otherPath}/${target._id.toString()}`)
       .set('Authorization', bearer(adminToken))
+      .expect(403);
+  });
+
+  test('should scope an app admin token to its application', async () => {
+    const applicationA = await createApplication();
+    const applicationB = await createApplication();
+    const target = await createUser();
+    const admin = await fixture.create<UserInterface>('User', {
+      email: generateRandomEmail('app-admin'),
+    });
+    const adminId = admin._id.toString();
+    await grantRole(adminId, applicationA._id.toString(), GrantRoles.ADMIN);
+    await grantRole(adminId, applicationB._id.toString(), GrantRoles.ADMIN);
+
+    const login = await request(app)
+      .post('/auth/login')
+      .send({
+        email: admin.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: applicationA.slug,
+      })
+      .expect(200);
+
+    const token = login.body.accessToken as string;
+
+    await request(app)
+      .put(`/applications/${applicationA._id.toString()}/grants`)
+      .set('Authorization', bearer(token))
+      .send({ userId: target._id.toString(), role: GrantRoles.EDITOR })
+      .expect(200);
+
+    await request(app)
+      .put(`/applications/${applicationB._id.toString()}/grants`)
+      .set('Authorization', bearer(token))
+      .send({ userId: target._id.toString(), role: GrantRoles.VIEWER })
       .expect(403);
   });
 

@@ -4,6 +4,7 @@ import {
   PASSWORD_REGEX,
 } from '../../common/constants/regex';
 import { normalizeEmail } from '../../common/email';
+import { Roles } from '../../common/enums/roles.enum';
 import { ForbiddenError } from '../../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
@@ -17,6 +18,7 @@ import { User, UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
 import { Code, CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
+import { ApplicationTokenService } from '../tokens/application-token.service';
 import { RequestContext } from '../tokens/request-context.type';
 import { SessionService } from '../tokens/session.service';
 import { AuthMailer } from './auth-mailer';
@@ -29,6 +31,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly blacklistService: TokenBlacklistPort,
     private readonly holdersService: HoldersPort,
+    private readonly applicationTokens: ApplicationTokenService,
     private readonly logger: LoggerInterface,
   ) {}
 
@@ -104,11 +107,37 @@ export class AuthService {
 
     this.assertVerified(user);
 
-    const session = await this.sessionService.create(
-      user._id.toString(),
-      user.role,
-      ctx,
-    );
+    const userId = user._id.toString();
+    const application =
+      typeof credentials.application === 'string'
+        ? credentials.application.trim()
+        : '';
+
+    if (application) {
+      const access = await this.applicationTokens.resolveAccess(
+        userId,
+        application,
+      );
+      const session = await this.sessionService.create(
+        userId,
+        access.role,
+        ctx,
+        access.application.audience,
+      );
+
+      return {
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      };
+    }
+
+    // Only the global owner can log in without an application; every other
+    // account must prove a grant on the application it wants a token for.
+    if (user.role !== Roles.OWNER) {
+      throw new ForbiddenError('An application is required');
+    }
+
+    const session = await this.sessionService.create(userId, user.role, ctx);
 
     return {
       accessToken: session.accessToken,
@@ -268,6 +297,7 @@ export class AuthService {
     userId: string,
     refreshToken: string,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     if (OBJECTID_REGEX.test(userId) === false) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
@@ -283,11 +313,17 @@ export class AuthService {
 
     this.assertVerified(user);
 
+    const role =
+      audience === undefined
+        ? user.role
+        : (await this.applicationTokens.resolveAccess(userId, audience)).role;
+
     const session = await this.sessionService.rotate(
       userId,
-      user.role,
+      role,
       refreshToken,
       ctx,
+      audience,
     );
 
     return {

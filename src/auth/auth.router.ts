@@ -57,7 +57,7 @@ export class AuthRouter {
 
     this.app.post(
       '/auth/refresh',
-      this.authenticationMiddleware.authenticate,
+      this.authenticationMiddleware.authenticateAny,
       this.authController.refreshToken.bind(this.authController),
     );
 
@@ -79,7 +79,7 @@ export class AuthRouter {
 
     this.app.post(
       '/auth/logout',
-      this.authenticationMiddleware.authenticate,
+      this.authenticationMiddleware.authenticateAny,
       this.authController.logout.bind(this.authController),
     );
   }

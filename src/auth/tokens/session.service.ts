@@ -15,8 +15,9 @@ export class SessionService {
     userId: string,
     role: TokenRole,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<TokenPair> {
-    const session = this.jwtService.signTokenPair(userId, role);
+    const session = this.jwtService.signTokenPair(userId, role, audience);
 
     await this.refreshTokenService.revokeAllByUserId(userId);
     await this.persistRefreshToken(userId, session, ctx);
@@ -29,13 +30,15 @@ export class SessionService {
     role: TokenRole,
     refreshToken: string,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<TokenPair> {
     const claims = this.jwtService.verifyToken(refreshToken);
 
     if (
       claims.type !== TokenTypes.REFRESH ||
       claims.userId !== userId ||
-      !claims.jti
+      !claims.jti ||
+      claims.aud !== audience
     ) {
       throw new UnauthorizedError('Invalid refresh token');
     }
@@ -50,7 +53,7 @@ export class SessionService {
       throw new UnauthorizedError('Refresh token has been revoked');
     }
 
-    const session = this.jwtService.signTokenPair(userId, role);
+    const session = this.jwtService.signTokenPair(userId, role, audience);
 
     try {
       await this.refreshTokenService.revokeByJti(

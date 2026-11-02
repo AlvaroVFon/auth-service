@@ -8,21 +8,36 @@ import {
 import { ApplicationAuthorizationMiddleware } from '../../../../src/common/middlewares/application-authorization.middleware';
 import { GrantRoles } from '../../../../src/grants/grants.interface';
 
-const buildRequest = (role: Roles): Partial<Request> => ({
-  user: { id: '507f191e810c19729de860ea', role },
-  params: { applicationId: '64b64c4f4f4f4f4f4f4f4f4f' },
+const APPLICATION_ID = '64b64c4f4f4f4f4f4f4f4f4f';
+
+const buildRequest = (
+  role: Roles | GrantRoles,
+  audience?: string,
+): Partial<Request> => ({
+  user: {
+    id: '507f191e810c19729de860ea',
+    role,
+    ...(audience === undefined ? {} : { audience }),
+  },
+  params: { applicationId: APPLICATION_ID },
 });
 
 describe('ApplicationAuthorizationMiddleware', () => {
   let findByUserAndApplication: ReturnType<typeof mock.fn>;
+  let findById: ReturnType<typeof mock.fn>;
   let middleware: ApplicationAuthorizationMiddleware;
   let next: ReturnType<typeof mock.fn>;
 
   beforeEach(() => {
     findByUserAndApplication = mock.fn();
-    middleware = new ApplicationAuthorizationMiddleware({
-      findByUserAndApplication,
-    } as never);
+    findById = mock.fn(async () => ({
+      _id: APPLICATION_ID,
+      audience: 'app-aud',
+    }));
+    middleware = new ApplicationAuthorizationMiddleware(
+      { findByUserAndApplication } as never,
+      { findById } as never,
+    );
     next = mock.fn();
   });
 
@@ -49,6 +64,48 @@ describe('ApplicationAuthorizationMiddleware', () => {
     );
 
     assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+  });
+
+  test('should accept an application token whose audience matches', async () => {
+    findByUserAndApplication.mock.mockImplementation(async () => ({
+      role: GrantRoles.ADMIN,
+    }));
+
+    await middleware.allowApplicationAdmin(
+      buildRequest(GrantRoles.ADMIN, 'app-aud') as Request,
+      {} as Response,
+      next,
+    );
+
+    assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+    assert.strictEqual(findById.mock.callCount(), 1);
+  });
+
+  test('should reject an application token for another application', async () => {
+    findByUserAndApplication.mock.mockImplementation(async () => ({
+      role: GrantRoles.ADMIN,
+    }));
+
+    await middleware.allowApplicationAdmin(
+      buildRequest(GrantRoles.ADMIN, 'other-aud') as Request,
+      {} as Response,
+      next,
+    );
+
+    assert.ok(next.mock.calls[0]?.arguments[0] instanceof ForbiddenError);
+    assert.strictEqual(findByUserAndApplication.mock.callCount(), 0);
+  });
+
+  test('should reject an application token when the target app does not exist', async () => {
+    findById.mock.mockImplementation(async () => null);
+
+    await middleware.allowApplicationAdmin(
+      buildRequest(GrantRoles.ADMIN, 'app-aud') as Request,
+      {} as Response,
+      next,
+    );
+
+    assert.ok(next.mock.calls[0]?.arguments[0] instanceof ForbiddenError);
   });
 
   test('should reject viewer and editor grants', async () => {

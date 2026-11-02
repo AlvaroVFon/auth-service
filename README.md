@@ -13,6 +13,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Per-route rate limiting
 - Role-based authorization (user / admin)
 - Home applications with per-user roles (viewer, editor, admin)
+- Login scoped to a concrete application (audience + grant role)
 
 ## Getting Started
 
@@ -54,6 +55,16 @@ OWNER_EMAIL=owner@home.example OWNER_PASSWORD='...' pnpm bootstrap:owner
 ```
 
 The owner administers `/applications` and `/users`. Application administrators (grants with role `admin`) can manage permissions only for their own application. Re-running the bootstrap with the same email is a no-op: it never rotates the password or creates a second owner.
+
+### Application login
+
+`POST /auth/login` takes `email`, `password` and an optional `application` (slug or
+audience). With an application, the account needs an active grant on it and receives
+access and refresh tokens carrying that app's `aud` and the grant role
+(`viewer`/`editor`/`admin`). Without an application, only the global owner can log in;
+the owner token has no `aud` and is the only one accepted by `/applications` and
+`/users`. A missing grant, unknown app or inactive app returns `403` without tokens,
+while invalid credentials always return the same generic `401`.
 
 ### JWT signing keys
 

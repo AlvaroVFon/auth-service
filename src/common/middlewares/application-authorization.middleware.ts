@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 
+import type { ApplicationsPort } from '../../applications';
 import { GrantRoles, GrantsPort } from '../../grants';
 import { Roles } from '../enums/roles.enum';
 import {
@@ -8,7 +9,10 @@ import {
 } from '../exceptions/auth.exceptions';
 
 export class ApplicationAuthorizationMiddleware {
-  constructor(private readonly grantsService: GrantsPort) {}
+  constructor(
+    private readonly grantsService: GrantsPort,
+    private readonly applicationsService: ApplicationsPort,
+  ) {}
 
   allowApplicationAdmin = async (
     req: Request,
@@ -31,6 +35,15 @@ export class ApplicationAuthorizationMiddleware {
 
       if (typeof applicationId !== 'string' || !applicationId) {
         throw new ForbiddenError('Access denied');
+      }
+
+      if (user.audience !== undefined) {
+        const application =
+          await this.applicationsService.findById(applicationId);
+
+        if (!application || application.audience !== user.audience) {
+          throw new ForbiddenError('Access denied');
+        }
       }
 
       const grant = await this.grantsService.findByUserAndApplication(

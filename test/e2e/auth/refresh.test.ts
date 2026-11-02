@@ -9,6 +9,7 @@ import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
+import { createApplicationAccess } from '../../helpers/application-access';
 import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Refresh Token', () => {
@@ -39,11 +40,18 @@ describe('E2E Auth Refresh Token', () => {
       .send({ code: codeDoc.code })
       .expect(204);
 
+    const user = await fixture.findOne<{ _id: string }>('User', {
+      email: signupCredentials.email,
+    });
+    assert.ok(user);
+    const { application } = await createApplicationAccess(String(user!._id));
+
     const loginResponse = await request(app)
       .post('/auth/login')
       .send({
         email: signupCredentials.email,
         password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
       })
       .expect(200);
 
@@ -51,6 +59,8 @@ describe('E2E Auth Refresh Token', () => {
       accessToken: loginResponse.body.accessToken,
       refreshToken: loginResponse.body.refreshToken,
       email: signupCredentials.email,
+      application,
+      userId: String(user!._id),
     };
   }
 
@@ -69,6 +79,50 @@ describe('E2E Auth Refresh Token', () => {
     assert.ok(JWT_REGEX.test(response.body.refreshToken));
     assert.notStrictEqual(response.body.accessToken, accessToken);
     assert.notStrictEqual(response.body.refreshToken, refreshToken);
+  });
+
+  test('should keep the application scope on refresh', async () => {
+    const { accessToken, refreshToken, application } = await signupAndLogin();
+
+    const response = await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ refreshToken })
+      .expect(200);
+
+    const access = jwt.decode(response.body.accessToken) as {
+      aud?: string;
+      role?: string;
+    };
+    const refresh = jwt.decode(response.body.refreshToken) as {
+      aud?: string;
+    };
+
+    assert.strictEqual(access.aud, application.audience);
+    assert.strictEqual(access.role, 'viewer');
+    assert.strictEqual(refresh.aud, application.audience);
+  });
+
+  test('should reject a refresh token from another application', async () => {
+    const { accessToken, email, userId } = await signupAndLogin();
+    const other = await createApplicationAccess(userId);
+
+    const otherLogin = await request(app)
+      .post('/auth/login')
+      .send({
+        email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: other.application.slug,
+      })
+      .expect(200);
+
+    const response = await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ refreshToken: otherLogin.body.refreshToken })
+      .expect(401);
+
+    assert.strictEqual(response.body.message, 'Invalid refresh token');
   });
 
   test('should fail refresh without authorization header', async () => {

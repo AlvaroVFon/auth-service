@@ -16,9 +16,16 @@ export class AuthController {
 
   @Catch()
   async login(req: Request, res: Response): Promise<void> {
-    const credentials = req.body;
+    const { email, password, application } = req.body as Record<
+      string,
+      unknown
+    >;
     const tokens = await this.authService.login(
-      credentials,
+      {
+        email: email as string,
+        password: password as string,
+        ...(typeof application === 'string' ? { application } : {}),
+      },
       this.buildRequestContext(req),
     );
 
@@ -41,6 +48,7 @@ export class AuthController {
       userId,
       refreshToken,
       this.buildRequestContext(req),
+      req.user?.audience,
     );
 
     res.status(200).json(tokens);

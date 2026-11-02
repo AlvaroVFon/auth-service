@@ -207,6 +207,7 @@ export const createApplicationComposition = (
     sessionService,
     blacklistService,
     holdersService,
+    applicationTokenService,
     logger,
   );
   const authModule = new AuthModule({
