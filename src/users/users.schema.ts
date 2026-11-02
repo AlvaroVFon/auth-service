@@ -54,4 +54,12 @@ const userSchema = new Schema<UserInterface>(
   },
 );
 
+userSchema.index(
+  { role: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { role: Roles.OWNER },
+  },
+);
+
 export const User = model<UserInterface>('User', userSchema);

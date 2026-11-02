@@ -11,5 +11,6 @@ export interface ApplicationsPort {
   findById(id: string): Promise<Application | null>;
   findBySlug(slug: string): Promise<Application | null>;
   findAll(): Promise<Application[]>;
+  findActiveByIds(ids: string[]): Promise<Application[]>;
   findAssignableById(id: string): Promise<Application | null>;
 }

@@ -10,6 +10,7 @@ import { User } from '../../../src/users/users.interface';
 
 export const DEFAULT_USER_ID = new Types.ObjectId();
 export const DEFAULT_ADMIN_ID = new Types.ObjectId();
+export const DEFAULT_OWNER_ID = new Types.ObjectId();
 
 export const DEFAULT_USER_PLAIN_PASSWORD = 'StrongPassword123!';
 
@@ -52,6 +53,27 @@ export const DEFAULT_ADMIN: User = {
   email: 'defaultadmin@example.com',
   password: '$2b$10$njKm0/jBAa8VjVT4XXTbOOUqALanrKZLGrPaWXIACh6iZpoI1NUzm',
   role: Roles.ADMIN,
+  verified: true,
+};
+
+const defaultOwnerPayload: Payload = {
+  userId: DEFAULT_OWNER_ID.toString(),
+  role: Roles.OWNER,
+  type: TokenTypes.ACCESS,
+  jti: '33333333-3333-4333-a333-333333333333',
+};
+
+export const DEFAULT_OWNER_TOKEN = jwt.sign(
+  defaultOwnerPayload,
+  getStringEnvVariable('JWT_SECRET'),
+  { expiresIn: '1h' },
+);
+
+export const DEFAULT_OWNER: User = {
+  _id: DEFAULT_OWNER_ID,
+  email: 'defaultowner@example.com',
+  password: '$2b$10$njKm0/jBAa8VjVT4XXTbOOUqALanrKZLGrPaWXIACh6iZpoI1NUzm',
+  role: Roles.OWNER,
   verified: true,
 };
 

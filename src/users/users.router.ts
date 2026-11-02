@@ -19,7 +19,7 @@ export class UsersRouter {
     this.app.use('/users', this.authenticationMiddleware.authenticate);
     this.app.use(
       '/users',
-      this.authorizationMiddleware.allowRoles(Roles.ADMIN),
+      this.authorizationMiddleware.allowRoles(Roles.OWNER),
     );
 
     this.app.post(

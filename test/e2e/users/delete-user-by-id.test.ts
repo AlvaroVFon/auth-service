@@ -1,11 +1,12 @@
 import { Application } from 'express';
 import request from 'supertest';
 
+import { Roles } from '../../../src/common/enums/roles.enum';
 import { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import {
-  DEFAULT_ADMIN_TOKEN,
+  DEFAULT_OWNER_TOKEN,
   DEFAULT_USER_TOKEN,
 } from '../../fixtures/defaults';
 import { getTestAppInstance } from '../../utils/app';
@@ -25,7 +26,7 @@ describe('Delete User By ID E2E Test', () => {
 
     const deleteResponse = await request(app)
       .delete(`/users/${newUser._id}`)
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .expect(204);
 
     const deletedUser = await fixture.findById<User>(
@@ -37,12 +38,31 @@ describe('Delete User By ID E2E Test', () => {
     assert.deepStrictEqual(deleteResponse.body, {});
   });
 
+  test('should reject deleting the owner', async () => {
+    const owner = await fixture.create<User>('User', {
+      email: generateRandomEmail('ownerself'),
+      password: 'Delete@1234',
+      role: Roles.OWNER,
+    });
+
+    await request(app)
+      .delete(`/users/${owner._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .expect(403);
+
+    const stillThere = await fixture.findById<User>(
+      'User',
+      owner._id.toString(),
+    );
+    assert.ok(stillThere);
+  });
+
   test('should return 404 when deleting a non-existent user', async () => {
     const nonExistentUserId = '64b64c4f4f4f4f4f4f4f4f4f'; // Example of a valid but non-existent ObjectId
 
     await request(app)
       .delete(`/users/${nonExistentUserId}`)
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .expect(404);
   });
 

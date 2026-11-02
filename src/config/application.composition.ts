@@ -1,8 +1,7 @@
 import { Application } from 'express';
 
 import type { ApplicationsPort } from '../applications';
-import { ApplicationModel } from '../applications/applications.schema';
-import { ApplicationsService } from '../applications/applications.service';
+import { ApplicationsModule } from '../applications/applications.module';
 import { AuthModule } from '../auth';
 import type { AuthRateLimitConfig } from '../auth';
 import { CodesModel } from '../auth/codes/codes.schema';
@@ -21,8 +20,8 @@ import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interce
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { GrantsPort } from '../grants';
+import { GrantsModule } from '../grants/grants.module';
 import { GrantModel } from '../grants/grants.schema';
-import { GrantsService } from '../grants/grants.service';
 import { HealthModule, isHealthProbe } from '../health';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
@@ -35,6 +34,7 @@ import { LoggerInterface } from '../libs/logger/logger.interface';
 import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
+import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
 import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
@@ -50,6 +50,7 @@ export interface ApplicationComposition {
   readonly grants: GrantsPort;
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
+  readonly ownerBootstrap: OwnerBootstrapService;
   readonly jwtKeyring: JwtKeyring;
   readonly applicationTokens: ApplicationTokenService;
   initialize(app: Application, logger?: LoggerInterface): void;
@@ -169,7 +170,11 @@ export const createApplicationComposition = (
   );
   const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
   const holdersService = new HoldersService(HoldersModel, cryptoService);
-  const applicationsService = new ApplicationsService(ApplicationModel);
+  const applicationsModule = new ApplicationsModule(
+    authenticationMiddleware,
+    authorizationMiddleware,
+    logger,
+  );
   const usersModule = new UsersModule(
     cryptoService,
     authenticationMiddleware,
@@ -179,15 +184,19 @@ export const createApplicationComposition = (
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
   );
-  const grantsService = new GrantsService(
+  const grantsModule = new GrantsModule(
     GrantModel,
-    applicationsService,
+    applicationsModule.service,
     usersModule.service,
+    authenticationMiddleware,
+    logger,
   );
+  usersModule.service.setGrantsCleaner(grantsModule.service);
+  const ownerBootstrap = new OwnerBootstrapService(usersModule.service);
   const applicationTokenService = new ApplicationTokenService(
     jwtService,
-    applicationsService,
-    grantsService,
+    applicationsModule.service,
+    grantsModule.service,
     usersModule.service,
   );
   const sessionService = new SessionService(jwtService, refreshTokenService);
@@ -210,10 +219,11 @@ export const createApplicationComposition = (
   return {
     logger,
     database,
-    applications: applicationsService,
-    grants: grantsService,
+    applications: applicationsModule.service,
+    grants: grantsModule.service,
     usersModule,
     authModule,
+    ownerBootstrap,
     jwtKeyring: jwtConfig.keyring,
     applicationTokens: applicationTokenService,
     initialize(app, requestLogger = logger): void {
@@ -242,6 +252,8 @@ export const createApplicationComposition = (
       GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
       healthModule.initialize(app);
       jwksModule.initialize(app);
+      applicationsModule.initialize(app);
+      grantsModule.initialize(app);
       usersModule.initialize(app);
       authModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);

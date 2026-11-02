@@ -52,16 +52,74 @@ export class GrantsService implements GrantsPort {
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
 
-    return this.grantModel.findOne({
+    const grant = await this.grantModel.findOne({
       userId: new Types.ObjectId(userId),
       applicationId: new Types.ObjectId(applicationId),
     });
+
+    if (!grant) {
+      return null;
+    }
+
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+
+    return application ? grant : null;
   }
 
   async listByUser(userId: string): Promise<Grant[]> {
     assertObjectId(userId, 'userId');
 
-    return this.grantModel.find({ userId: new Types.ObjectId(userId) });
+    const grants = await this.grantModel.find({
+      userId: new Types.ObjectId(userId),
+    });
+
+    const activeApplications = await this.applicationsService.findActiveByIds(
+      grants.map((grant) => grant.applicationId.toString()),
+    );
+    const activeIds = new Set(
+      activeApplications.map((application) => application._id.toString()),
+    );
+
+    return grants.filter((grant) =>
+      activeIds.has(grant.applicationId.toString()),
+    );
+  }
+
+  async listByApplication(applicationId: string): Promise<Grant[]> {
+    assertObjectId(applicationId, 'applicationId');
+
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    return this.grantModel.find({
+      applicationId: new Types.ObjectId(applicationId),
+    });
+  }
+
+  async revokeRole(userId: string, applicationId: string): Promise<void> {
+    assertObjectId(userId, 'userId');
+    assertObjectId(applicationId, 'applicationId');
+
+    const result = await this.grantModel.deleteOne({
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+    });
+
+    if (result.deletedCount === 0) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+  }
+
+  async deleteByUser(userId: string): Promise<void> {
+    assertObjectId(userId, 'userId');
+
+    await this.grantModel.deleteMany({
+      userId: new Types.ObjectId(userId),
+    });
   }
 
   private async upsertGrant(

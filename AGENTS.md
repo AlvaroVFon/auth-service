@@ -12,6 +12,7 @@
 - **Lint**: `pnpm lint` (oxlint) — `pnpm lint:fix` to apply fixes
 - **Format**: `pnpm format` (oxfmt) — `pnpm format:check` to verify only
 - **Commit**: `pnpm commit` (Commitizen conventional-changelog)
+- **Owner bootstrap**: `pnpm bootstrap:owner` (idempotent, reads `OWNER_EMAIL`/`OWNER_PASSWORD`)
 - **Preferred order**: `lint -> test`
 
 ## Architecture
@@ -19,7 +20,8 @@
 - **Stack**: Express 5 + Mongoose (MongoDB) + TypeScript (ESM via `tsx`)
 - **Entry point**: `src/index.ts` -> `src/config/bootstrap.ts`
 - **Manual DI in `bootstrap.ts`**: all services and modules are instantiated and wired there. New services must be added to bootstrap.
-- **Module pattern**: `users/` and `auth/` are the two feature modules. Each has `{module,controller,router,service,interface,schema}` files.
+- **Module pattern**: `users/`, `auth/`, `applications/` and `grants/` are the feature modules. Each has `{module,controller,router,service,interface,port,schema}` files.
+- **Authorization**: global role `owner` (single) plus per-application grants (`viewer`/`editor`/`admin`). `ADMIN` is legacy and no longer authorizes; `OWNER_EMAIL`/`OWNER_PASSWORD` seed the owner.
 - **`holders/`**: pre-verification accounts (staging area before a user is verified).
 - **`src/libs/`**: shared infrastructure (logger/winston, crypto, jwt, mailer/nodemailer, templates/handlebars).
 - **`src/common/`**: interceptors, middlewares (authentication, authorization), exceptions.
@@ -47,7 +49,7 @@
 - **Env loading**: `process.loadEnvFile()` (Node.js native, not dotenv)
 - **`.env` is gitignored**; `.env.test` is committed
 - **External services via docker-compose**: MongoDB (27017), MailHog (SMTP 1025, web UI 8025)
-- **Key env vars**: `MONGO_URI`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_KEY_ID`, `JWT_RETIRED_PUBLIC_KEYS`, `JWT_ISSUER`, `JWT_ALLOW_EPHEMERAL_KEYS` (local/test only), `JWT_SECRET` (legacy HS256 only), `JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`, `SMTP_*`, `TEMPLATES_PATH`, `CODE_LENGTH`, `CODE_EXPIRATION_MS`
+- **Key env vars**: `MONGO_URI`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_KEY_ID`, `JWT_RETIRED_PUBLIC_KEYS`, `JWT_ISSUER`, `JWT_ALLOW_EPHEMERAL_KEYS` (local/test only), `JWT_SECRET` (legacy HS256 only), `JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`, `OWNER_EMAIL`, `OWNER_PASSWORD`, `SMTP_*`, `TEMPLATES_PATH`, `CODE_LENGTH`, `CODE_EXPIRATION_MS`
 
 ## TypeScript
 

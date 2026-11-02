@@ -45,6 +45,16 @@ The default is `false`. Without this setting, IP/UA session tracking will record
 
 Only `true`, `false` or a non-negative integer hop count are accepted. Any other value (for example `10.0.0.0/8`, `1.5`, `1e3` or a typo) aborts startup with an `Invalid TRUST_PROXY value` error instead of silently falling back to `false`.
 
+### Owner bootstrap
+
+Set `OWNER_EMAIL` and `OWNER_PASSWORD` to provision the single home owner. Startup runs it idempotently after connecting to MongoDB, or run it on demand:
+
+```sh
+OWNER_EMAIL=owner@home.example OWNER_PASSWORD='...' pnpm bootstrap:owner
+```
+
+The owner administers `/applications` and `/users`. Application administrators (grants with role `admin`) can manage permissions only for their own application. Re-running the bootstrap with the same email is a no-op: it never rotates the password or creates a second owner.
+
 ### JWT signing keys
 
 Access tokens are signed with RS256. Consumers verify them with the public keys published at `GET /.well-known/jwks.json` (cacheable, never includes private material). Configure the active key with:

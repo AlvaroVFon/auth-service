@@ -50,7 +50,7 @@ El hogar es único; lo que varía es el acceso de cada usuario a cada aplicació
 - [x] **Retirada del modelo de tenants:** schema, login por `tenantSecret`, servicio y token eliminados (#38).
 - [x] **Catálogo de aplicaciones:** `Application` con `name`, `slug`, `audience` y `active` (#38).
 - [x] **Permisos por par usuario-aplicación:** `Grant` con rol `viewer`, `editor` o `admin` (#38).
-- [ ] **API de administración:** alta de apps, asignación y revocación de permisos, bootstrap del owner (#41).
+- [x] **API de administración:** alta de apps, asignación y revocación de permisos, bootstrap del owner (#41).
 - [ ] **Tokens con audiencia por app:** RS256 + JWKS y login contra una app concreta (#39, #40).
 
 ---
@@ -67,11 +67,11 @@ El hogar es único; lo que varía es el acceso de cada usuario a cada aplicació
 
 El backlog priorizado vive en GitHub (issues #38–#53). Orden inmediato:
 
-1. Emitir tokens por aplicación con RS256 y JWKS (#39).
+1. Emitir tokens por aplicación con RS256 y JWKS (#39, en revisión).
 2. Autenticar usuarios contra una app concreta (#40).
-3. Gestión de apps, permisos y owner inicial (#41).
-4. Refresh sin access token (#44) y sesiones por dispositivo (#45).
-5. Invitaciones y reset por enlace compartible (#43).
+3. Refresh sin access token (#44) y sesiones por dispositivo (#45).
+4. Invitaciones y reset por enlace compartible (#43).
+5. Notificaciones por Telegram (#51), MFA (#52) y auditoría (#53).
 
 ---
 
@@ -80,5 +80,5 @@ El backlog priorizado vive en GitHub (issues #38–#53). Orden inmediato:
 - **Stack:** Express 5 + Mongoose (MongoDB) + TypeScript (ESM via `tsx`).
 - **Tokens:** JWT con `jti` (UUID). Access: 1h. Refresh: configurable (JWT_REFRESH_EXPIRATION). Rotación completa.
 - **Rate Limiting:** `express-rate-limit` v8 global. Pendiente granularidad por endpoint.
-- **Aplicaciones del hogar:** `Application` (slug + audience) y `Grant` por par usuario-aplicación con rol `viewer`/`editor`/`admin`. Sin multi-hogar.
+- **Aplicaciones del hogar:** `Application` (slug + audience) y `Grant` por par usuario-aplicación con rol `viewer`/`editor`/`admin`. Owner único para administrar el catálogo y los permisos. Sin multi-hogar ni roles globales de autorización.
 - **Prioridad:** Primero robustez y funcionalidad core (Fases 1-3), luego tokens por aplicación y OAuth2.

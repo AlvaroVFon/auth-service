@@ -70,6 +70,21 @@ export class ApplicationsService implements ApplicationsPort {
     return this.applicationModel.find();
   }
 
+  async findActiveByIds(ids: string[]): Promise<Application[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    for (const id of ids) {
+      assertObjectId(id);
+    }
+
+    return this.applicationModel.find({
+      _id: { $in: ids },
+      active: true,
+    });
+  }
+
   async findAssignableById(id: string): Promise<Application | null> {
     const application = await this.findById(id);
 

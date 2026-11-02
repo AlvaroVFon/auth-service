@@ -5,6 +5,7 @@ import request from 'supertest';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import {
   DEFAULT_ADMIN_TOKEN,
+  DEFAULT_OWNER_TOKEN,
   DEFAULT_USER_TOKEN,
 } from '../../fixtures/defaults';
 import { getTestAppInstance } from '../../utils/app';
@@ -24,7 +25,7 @@ describe('Create User E2E Test', () => {
     const response = await request(app)
       .post('/users')
       .send(newUser)
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .set('Accept', 'application/json')
       .expect(201);
 
@@ -42,7 +43,7 @@ describe('Create User E2E Test', () => {
     const response = await request(app)
       .post('/users')
       .send(invalidUser)
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .set('Accept', 'application/json')
       .expect(400);
 
@@ -53,11 +54,40 @@ describe('Create User E2E Test', () => {
   test('should handle error if no body is sent', async () => {
     const response = await request(app)
       .post('/users')
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .set('Accept', 'application/json')
       .expect(400);
 
     assert.ok(response.body.message.includes('Request body is required'));
+  });
+
+  test('should ignore a role supplied in the body', async () => {
+    const newUser = {
+      password: 'Test@1234',
+      email: generateRandomEmail('roleinjection'),
+      role: 'owner',
+    };
+
+    const response = await request(app)
+      .post('/users')
+      .send(newUser)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .expect(201);
+
+    assert.strictEqual(response.body.role, 'user');
+  });
+
+  test('should return 403 for the legacy admin role', async () => {
+    const response = await request(app)
+      .post('/users')
+      .send({
+        password: 'Test@1234',
+        email: generateRandomEmail('legacyadmin'),
+      })
+      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .expect(403);
+
+    assert.ok(response.body.message.includes('Access denied'));
   });
 
   test('should return 403 when a non-admin user tries to create a user', async () => {

@@ -18,6 +18,7 @@
     "test:coverage": "NODE_ENV=test node --test --experimental-test-coverage --import tsx --import ./test/setup.ts --import ./test/setup.db.ts \"test/**/*.test.ts\"",
     "tdd": "NODE_ENV=test node --test --watch --import tsx --import ./test/setup.ts \"test/unit/**/*.test.ts\"",
     "backfill:holder-emails": "tsx scripts/backfill-holder-emails.ts",
+    "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
     "build": "tsc --noEmit",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

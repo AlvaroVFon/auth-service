@@ -1,0 +1,40 @@
+import { Request, Response } from 'express';
+
+import { Catch } from '../common/decorators/catch.decorator';
+import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import { ApplicationsService } from './applications.service';
+
+export class ApplicationsController {
+  constructor(private readonly applicationsService: ApplicationsService) {}
+
+  @Catch()
+  async create(req: Request, res: Response): Promise<void> {
+    const { name, slug, audience } = req.body ?? {};
+    const application = await this.applicationsService.create({
+      name,
+      slug,
+      audience,
+    });
+
+    res.status(201).json(application);
+  }
+
+  @Catch()
+  async findAll(_req: Request, res: Response): Promise<void> {
+    const applications = await this.applicationsService.findAll();
+
+    res.status(200).json(applications);
+  }
+
+  @Catch()
+  async findById(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const application = await this.applicationsService.findById(id);
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    res.status(200).json(application);
+  }
+}
