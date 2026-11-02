@@ -22,6 +22,7 @@ export class SessionService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly refreshTokenService: RefreshTokenService,
+    private readonly maxSessionsPerUser = 50,
   ) {}
 
   async create(
@@ -38,6 +39,10 @@ export class SessionService {
       randomUUID(),
       ctx,
       audience,
+    );
+    await this.refreshTokenService.pruneActiveSessions(
+      userId,
+      this.maxSessionsPerUser,
     );
 
     return session;
@@ -92,6 +97,7 @@ export class SessionService {
       storedToken.sessionId ?? claims.jti,
       ctx,
       audience,
+      storedToken.sessionStartedAt ?? storedToken.createdAt,
     );
 
     return session;
@@ -140,7 +146,7 @@ export class SessionService {
       device: token.userAgent ?? null,
       application: token.audience ?? null,
       ipAddress: token.ipAddress ?? null,
-      createdAt: token.createdAt ?? null,
+      createdAt: token.sessionStartedAt ?? token.createdAt ?? null,
       lastActivityAt:
         token.lastActivityAt ?? token.createdAt ?? token.expiresAt,
       expiresAt: token.expiresAt,
@@ -153,6 +159,7 @@ export class SessionService {
     sessionId: string,
     ctx?: RequestContext,
     audience?: string,
+    sessionStartedAt?: Date,
   ): Promise<void> {
     await this.refreshTokenService.create(
       userId,
@@ -162,6 +169,7 @@ export class SessionService {
       {
         sessionId,
         ...(audience === undefined ? {} : { audience }),
+        ...(sessionStartedAt === undefined ? {} : { sessionStartedAt }),
       },
     );
   }

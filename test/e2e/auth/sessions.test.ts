@@ -105,6 +105,30 @@ describe('E2E device sessions', () => {
     assert.ok(listed?.expiresAt);
   });
 
+  test('AC-2: keeps the session creation time after a refresh', async () => {
+    const { login: session } = await createSession('Desktop');
+
+    const before = await request(app)
+      .get('/auth/sessions')
+      .set('Authorization', bearer(session.accessToken))
+      .expect(200);
+    const [listedBefore] = before.body as Array<{ createdAt: string }>;
+    assert.ok(listedBefore?.createdAt);
+
+    await request(app)
+      .post('/auth/refresh')
+      .send({ refreshToken: session.refreshToken })
+      .expect(200);
+
+    const after = await request(app)
+      .get('/auth/sessions')
+      .set('Authorization', bearer(session.accessToken))
+      .expect(200);
+    const [listedAfter] = after.body as Array<{ createdAt: string }>;
+
+    assert.strictEqual(listedAfter?.createdAt, listedBefore!.createdAt);
+  });
+
   test('AC-3: revoking one session keeps the other working', async () => {
     const user = await createUser();
     const { application } = await createApplicationAccess(user._id.toString());
@@ -121,6 +145,12 @@ describe('E2E device sessions', () => {
     ).find((session) => session.device === 'Desktop');
     assert.ok(desktopSession);
 
+    await request(app)
+      .delete(`/auth/sessions/${desktopSession!.id}`)
+      .set('Authorization', bearer(desktop.accessToken))
+      .expect(204);
+
+    // Repeating the revoke is idempotent.
     await request(app)
       .delete(`/auth/sessions/${desktopSession!.id}`)
       .set('Authorization', bearer(desktop.accessToken))

@@ -85,8 +85,9 @@ without any extra data.
 Every login creates an independent session; logging in from another device no longer
 ends the previous one. `GET /auth/sessions` lists the user's active sessions with the
 device (user-agent), application, IP, creation time and last activity, and
-`DELETE /auth/sessions/:sessionId` revokes one session without touching the rest.
-`DELETE /auth/sessions` revokes them all.
+`DELETE /auth/sessions/:sessionId` revokes one session without touching the rest
+(repeating it is a no-op), and `DELETE /auth/sessions` revokes them all. The oldest
+sessions beyond `MAX_SESSIONS_PER_USER` (default `50`) are revoked on each new login.
 
 ### JWT signing keys
 

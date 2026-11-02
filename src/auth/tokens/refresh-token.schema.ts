@@ -15,6 +15,7 @@ const RefreshTokenSchema = new Schema<RefreshToken>(
     },
     jti: { type: String, required: true, unique: true },
     audience: { type: String, default: null },
+    sessionStartedAt: { type: Date, default: () => new Date() },
     expiresAt: { type: Date, required: true },
     lastActivityAt: { type: Date, default: () => new Date() },
     revokedAt: { type: Date, default: null },
@@ -32,6 +33,7 @@ const RefreshTokenSchema = new Schema<RefreshToken>(
 
 RefreshTokenSchema.index({ userId: 1, expiresAt: 1, revokedAt: 1 });
 RefreshTokenSchema.index({ userId: 1, sessionId: 1, revokedAt: 1 });
+RefreshTokenSchema.index({ userId: 1, revokedAt: 1, lastActivityAt: -1 });
 RefreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const RefreshTokenModel = model<RefreshToken>(

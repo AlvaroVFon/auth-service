@@ -402,6 +402,102 @@ describe('RefreshTokenService', () => {
       assert.strictEqual(sessions[0]?.sessionId, sessionB);
     });
 
+    test('should persist the session start time across rotations', async () => {
+      const startedAt = new Date('2026-01-01T10:00:00.000Z');
+      const token = await refreshTokenService.create(
+        new Types.ObjectId().toString(),
+        '550e8400-e29b-41d4-a716-446655440022',
+        new Date(Date.now() + 60_000),
+        undefined,
+        { sessionId: sessionA, sessionStartedAt: startedAt },
+      );
+
+      assert.strictEqual(
+        token.sessionStartedAt?.getTime(),
+        startedAt.getTime(),
+      );
+    });
+
+    test('should revoke a legacy token using its jti as session id', async () => {
+      const userId = new Types.ObjectId();
+      const jti = '550e8400-e29b-41d4-a716-446655440023';
+
+      // Legacy documents predate sessionId, so insert one without the field.
+      await RefreshTokenModel.collection.insertOne({
+        userId,
+        jti,
+        expiresAt: new Date(Date.now() + 60_000),
+        revokedAt: null,
+        replacedByJti: null,
+        ipAddress: null,
+        userAgent: null,
+        audience: null,
+        type: TokenTypes.REFRESH,
+      });
+
+      await refreshTokenService.revokeBySessionId(userId.toString(), jti);
+
+      const stored = await fixture.findOne<RefreshToken>(
+        RefreshTokenModel.modelName,
+        { jti },
+      );
+      assert.ok(stored?.revokedAt instanceof Date);
+    });
+
+    test('should treat revoking an already revoked session as a no-op', async () => {
+      const userId = new Types.ObjectId();
+      await fixture.create<RefreshToken>(
+        RefreshTokenModel.modelName,
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionA,
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+
+      await refreshTokenService.revokeBySessionId(userId.toString(), sessionA);
+      await refreshTokenService.revokeBySessionId(userId.toString(), sessionA);
+    });
+
+    test('should revoke the oldest sessions beyond the cap', async () => {
+      const userId = new Types.ObjectId();
+      const now = Date.now();
+
+      await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionA,
+          lastActivityAt: new Date(now - 3000),
+          expiresAt: new Date(now + 60_000),
+        }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionB,
+          lastActivityAt: new Date(now - 2000),
+          expiresAt: new Date(now + 60_000),
+        }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: '6f1c2a2e-3333-4333-a333-333333333333',
+          lastActivityAt: new Date(now - 1000),
+          expiresAt: new Date(now + 60_000),
+        }),
+      ]);
+
+      await refreshTokenService.pruneActiveSessions(userId.toString(), 2);
+
+      const active = await fixture.find<RefreshToken>(
+        RefreshTokenModel.modelName,
+        { userId, revokedAt: null },
+      );
+
+      assert.strictEqual(active.length, 2);
+      assert.deepStrictEqual(
+        new Set(active.map((token) => token.sessionId)),
+        new Set([sessionB, '6f1c2a2e-3333-4333-a333-333333333333']),
+      );
+    });
+
     test('should throw when the session does not exist', async () => {
       await assert.rejects(
         refreshTokenService.revokeBySessionId(

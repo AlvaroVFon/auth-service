@@ -33,6 +33,7 @@ describe('SessionService', () => {
     const refreshTokenService = {
       revokeAllByUserId: mock.fn(() => Promise.resolve()),
       create: mock.fn(() => Promise.resolve()),
+      pruneActiveSessions: mock.fn(() => Promise.resolve()),
     } as unknown as RefreshTokenService;
     const service = new SessionService(jwtService, refreshTokenService);
 
@@ -53,6 +54,11 @@ describe('SessionService', () => {
     assert.strictEqual(args[3], context);
     assert.match(args[4].sessionId, /^[0-9a-f-]{36}$/);
     assert.strictEqual(args[4].audience, undefined);
+    assert.deepStrictEqual(
+      // @ts-expect-error mock.calls exists
+      refreshTokenService.pruneActiveSessions.mock.calls[0].arguments,
+      [claims.userId, 50],
+    );
   });
 
   test('binds a login session to the application audience', async () => {
@@ -61,6 +67,7 @@ describe('SessionService', () => {
     } as unknown as JwtService;
     const refreshTokenService = {
       create: mock.fn(() => Promise.resolve()),
+      pruneActiveSessions: mock.fn(() => Promise.resolve()),
     } as unknown as RefreshTokenService;
     const service = new SessionService(jwtService, refreshTokenService);
 
@@ -105,6 +112,33 @@ describe('SessionService', () => {
     const args = refreshTokenService.create.mock.calls[0].arguments;
     assert.strictEqual(args[4].sessionId, sessionId);
     assert.strictEqual(args[4].audience, 'app-aud');
+  });
+
+  test('keeps the original session start time when rotating', async () => {
+    const sessionStartedAt = new Date('2026-01-01T10:00:00.000Z');
+    const wrappedClaims = { ...claims, aud: 'app-aud' };
+    const jwtService = {
+      signTokenPair: mock.fn(() => pair),
+    } as unknown as JwtService;
+    const refreshTokenService = {
+      findByJti: mock.fn(() =>
+        Promise.resolve({
+          userId: claims.userId,
+          revokedAt: null,
+          sessionId,
+          sessionStartedAt,
+        }),
+      ),
+      revokeByJti: mock.fn(() => Promise.resolve()),
+      create: mock.fn(() => Promise.resolve()),
+    } as unknown as RefreshTokenService;
+    const service = new SessionService(jwtService, refreshTokenService);
+
+    await service.rotate(wrappedClaims, claims.role!, context);
+
+    // @ts-expect-error mock.calls exists
+    const args = refreshTokenService.create.mock.calls[0].arguments;
+    assert.strictEqual(args[4].sessionStartedAt, sessionStartedAt);
   });
 
   test('rejects a stored token that belongs to another user', async () => {
@@ -217,6 +251,32 @@ describe('SessionService', () => {
         expiresAt: new Date('2026-02-01'),
       },
     ]);
+  });
+
+  test('uses the session start time instead of the current token creation time', async () => {
+    const sessionStartedAt = new Date('2026-01-01');
+    const tokenCreatedAt = new Date('2026-01-05');
+    const refreshTokenService = {
+      listActiveByUserId: mock.fn(async () => [
+        {
+          sessionId,
+          jti: 'jti',
+          sessionStartedAt,
+          createdAt: tokenCreatedAt,
+          lastActivityAt: tokenCreatedAt,
+          expiresAt: new Date('2026-02-01'),
+          revokedAt: null,
+        },
+      ]),
+    } as unknown as RefreshTokenService;
+    const service = new SessionService(
+      {} as unknown as JwtService,
+      refreshTokenService,
+    );
+
+    const [session] = await service.list(claims.userId!);
+
+    assert.strictEqual(session?.createdAt, sessionStartedAt);
   });
 
   test('revokes a single session', async () => {

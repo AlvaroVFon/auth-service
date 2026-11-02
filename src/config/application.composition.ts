@@ -204,7 +204,11 @@ export const createApplicationComposition = (
     grantsModule.service,
     usersModule.service,
   );
-  const sessionService = new SessionService(jwtService, refreshTokenService);
+  const sessionService = new SessionService(
+    jwtService,
+    refreshTokenService,
+    getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
+  );
   const authService = new AuthService(
     usersModule.service,
     authMailer,

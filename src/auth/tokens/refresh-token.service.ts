@@ -10,6 +10,7 @@ import { RequestContext } from './request-context.type';
 
 export interface SessionOptions {
   sessionId?: string;
+  sessionStartedAt?: Date;
   audience?: string;
 }
 
@@ -37,6 +38,7 @@ export class RefreshTokenService {
       userId,
       ...(options.sessionId ? { sessionId: options.sessionId } : {}),
       jti,
+      sessionStartedAt: options.sessionStartedAt ?? new Date(),
       expiresAt,
       lastActivityAt: new Date(),
       revokedAt: null,
@@ -95,14 +97,55 @@ export class RefreshTokenService {
       throw new InvalidArgumentError('sessionId is not a valid UUID');
     }
 
+    // Tokens created before sessionId existed are listed with their jti as the
+    // session id, so the revoke path must keep that fallback.
+    const sessionFilter = {
+      userId,
+      $or: [{ sessionId }, { jti: sessionId, sessionId: null }],
+    };
+
     const result = await this.refreshTokenModel.updateMany(
-      { userId, sessionId, revokedAt: null },
+      { ...sessionFilter, revokedAt: null },
       { revokedAt: new Date() },
     );
 
-    if (result.matchedCount === 0) {
+    if (result.matchedCount > 0) {
+      return;
+    }
+
+    // Revoking an already revoked session is a successful no-op; only an
+    // unknown session is a 404.
+    const exists = await this.refreshTokenModel.exists(sessionFilter);
+
+    if (!exists) {
       throw new EntityNotFoundError('Session not found');
     }
+  }
+
+  async pruneActiveSessions(userId: string, keep: number): Promise<void> {
+    if (!OBJECTID_REGEX.test(userId)) {
+      throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+
+    if (keep < 0) {
+      throw new InvalidArgumentError('keep must not be negative');
+    }
+
+    const stale = await this.refreshTokenModel
+      .find({ userId, revokedAt: null, expiresAt: { $gt: new Date() } })
+      .sort({ lastActivityAt: -1 })
+      .skip(keep)
+      .select('_id')
+      .lean();
+
+    if (stale.length === 0) {
+      return;
+    }
+
+    await this.refreshTokenModel.updateMany(
+      { _id: { $in: stale.map((token) => token._id) } },
+      { revokedAt: new Date() },
+    );
   }
 
   async revokeAllByUserId(userId: string, audience?: string): Promise<void> {

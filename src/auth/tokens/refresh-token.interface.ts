@@ -8,6 +8,7 @@ export interface RefreshToken {
   sessionId?: string;
   jti: string;
   audience: string | null;
+  sessionStartedAt?: Date;
   expiresAt: Date;
   lastActivityAt?: Date;
   revokedAt: Date | null;
