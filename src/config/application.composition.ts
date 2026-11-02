@@ -33,6 +33,7 @@ import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
 import { UsersModule } from '../users/users.module';
+import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { GlobalMiddlewares } from './middlewares.config';
@@ -59,6 +60,7 @@ export interface ApplicationCompositionOptions {
   lockoutDurationMs?: number;
   publicAppUrl?: string;
   rateLimitConfig?: AuthRateLimitConfig;
+  corsOrigins?: string[];
   trustProxy?: boolean | number;
 }
 
@@ -177,10 +179,24 @@ export const createApplicationComposition = (
         options.trustProxy ??
           resolveTrustProxy(getStringEnvVariable('TRUST_PROXY')),
       );
+
+      const corsOrigins =
+        options.corsOrigins === undefined
+          ? resolveCorsOrigins(getStringEnvVariable('CORS_ORIGINS'))
+          : normalizeCorsOrigins(options.corsOrigins);
+
+      if (corsOrigins.length === 0) {
+        requestLogger.warn(
+          'CORS_ORIGINS is not configured: every browser origin will be rejected',
+        );
+      } else {
+        requestLogger.info(`CORS allowed origins: ${corsOrigins.join(', ')}`);
+      }
+
       HttpLoggerInterceptor.initialize(app, requestLogger, (request) =>
         isHealthProbe(request.path),
       );
-      GlobalMiddlewares.initialize(app, ['/auth/logout']);
+      GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
       healthModule.initialize(app);
       usersModule.initialize(app);
       authModule.initialize(app);

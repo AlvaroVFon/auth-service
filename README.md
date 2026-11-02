@@ -53,3 +53,15 @@ Only `true`, `false` or a non-negative integer hop count are accepted. Any other
 Both probes are exempt from the global rate limiter and are not written to the request log, so a container health check cannot throttle itself or flood the log. They report the readiness of the injected `Database` connection, not the `mongoose` module singleton.
 
 On `SIGTERM` or `SIGINT` the server stops accepting connections, finishes in-flight requests and closes the database connection. The server close is bounded by a 10s timeout, a second signal forces `exit(1)`, and any failure is logged before the process exits with code `1`.
+
+### CORS
+
+Set `CORS_ORIGINS` to a comma-separated list of allowed browser origins. When unset, no origin is allowed:
+
+```sh
+CORS_ORIGINS=http://localhost:5173,https://auth.home.example
+```
+
+Entries are normalized before comparison (trailing slashes, casing and default ports are ignored). Wildcards and entries with a path, query, fragment or credentials are rejected at startup so a misconfiguration fails fast.
+
+Every response also gets the standard `helmet` security headers and the `X-Powered-By` header is removed.
