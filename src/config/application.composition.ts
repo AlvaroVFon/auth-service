@@ -138,8 +138,14 @@ export const createApplicationComposition = (
       ...(jwtConfig.legacySecret === undefined
         ? {}
         : { legacySecret: jwtConfig.legacySecret }),
+      logger,
     },
   );
+  if (jwtConfig.ephemeral) {
+    logger.warn(
+      'JWT keys are ephemeral: tokens and JWKS will differ between instances and restarts',
+    );
+  }
   const jwksModule = new JwksModule(logger, () => jwtConfig.keyring.getJwks());
   const blacklistService = new BlacklistService(BlacklistedTokenModel);
   const authenticationMiddleware = new AuthenticationMiddleware(

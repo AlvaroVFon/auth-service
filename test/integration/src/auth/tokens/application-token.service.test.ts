@@ -4,10 +4,7 @@ import { ApplicationModel } from '../../../../../src/applications/applications.s
 import { ApplicationsService } from '../../../../../src/applications/applications.service';
 import { ApplicationTokenService } from '../../../../../src/auth/tokens/application-token.service';
 import { ForbiddenError } from '../../../../../src/common/exceptions/auth.exceptions';
-import {
-  EntityNotFoundError,
-  InvalidArgumentError,
-} from '../../../../../src/common/exceptions/base.exception';
+import { InvalidArgumentError } from '../../../../../src/common/exceptions/base.exception';
 import { GrantRoles } from '../../../../../src/grants/grants.interface';
 import { GrantModel } from '../../../../../src/grants/grants.schema';
 import { GrantsService } from '../../../../../src/grants/grants.service';
@@ -55,7 +52,7 @@ describe('ApplicationTokenService', () => {
   const createUserAndApplication = async () => {
     const user = await fixture.create<UserInterface>(
       'User',
-      UserFactory.generate(),
+      UserFactory.generate({ verified: true }),
     );
     const application = ApplicationFactory.generate();
     const createdApplication = await applicationsService.create({
@@ -101,6 +98,32 @@ describe('ApplicationTokenService', () => {
     );
   });
 
+  test('should reject an unverified user', async () => {
+    const user = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate({ verified: false }),
+    );
+    const application = ApplicationFactory.generate();
+    const createdApplication = await applicationsService.create({
+      name: application.name,
+      slug: application.slug,
+      audience: application.audience,
+    });
+    await grantsService.assignRole({
+      userId: String(user._id),
+      applicationId: String(createdApplication._id),
+      role: GrantRoles.VIEWER,
+    });
+
+    await assert.rejects(
+      service.issueAccessToken(
+        String(user._id),
+        String(createdApplication._id),
+      ),
+      new ForbiddenError('Email is not verified'),
+    );
+  });
+
   test('should reject an inactive application', async () => {
     const { userId, application } = await createUserAndApplication();
     await GrantModel.create({
@@ -115,11 +138,11 @@ describe('ApplicationTokenService', () => {
 
     await assert.rejects(
       service.issueAccessToken(userId, String(application._id)),
-      EntityNotFoundError,
+      ForbiddenError,
     );
   });
 
-  test('should reject a deleted user even if the grant survived', async () => {
+  test('should hide a deleted user behind a forbidden response', async () => {
     const { userId, application } = await createUserAndApplication();
     await grantsService.assignRole({
       userId,
@@ -130,7 +153,7 @@ describe('ApplicationTokenService', () => {
 
     await assert.rejects(
       service.issueAccessToken(userId, String(application._id)),
-      new EntityNotFoundError('User not found'),
+      new ForbiddenError('User has no access to this application'),
     );
   });
 

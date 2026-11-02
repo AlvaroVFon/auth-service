@@ -23,6 +23,7 @@ describe('resolveJwtConfig', () => {
     assert.strictEqual(config.legacySecret, 'legacy-secret');
     assert.strictEqual(config.keyring.getSigningKey().kid, 'primary');
     assert.strictEqual(config.keyring.getJwks().length, 1);
+    assert.strictEqual(config.ephemeral, false);
   });
 
   test('should accept PEM values with escaped newlines', () => {
@@ -72,6 +73,30 @@ describe('resolveJwtConfig', () => {
     );
   });
 
+  test('should reject retired entries without a string kid or public key', () => {
+    const active = createRsaKeyPair();
+    const retired = createRsaKeyPair();
+
+    for (const entry of [
+      retired.publicKey,
+      { kid: 123, publicKey: retired.publicKey },
+      { publicKey: retired.publicKey },
+      { kid: 'old', publicKey: 42 },
+    ]) {
+      assert.throws(
+        () =>
+          resolveJwtConfig({
+            env: env({
+              JWT_PRIVATE_KEY: active.privateKey,
+              JWT_PUBLIC_KEY: active.publicKey,
+              JWT_RETIRED_PUBLIC_KEYS: JSON.stringify([entry]),
+            }),
+          }),
+        InvalidArgumentError,
+      );
+    }
+  });
+
   test('should reject duplicated retired key ids', () => {
     const active = createRsaKeyPair();
     const retired = createRsaKeyPair();
@@ -106,6 +131,19 @@ describe('resolveJwtConfig', () => {
     );
   });
 
+  test('should reject ephemeral keys when NODE_ENV is production', () => {
+    assert.throws(
+      () =>
+        resolveJwtConfig({
+          env: env({
+            NODE_ENV: 'production',
+            JWT_ALLOW_EPHEMERAL_KEYS: 'true',
+          }),
+        }),
+      InvalidArgumentError,
+    );
+  });
+
   test('should reject a public key without a private key', () => {
     const pair = createRsaKeyPair();
 
@@ -135,5 +173,6 @@ describe('resolveJwtConfig', () => {
     );
     assert.strictEqual(first.issuer, 'auth-service');
     assert.strictEqual(first.legacySecret, undefined);
+    assert.strictEqual(first.ephemeral, true);
   });
 });

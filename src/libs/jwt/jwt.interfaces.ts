@@ -1,5 +1,6 @@
 import type { Roles } from '../../common/enums/roles.enum';
 import type { GrantRoles } from '../../grants/grants.interface';
+import type { LoggerInterface } from '../logger/logger.interface';
 import { TokenTypes } from './token-types.enum';
 
 export type TokenRole = Roles | GrantRoles;
@@ -36,6 +37,7 @@ export interface TokenPair {
 export interface JwtServiceOptions {
   issuer?: string;
   legacySecret?: string;
+  logger?: LoggerInterface;
 }
 
 export interface VerifyTokenOptions {

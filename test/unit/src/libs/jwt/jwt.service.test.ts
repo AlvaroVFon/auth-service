@@ -168,6 +168,27 @@ describe('JwtService', () => {
       );
     });
 
+    test('should log the underlying verification error', () => {
+      const logger = {
+        info: mock.fn(),
+        warn: mock.fn(),
+        error: mock.fn(),
+        debug: mock.fn(),
+      };
+      const service = new JwtService(
+        keyring,
+        jwtExpiresIn,
+        jwtRefreshExpiresIn,
+        { issuer: 'auth-service-test', logger },
+      );
+
+      assert.throws(
+        () => service.verifyToken('invalid.token.here'),
+        (error: unknown) => (error as Error).name === 'InvalidTokenError',
+      );
+      assert.strictEqual(logger.debug.mock.callCount(), 1);
+    });
+
     test('should reject an invalid token', () => {
       assert.throws(
         () => jwtService.verifyToken('invalid.token.here'),

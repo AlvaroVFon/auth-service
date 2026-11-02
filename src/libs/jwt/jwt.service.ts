@@ -5,6 +5,7 @@ import { Types } from 'mongoose';
 
 import { assertDependencies } from '../../common/depencencies-validator';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
+import type { LoggerInterface } from '../logger/logger.interface';
 import { JwtKeyring } from './jwt-keyring';
 import { InvalidTokenError } from './jwt.errors';
 import {
@@ -24,6 +25,7 @@ const LEGACY_ALGORITHM = 'HS256';
 export class JwtService {
   private readonly issuer: string;
   private readonly legacySecret: string | undefined;
+  private readonly logger: LoggerInterface | undefined;
 
   constructor(
     private readonly keyring: JwtKeyring,
@@ -41,6 +43,7 @@ export class JwtService {
     );
     this.issuer = options.issuer ?? DEFAULT_ISSUER;
     this.legacySecret = options.legacySecret;
+    this.logger = options.logger;
   }
 
   signTokenPair(userId: string, role: TokenRole): TokenPair {
@@ -90,7 +93,10 @@ export class JwtService {
         : this.verifyLegacy(token, options);
 
       return this.toTokenClaims(payload);
-    } catch {
+    } catch (error) {
+      // Keep the generic error for callers, but leave the underlying reason
+      // (for example an unknown `kid`) visible to operators.
+      this.logger?.debug('JWT verification failed', error);
       throw new InvalidTokenError(
         'InvalidTokenError: Token is invalid or has expired',
       );

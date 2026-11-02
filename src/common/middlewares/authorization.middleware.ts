@@ -1,10 +1,14 @@
 import { NextFunction, Request, Response } from 'express';
 
+import { GrantRoles } from '../../grants';
 import { Roles } from '../enums/roles.enum';
 import { ForbiddenError } from '../exceptions/auth.exceptions';
 
 const isGlobalRole = (role: string): role is Roles =>
   (Object.values(Roles) as string[]).includes(role);
+
+const isGrantRole = (role: string): role is GrantRoles =>
+  (Object.values(GrantRoles) as string[]).includes(role);
 
 export class AuthorizationMiddleware {
   allowRoles = (...roles: Roles[]) => {
@@ -19,6 +23,27 @@ export class AuthorizationMiddleware {
           !user ||
           user.audience !== undefined ||
           !isGlobalRole(user.role) ||
+          !roles.includes(user.role)
+        ) {
+          throw new ForbiddenError('Access denied');
+        }
+
+        next();
+      } catch (error) {
+        next(error);
+      }
+    };
+  };
+
+  allowGrantRoles = (audience: string, ...roles: GrantRoles[]) => {
+    return (req: Request, _res: Response, next: NextFunction) => {
+      try {
+        const user = req.user;
+
+        if (
+          !user ||
+          user.audience !== audience ||
+          !isGrantRole(user.role) ||
           !roles.includes(user.role)
         ) {
           throw new ForbiddenError('Access denied');

@@ -9,6 +9,7 @@ export interface JwtConfig {
   keyring: JwtKeyring;
   issuer: string;
   legacySecret: string | undefined;
+  ephemeral: boolean;
 }
 
 export interface ResolveJwtConfigOptions {
@@ -16,7 +17,7 @@ export interface ResolveJwtConfigOptions {
 }
 
 interface RetiredKeyEntry {
-  kid?: string;
+  kid: string;
   publicKey: string;
 }
 
@@ -52,25 +53,22 @@ const parseRetiredKeys = (rawValue: string | undefined): RetiredKeyEntry[] => {
   }
 
   return parsed.map((entry: unknown) => {
-    if (typeof entry === 'string') {
-      return { publicKey: normalizePem(entry) };
-    }
-
     if (
-      typeof entry === 'object' &&
-      entry !== null &&
-      typeof (entry as RetiredKeyEntry).publicKey === 'string'
+      typeof entry !== 'object' ||
+      entry === null ||
+      typeof (entry as RetiredKeyEntry).kid !== 'string' ||
+      !(entry as RetiredKeyEntry).kid.trim() ||
+      typeof (entry as RetiredKeyEntry).publicKey !== 'string' ||
+      !(entry as RetiredKeyEntry).publicKey.trim()
     ) {
-      const { kid, publicKey } = entry as RetiredKeyEntry;
-
-      return kid
-        ? { kid, publicKey: normalizePem(publicKey) }
-        : { publicKey: normalizePem(publicKey) };
+      throw new InvalidArgumentError(
+        'JWT_RETIRED_PUBLIC_KEYS entries must be { kid, publicKey } objects with string values',
+      );
     }
 
-    throw new InvalidArgumentError(
-      'JWT_RETIRED_PUBLIC_KEYS entries must be PEM strings or { kid, publicKey } objects',
-    );
+    const { kid, publicKey } = entry as RetiredKeyEntry;
+
+    return { kid: kid.trim(), publicKey: normalizePem(publicKey) };
   });
 };
 
@@ -111,8 +109,14 @@ export const resolveJwtConfig = (
         'JWT_PRIVATE_KEY is required; set JWT_ALLOW_EPHEMERAL_KEYS=true only for local or test environments',
       );
     }
+    if (env.NODE_ENV === 'production') {
+      throw new InvalidArgumentError(
+        'Ephemeral JWT keys cannot be used when NODE_ENV=production',
+      );
+    }
   }
 
+  const ephemeral = privateKey === undefined;
   const signingPair = privateKey
     ? { privateKey, ...(publicKey ? { publicKey } : {}) }
     : generateEphemeralKeyPair();
@@ -128,5 +132,6 @@ export const resolveJwtConfig = (
     keyring: new JwtKeyring(materials),
     issuer,
     legacySecret,
+    ephemeral,
   };
 };

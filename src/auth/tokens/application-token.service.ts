@@ -1,6 +1,5 @@
 import type { ApplicationsPort } from '../../applications';
 import { ForbiddenError } from '../../common/exceptions/auth.exceptions';
-import { EntityNotFoundError } from '../../common/exceptions/base.exception';
 import { assertObjectId } from '../../common/validators/object-id';
 import type { GrantsPort } from '../../grants';
 import { GrantRoles } from '../../grants';
@@ -30,14 +29,16 @@ export class ApplicationTokenService {
 
     const application =
       await this.applicationsService.findAssignableById(applicationId);
+    const user = await this.usersService.findById(userId);
 
-    if (!application) {
-      throw new EntityNotFoundError('Application not found');
+    // Collapse "missing user", "inactive application" and "no grant" into one
+    // response so the caller cannot use this path to enumerate ids.
+    if (!application || !user) {
+      throw new ForbiddenError('User has no access to this application');
     }
 
-    const user = await this.usersService.findById(userId);
-    if (!user) {
-      throw new EntityNotFoundError('User not found');
+    if (!user.verified) {
+      throw new ForbiddenError('Email is not verified');
     }
 
     const grant = await this.grantsService.findByUserAndApplication(

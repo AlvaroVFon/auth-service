@@ -49,4 +49,41 @@ describe('AuthorizationMiddleware', () => {
 
     assert.ok(next.mock.calls[0]?.arguments[0] instanceof ForbiddenError);
   });
+
+  describe('allowGrantRoles', () => {
+    const runGrant = (user: Request['user'], roles: GrantRoles[]): void => {
+      const handler = middleware.allowGrantRoles('app-a', ...roles);
+      handler({ user } as Request, {} as Response, next as NextFunction);
+    };
+
+    test('should allow the matching grant role for the audience', () => {
+      runGrant({ id: '1', role: GrantRoles.ADMIN, audience: 'app-a' }, [
+        GrantRoles.ADMIN,
+      ]);
+
+      assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+    });
+
+    test('should reject a different grant role', () => {
+      runGrant({ id: '1', role: GrantRoles.VIEWER, audience: 'app-a' }, [
+        GrantRoles.ADMIN,
+      ]);
+
+      assert.ok(next.mock.calls[0]?.arguments[0] instanceof ForbiddenError);
+    });
+
+    test('should reject a token from another audience', () => {
+      runGrant({ id: '1', role: GrantRoles.ADMIN, audience: 'app-b' }, [
+        GrantRoles.ADMIN,
+      ]);
+
+      assert.ok(next.mock.calls[0]?.arguments[0] instanceof ForbiddenError);
+    });
+
+    test('should reject a global token without an audience', () => {
+      runGrant({ id: '1', role: Roles.ADMIN }, [GrantRoles.ADMIN]);
+
+      assert.ok(next.mock.calls[0]?.arguments[0] instanceof ForbiddenError);
+    });
+  });
 });
