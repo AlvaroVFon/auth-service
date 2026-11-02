@@ -55,6 +55,27 @@ OWNER_EMAIL=owner@home.example OWNER_PASSWORD='...' pnpm bootstrap:owner
 
 The owner administers `/applications` and `/users`. Application administrators (grants with role `admin`) can manage permissions only for their own application. Re-running the bootstrap with the same email is a no-op: it never rotates the password or creates a second owner.
 
+### JWT signing keys
+
+Access tokens are signed with RS256. Consumers verify them with the public keys published at `GET /.well-known/jwks.json` (cacheable, never includes private material). Configure the active key with:
+
+```sh
+JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n..."
+JWT_KEY_ID="2026-11"
+JWT_ISSUER=auth-service
+```
+
+`JWT_PUBLIC_KEY` is derived from the private key when omitted, and `JWT_KEY_ID` defaults to the RFC 7638 thumbprint of the public key. When no keys are configured the service refuses to start unless `JWT_ALLOW_EPHEMERAL_KEYS=true` is set explicitly, which is only appropriate for local development and tests: every process generates its own pair, so tokens and JWKS differ between replicas. `NODE_ENV=production` rejects ephemeral keys even with the flag set. `JWT_PUBLIC_KEY` without `JWT_PRIVATE_KEY` is always rejected.
+
+To rotate, add the previous public keys to `JWT_RETIRED_PUBLIC_KEYS` as JSON on every instance, deploy the new active key, wait for the maximum refresh-token TTL and then remove the retired entries. Every entry needs its original `kid`; the service does not derive it:
+
+```sh
+JWT_RETIRED_PUBLIC_KEYS='[{"kid":"2026-10","publicKey":"-----BEGIN PUBLIC KEY-----\n..."}]'
+```
+
+`JWT_SECRET` is only a migration bridge: it verifies legacy HS256 tokens that carry no audience. Remove it once every HS256 access and refresh token has expired. See `docs/implementations/2026-11-02-rs256-jwks.md` for the full runbook.
+
 ### Health checks
 
 - `GET /health` — liveness, does not depend on MongoDB.

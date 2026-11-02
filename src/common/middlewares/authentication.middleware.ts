@@ -11,6 +11,20 @@ export class AuthenticationMiddleware {
   ) {}
 
   authenticate = async (req: Request, _res: Response, next: NextFunction) => {
+    await this.authenticateRequest(req, next);
+  };
+
+  authenticateForAudience(audience: string) {
+    return async (req: Request, _res: Response, next: NextFunction) => {
+      await this.authenticateRequest(req, next, audience);
+    };
+  }
+
+  private async authenticateRequest(
+    req: Request,
+    next: NextFunction,
+    audience?: string,
+  ): Promise<void> {
     try {
       const authHeader = req.headers.authorization;
 
@@ -22,7 +36,10 @@ export class AuthenticationMiddleware {
 
       const token = authHeader.slice(7).trim();
 
-      const payload = this.jwtService.verifyToken(token);
+      const payload =
+        audience === undefined
+          ? this.jwtService.verifyToken(token)
+          : this.jwtService.verifyToken(token, { audience });
 
       if (!payload.userId || !payload.role) {
         throw new InvalidCredentialsError('Invalid token payload');
@@ -33,6 +50,14 @@ export class AuthenticationMiddleware {
       }
 
       if (!payload.jti) {
+        throw new InvalidCredentialsError('Invalid token payload');
+      }
+
+      if (
+        audience === undefined
+          ? payload.aud !== undefined
+          : payload.aud !== audience
+      ) {
         throw new InvalidCredentialsError('Invalid token payload');
       }
 
@@ -49,11 +74,12 @@ export class AuthenticationMiddleware {
         role: payload.role,
         jti: payload.jti,
         expiresAt: new Date(payload.exp * 1000),
+        ...(payload.aud === undefined ? {} : { audience: payload.aud }),
       };
 
       next();
     } catch (error) {
       next(error);
     }
-  };
+  }
 }
