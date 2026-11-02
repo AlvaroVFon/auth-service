@@ -10,6 +10,7 @@ import {
   InvalidCodeError,
 } from '../../../../../src/common/exceptions/codes.exceptions';
 import fixture from '../../../../fixtures';
+import { assertTtlIndex } from '../../../../helpers/assert-ttl-index';
 import { CodesFactory } from '../../../../helpers/factories/codes.factory';
 
 describe('Codes Service', () => {
@@ -301,14 +302,7 @@ describe('Codes Service', () => {
 });
 
 describe('Code TTL', () => {
-  test('should delete expired codes automatically', () => {
-    const ttl = CodesModel.schema
-      .indexes()
-      .some(
-        ([fields, options]) =>
-          fields.expiresAt === 1 && options?.expireAfterSeconds === 0,
-      );
-
-    assert.ok(ttl);
+  test('should create a TTL index on the collection', async () => {
+    await assertTtlIndex(CodesModel, 'expiresAt');
   });
 });

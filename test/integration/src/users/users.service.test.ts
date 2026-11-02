@@ -82,6 +82,18 @@ describe('UsersService', () => {
         assert.strictEqual(foundUser?.password, newUser.password);
       });
 
+      test('should default users created by admins to verified', async () => {
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('create-verified+'),
+          password: 'securepassword123',
+        });
+        delete userData.verified;
+
+        const newUser = await usersService.create(userData);
+
+        assert.strictEqual(newUser.verified, true);
+      });
+
       test('should throw an error when creating a user with missing required fields', async () => {
         const userData: Partial<UserInterface> = UserFactory.generate({
           email: undefined as unknown as string,

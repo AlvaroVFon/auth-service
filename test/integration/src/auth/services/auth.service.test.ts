@@ -993,6 +993,42 @@ describe('Auth Service', () => {
       );
     });
 
+    test('should reject a refresh for an unverified user', async () => {
+      await fixture.updateOne<UserInterface>(
+        'User',
+        { _id: DEFAULT_USER_ID },
+        { verified: false },
+      );
+
+      const refreshToken = jwtService.signTokenPair(
+        DEFAULT_USER_ID.toString(),
+        Roles.USER,
+      ).refreshToken;
+      const decoded = jwtService.verifyToken(refreshToken) as any;
+
+      await fixture.create<RefreshToken>('RefreshToken', {
+        userId: DEFAULT_USER_ID,
+        jti: decoded.jti,
+        expiresAt: new Date(decoded.exp * 1000),
+        revokedAt: null,
+        replacedByJti: null,
+        type: TokenTypes.REFRESH,
+      });
+
+      await assert.rejects(
+        async () =>
+          await authService.refreshToken(
+            DEFAULT_USER_ID.toString(),
+            refreshToken,
+          ),
+        {
+          name: 'ForbiddenError',
+          message: 'Email is not verified',
+          code: 'FORBIDDEN',
+        },
+      );
+    });
+
     test('should succeed with valid userId and refreshToken', async () => {
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),

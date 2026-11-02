@@ -28,6 +28,12 @@ export class AuthService {
     private readonly holdersService: HoldersPort,
   ) {}
 
+  private assertVerified(user: { verified: boolean }): void {
+    if (!user.verified) {
+      throw new ForbiddenError('Email is not verified');
+    }
+  }
+
   async login(
     credentials: Credentials,
     ctx?: RequestContext,
@@ -45,9 +51,7 @@ export class AuthService {
       credentials.password,
     );
 
-    if (!user.verified) {
-      throw new ForbiddenError('Email is not verified');
-    }
+    this.assertVerified(user);
 
     const session = await this.sessionService.create(
       user._id.toString(),
@@ -225,6 +229,8 @@ export class AuthService {
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
+
+    this.assertVerified(user);
 
     const session = await this.sessionService.rotate(
       userId,

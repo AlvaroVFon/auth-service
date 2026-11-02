@@ -9,6 +9,7 @@ import {
 } from '../../../../../src/common/exceptions/base.exception';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
 import fixture from '../../../../fixtures';
+import { assertTtlIndex } from '../../../../helpers/assert-ttl-index';
 import { RefreshTokenFactory } from '../../../../helpers/factories/refresh-token.factory';
 
 describe('RefreshTokenService', () => {
@@ -299,14 +300,7 @@ describe('RefreshTokenService', () => {
 });
 
 describe('RefreshToken TTL', () => {
-  test('should delete expired tokens automatically', () => {
-    const ttl = RefreshTokenModel.schema
-      .indexes()
-      .some(
-        ([fields, options]) =>
-          fields.expiresAt === 1 && options?.expireAfterSeconds === 0,
-      );
-
-    assert.ok(ttl);
+  test('should create a TTL index on the collection', async () => {
+    await assertTtlIndex(RefreshTokenModel, 'expiresAt');
   });
 });
