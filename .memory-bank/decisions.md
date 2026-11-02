@@ -4,7 +4,7 @@
 
 - **Date:** 2026-06-14
 - **Context:** Need to protect against brute-force attacks on the login endpoint. Options include IP-based blocking, CAPTCHA, account lockout, or a combination.
-- **Decision:** Implement account-based lockout (not IP-based). After `MAX_LOGIN_ATTEMPTS` consecutive failed logins, the account is locked for `LOCKOUT_DURATION_MS`. Both values are configurable via environment variables. Atomic Mongoose updates (`$inc`, `$set`) are used to prevent race conditions. The same counters guard repeated invalid MFA codes.
+- **Decision:** Implement account-based lockout (not IP-based). After `MAX_LOGIN_ATTEMPTS` consecutive failed logins, the account is locked for `LOCKOUT_DURATION_MS`. Both values are configurable via environment variables. Atomic Mongoose updates (`$inc`, `$set`) are used to prevent race conditions. The same thresholds guard repeated invalid MFA codes, tracked in dedicated counters (`mfaFailedAttempts` / `mfaLockoutUntil`).
 - **Consequences:**
   - Legitimate users may be locked out if an attacker knows their email.
   - No IP tracking means distributed attacks are not mitigated (rate limiting handles that separately).
@@ -60,11 +60,12 @@
 
 - **Date:** 2026-11-02
 - **Context:** Un refresh token reutilizable permite secuestros permanentes y el logout no podía invalidar access tokens ya emitidos.
-- **Decision:** Cada refresh token se persiste con `jti`, IP, user-agent, aplicación y última actividad; `POST /auth/refresh` lo rota (`replacedByJti`) y rechaza reutilizaciones. El logout y la revocación de sesión añaden el `jti` del access token a `BlacklistedToken`, con TTL hasta su expiración. Cada login abre una sesión independiente y `MAX_SESSIONS_PER_USER` revoca las más antiguas.
+- **Decision:** Cada refresh token se persiste con `jti`, IP, user-agent, aplicación y última actividad; `POST /auth/refresh` lo rota (`replacedByJti`) y rechaza reutilizaciones. El logout añade además el `jti` del access token a `BlacklistedToken`, con TTL hasta su expiración. La revocación de sesión (`DELETE /auth/sessions*`) solo invalida los refresh tokens: el access token ya emitido sigue siendo válido hasta que caduca. Cada login abre una sesión independiente y `MAX_SESSIONS_PER_USER` revoca las más antiguas.
 - **Consequences:**
   - El cliente debe estar preparado para recibir un refresh token nuevo en cada refresh.
   - La blacklist añade una lectura por petición autenticada; el TTL la limpia sola.
   - Reutilizar un refresh token revocado no devuelve tokens nuevos: hay que volver a iniciar sesión.
+  - Revocar una sesión no corta el access token en vuelo; para eso está el logout, o esperar a `JWT_EXPIRATION`.
   - Ver `docs/implementations/2026-11-02-public-refresh.md` y `.../device-sessions.md`.
 
 ## ADR-007: Auditoría persistente con retención por TTL

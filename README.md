@@ -196,20 +196,20 @@ Every route is declared in a module router and mounted by
 
 ### Users, applications and grants
 
-| Method   | Route                                         | Access    | Notes                                                    |
-| -------- | --------------------------------------------- | --------- | -------------------------------------------------------- |
-| `POST`   | `/users`                                      | Owner     | Creates a verified user directly.                        |
-| `GET`    | `/users`                                      | Owner     | Lists users.                                             |
-| `GET`    | `/users/:id`                                  | Owner     | Reads one user.                                          |
-| `PATCH`  | `/users/:id`                                  | Owner     | Updates profile, role or `telegramChatId`.               |
-| `DELETE` | `/users/:id`                                  | Owner     | Deletes the user and cascades its grants; not the owner. |
-| `POST`   | `/applications`                               | Owner     | Creates an application (name, slug, audience).           |
-| `GET`    | `/applications`                               | Owner     | Lists applications.                                      |
-| `GET`    | `/applications/:id`                           | Owner     | Reads one application.                                   |
-| `PUT`    | `/applications/:applicationId/grants`         | App admin | Upserts the role of a user in the application.           |
-| `GET`    | `/applications/:applicationId/grants`         | App admin | Lists the application grants.                            |
-| `GET`    | `/applications/:applicationId/grants/:userId` | App admin | Reads one grant.                                         |
-| `DELETE` | `/applications/:applicationId/grants/:userId` | App admin | Revokes a grant.                                         |
+| Method   | Route                                         | Access    | Notes                                                                   |
+| -------- | --------------------------------------------- | --------- | ----------------------------------------------------------------------- |
+| `POST`   | `/users`                                      | Owner     | Creates a verified user directly.                                       |
+| `GET`    | `/users`                                      | Owner     | Lists users.                                                            |
+| `GET`    | `/users/:id`                                  | Owner     | Reads one user.                                                         |
+| `PATCH`  | `/users/:id`                                  | Owner     | Updates profile fields (including `telegramChatId`); `role` is ignored. |
+| `DELETE` | `/users/:id`                                  | Owner     | Deletes the user and cascades its grants; not the owner.                |
+| `POST`   | `/applications`                               | Owner     | Creates an application (name, slug, audience).                          |
+| `GET`    | `/applications`                               | Owner     | Lists applications.                                                     |
+| `GET`    | `/applications/:id`                           | Owner     | Reads one application.                                                  |
+| `PUT`    | `/applications/:applicationId/grants`         | App admin | Upserts the role of a user in the application.                          |
+| `GET`    | `/applications/:applicationId/grants`         | App admin | Lists the application grants.                                           |
+| `GET`    | `/applications/:applicationId/grants/:userId` | App admin | Reads one grant.                                                        |
+| `DELETE` | `/applications/:applicationId/grants/:userId` | App admin | Revokes a grant.                                                        |
 
 ### Audit
 
@@ -295,6 +295,10 @@ device (user-agent), application, IP, creation time and last activity, and
 `DELETE /auth/sessions/:sessionId` revokes one session without touching the rest
 (repeating it is a no-op), and `DELETE /auth/sessions` revokes them all. The oldest
 sessions beyond `MAX_SESSIONS_PER_USER` (default `50`) are revoked on each new login.
+
+Revoking a session invalidates its refresh token; an access token already issued keeps
+working until it expires (`JWT_EXPIRATION`, one hour by default). Use `POST /auth/logout`
+to also blacklist the caller's current access token.
 
 ### Shareable invitations and password resets
 

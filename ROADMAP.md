@@ -28,7 +28,8 @@ Objetivo: sesiones largas y seguras sin comprometer la seguridad.
 - [x] **Verificación de email:** flujo holder -> user con `POST /auth/verify`.
 - [x] **Enlaces compartibles de un solo uso:** invitaciones y resets generados por API,
       hasheados en reposo, con expiración configurable, sin depender de SMTP.
-- [x] **Plantillas:** handlebars para verificación, reset e invitación.
+- [x] **Plantillas:** handlebars para verificación y reset (`signup_verification`,
+      `reset_password`, `welcome`).
 
 ## Fase 3: Blindaje de Seguridad (Hardening) — 100% Completada
 
