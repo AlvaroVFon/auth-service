@@ -50,6 +50,7 @@ describe('application composition wiring', () => {
 
     assert.ok(composition.applications);
     assert.ok(composition.grants);
+    assert.ok(composition.ownerBootstrap);
     await assert.rejects(
       composition.grants.assignRole({
         userId: 'bad',

@@ -13,4 +13,7 @@ export interface GrantsPort {
     applicationId: string,
   ): Promise<Grant | null>;
   listByUser(userId: string): Promise<Grant[]>;
+  listByApplication(applicationId: string): Promise<Grant[]>;
+  revokeRole(userId: string, applicationId: string): Promise<void>;
+  deleteByUser(userId: string): Promise<void>;
 }

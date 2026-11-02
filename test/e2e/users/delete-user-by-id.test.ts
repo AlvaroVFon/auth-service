@@ -5,7 +5,7 @@ import { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import {
-  DEFAULT_ADMIN_TOKEN,
+  DEFAULT_OWNER_TOKEN,
   DEFAULT_USER_TOKEN,
 } from '../../fixtures/defaults';
 import { getTestAppInstance } from '../../utils/app';
@@ -25,7 +25,7 @@ describe('Delete User By ID E2E Test', () => {
 
     const deleteResponse = await request(app)
       .delete(`/users/${newUser._id}`)
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .expect(204);
 
     const deletedUser = await fixture.findById<User>(
@@ -42,7 +42,7 @@ describe('Delete User By ID E2E Test', () => {
 
     await request(app)
       .delete(`/users/${nonExistentUserId}`)
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .expect(404);
   });
 

@@ -363,4 +363,138 @@ describe('GrantsService', () => {
       );
     });
   });
+  describe('inactive applications', () => {
+    test('should hide grants of inactive applications', async () => {
+      const application = await createApplication();
+      const userId = await createUser();
+
+      await grantsService.assignRole({
+        userId,
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+      await ApplicationModel.updateOne(
+        { _id: application._id },
+        { active: false },
+      );
+
+      assert.strictEqual(
+        await grantsService.findByUserAndApplication(
+          userId,
+          application._id.toString(),
+        ),
+        null,
+      );
+      assert.deepStrictEqual(await grantsService.listByUser(userId), []);
+    });
+  });
+
+  describe('listByApplication', () => {
+    test('should list every grant of one application', async () => {
+      const applicationA = await createApplication();
+      const applicationB = await createApplication();
+      const userA = await createUser();
+      const userB = await createUser();
+
+      await grantsService.assignRole({
+        userId: userA,
+        applicationId: applicationA._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+      await grantsService.assignRole({
+        userId: userB,
+        applicationId: applicationA._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+      await grantsService.assignRole({
+        userId: userA,
+        applicationId: applicationB._id.toString(),
+        role: GrantRoles.EDITOR,
+      });
+
+      const grants = await grantsService.listByApplication(
+        applicationA._id.toString(),
+      );
+
+      assert.strictEqual(grants.length, 2);
+    });
+
+    test('should reject an unknown or inactive application', async () => {
+      const application = await createApplication();
+      await ApplicationModel.updateOne(
+        { _id: application._id },
+        { active: false },
+      );
+
+      await assert.rejects(
+        grantsService.listByApplication(application._id.toString()),
+        EntityNotFoundError,
+      );
+      await assert.rejects(
+        grantsService.listByApplication('64b64c4f4f4f4f4f4f4f4f4f'),
+        EntityNotFoundError,
+      );
+    });
+  });
+
+  describe('revokeRole', () => {
+    test('should delete the grant of the pair', async () => {
+      const application = await createApplication();
+      const userId = await createUser();
+
+      await grantsService.assignRole({
+        userId,
+        applicationId: application._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+
+      await grantsService.revokeRole(userId, application._id.toString());
+
+      assert.strictEqual(
+        await grantsService.findByUserAndApplication(
+          userId,
+          application._id.toString(),
+        ),
+        null,
+      );
+
+      await assert.rejects(
+        grantsService.revokeRole(userId, application._id.toString()),
+        new EntityNotFoundError('Grant not found'),
+      );
+    });
+  });
+
+  describe('deleteByUser', () => {
+    test('should delete every grant of the user only', async () => {
+      const applicationA = await createApplication();
+      const applicationB = await createApplication();
+      const userId = await createUser();
+      const otherUserId = await createUser();
+
+      await grantsService.assignRole({
+        userId,
+        applicationId: applicationA._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+      await grantsService.assignRole({
+        userId,
+        applicationId: applicationB._id.toString(),
+        role: GrantRoles.EDITOR,
+      });
+      await grantsService.assignRole({
+        userId: otherUserId,
+        applicationId: applicationA._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+
+      await grantsService.deleteByUser(userId);
+
+      assert.deepStrictEqual(await grantsService.listByUser(userId), []);
+      assert.strictEqual(
+        (await grantsService.listByUser(otherUserId)).length,
+        1,
+      );
+    });
+  });
 });

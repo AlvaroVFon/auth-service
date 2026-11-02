@@ -6,7 +6,7 @@ import { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import { generateRandomEmail } from '../../fixtures/defaults';
 import {
-  DEFAULT_ADMIN_TOKEN,
+  DEFAULT_OWNER_TOKEN,
   DEFAULT_USER_TOKEN,
 } from '../../fixtures/defaults';
 import { getTestAppInstance } from '../../utils/app';
@@ -25,7 +25,7 @@ describe('Get User By ID E2E Test', () => {
     });
     const response = await request(app)
       .get(`/users/${user._id.toString()}`)
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .set('Accept', 'application/json')
       .expect(200);
 
@@ -39,7 +39,7 @@ describe('Get User By ID E2E Test', () => {
     const response = await request(app)
       .get(`/users/${invalidUserId}`)
       .set('Accept', 'application/json')
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .expect(400);
 
     assert.strictEqual(response.body.code, 'INVALID_ARGUMENT');
@@ -52,7 +52,7 @@ describe('Get User By ID E2E Test', () => {
     const response = await request(app)
       .get(`/users/${nonExistingUserId}`)
       .set('Accept', 'application/json')
-      .set('Authorization', `Bearer ${DEFAULT_ADMIN_TOKEN}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .expect(404);
 
     assert.strictEqual(response.body.code, 'NOT_FOUND');

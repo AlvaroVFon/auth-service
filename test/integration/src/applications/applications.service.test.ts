@@ -236,4 +236,36 @@ describe('ApplicationsService', () => {
       assert.strictEqual(found, null);
     });
   });
+  describe('findActiveByIds', () => {
+    test('should return only active applications', async () => {
+      const active = ApplicationFactory.generate();
+      const inactive = ApplicationFactory.generate();
+      const createdActive = await applicationsService.create({
+        name: active.name,
+        slug: active.slug,
+        audience: active.audience,
+      });
+      const createdInactive = await fixture.create<Application>('Application', {
+        ...inactive,
+        active: false,
+      });
+
+      const applications = await applicationsService.findActiveByIds([
+        createdActive._id.toString(),
+        createdInactive._id.toString(),
+      ]);
+
+      assert.deepStrictEqual(
+        applications.map((application) => application._id.toString()),
+        [createdActive._id.toString()],
+      );
+    });
+
+    test('should reject an invalid id', async () => {
+      await assert.rejects(
+        applicationsService.findActiveByIds(['bad-id']),
+        InvalidArgumentError,
+      );
+    });
+  });
 });

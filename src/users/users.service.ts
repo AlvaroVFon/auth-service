@@ -1,7 +1,12 @@
 import { Model } from 'mongoose';
 
-import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
+import {
+  EMAIL_REGEX,
+  OBJECTID_REGEX,
+  PASSWORD_REGEX,
+} from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
+import { Roles } from '../common/enums/roles.enum';
 import {
   AccountLockedError,
   InvalidCredentialsError,
@@ -13,9 +18,11 @@ import {
 } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
-import type { UsersPort } from './users.port';
+import type { UserGrantsCleanerPort, UsersPort } from './users.port';
 
 export class UsersService implements UsersPort {
+  private grantsCleaner?: UserGrantsCleanerPort;
+
   constructor(
     private readonly usersModel: Model<UserInterface>,
     private readonly cryptoService: CryptoService,
@@ -49,6 +56,25 @@ export class UsersService implements UsersPort {
       email,
       password,
       verified: data.verified ?? true,
+    });
+  }
+
+  async createOwner(email: string, password: string): Promise<UserInterface> {
+    const normalizedEmail = normalizeEmail(email);
+    if (!email || !EMAIL_REGEX.test(normalizedEmail)) {
+      throw new InvalidArgumentError('Invalid email format');
+    }
+    if (!password || !PASSWORD_REGEX.test(password)) {
+      throw new InvalidArgumentError(
+        'Password does not meet complexity requirements',
+      );
+    }
+
+    return this.create({
+      email: normalizedEmail,
+      password,
+      role: Roles.OWNER,
+      verified: true,
     });
   }
 
@@ -127,6 +153,18 @@ export class UsersService implements UsersPort {
 
   async findAll(): Promise<UserInterface[]> {
     return this.usersModel.find();
+  }
+
+  async findByRole(role: Roles): Promise<UserInterface | null> {
+    if (!Object.values(Roles).includes(role)) {
+      throw new InvalidArgumentError('Invalid role');
+    }
+
+    return this.usersModel.findOne({ role });
+  }
+
+  setGrantsCleaner(cleaner: UserGrantsCleanerPort): void {
+    this.grantsCleaner = cleaner;
   }
 
   async updateOneById(
@@ -216,10 +254,13 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    const user = await this.usersModel.findByIdAndDelete(id);
+    const user = await this.usersModel.findById(id);
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
+
+    await this.grantsCleaner?.deleteByUser(id);
+    await this.usersModel.findByIdAndDelete(id);
 
     return user;
   }

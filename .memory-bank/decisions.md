@@ -22,6 +22,18 @@
   - The global limiter still applies — a request must pass both the per-route and global limiters.
   - Only three endpoints are rate-limited in this phase; others can be added incrementally.
 
+## ADR-004: Owner único y autorización por aplicación
+
+- **Date:** 2026-11-02
+- **Context:** El rol global `ADMIN` no era una fuente de autorización sostenible: nadie podía obtenerlo sin tocar la base de datos, y no distinguía entre administrar el hogar y administrar una app concreta.
+- **Decision:** Añadir el rol global `owner` (único, garantizado por un índice único parcial) y provisionarlo de forma idempotente desde `OWNER_EMAIL`/`OWNER_PASSWORD` en el arranque o con `pnpm bootstrap:owner`. `/users` y el catálogo de aplicaciones pasan a ser owner-only. La gestión de permisos de una app se autoriza contra el `Grant` de la base de datos: owner siempre, admin de esa app para el resto. `ADMIN`/`USER` se conservan en el enum solo por compatibilidad de datos y tokens; `ADMIN` ya no autoriza.
+- **Consequences:**
+  - Cambio incompatible: los `ADMIN` existentes pierden acceso a `/users` hasta convertirse en owner o admin de app.
+  - Un único owner; cambiar su email o crear otro requiere intervención manual.
+  - La contraseña configurada no rota la del owner existente: se usa el flujo de reset.
+  - La revocación de permisos es inmediata porque cada petición consulta el grant, a costa de una lectura adicional.
+  - Cambiar el email configurado cuando ya existe un owner aborta el arranque en lugar de crear un segundo owner.
+
 ## ADR-003: Un hogar único con aplicaciones y permisos por usuario
 
 - **Date:** 2026-11-01

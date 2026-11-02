@@ -1,0 +1,42 @@
+import { Roles } from '../../../../src/common/enums/roles.enum';
+import { User } from '../../../../src/users/users.schema';
+
+const buildUser = (role: Roles, suffix: string) => ({
+  email: `schema-${suffix}@example.com`,
+  password: 'hash',
+  role,
+  verified: true,
+});
+
+describe('User schema owner constraint', () => {
+  test('should allow multiple admin and user documents', async () => {
+    await User.create(buildUser(Roles.ADMIN, 'admin-1'));
+    await User.create(buildUser(Roles.ADMIN, 'admin-2'));
+    await User.create(buildUser(Roles.USER, 'user-1'));
+
+    assert.strictEqual(await User.countDocuments(), 3);
+  });
+
+  test('should reject a second owner', async () => {
+    await User.create(buildUser(Roles.OWNER, 'owner-1'));
+
+    await assert.rejects(
+      User.create(buildUser(Roles.OWNER, 'owner-2')),
+      (error: unknown) => (error as { code?: number }).code === 11000,
+    );
+
+    assert.strictEqual(await User.countDocuments({ role: Roles.OWNER }), 1);
+  });
+
+  test('should reject an unknown role', async () => {
+    await assert.rejects(
+      User.create({
+        email: 'schema-unknown@example.com',
+        password: 'hash',
+        role: 'superuser' as unknown as Roles,
+        verified: true,
+      }),
+      (error: unknown) => (error as Error).name === 'ValidationError',
+    );
+  });
+});
