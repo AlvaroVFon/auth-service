@@ -9,6 +9,7 @@ import { CodesService } from '../auth/codes/codes.service';
 import { AuthController } from '../auth/controllers/auth.controller';
 import { AuthMailer } from '../auth/services/auth-mailer';
 import { AuthService } from '../auth/services/auth.service';
+import { ProfileService } from '../auth/services/profile.service';
 import { ApplicationTokenService } from '../auth/tokens/application-token.service';
 import { BlacklistService } from '../auth/tokens/blacklist.service';
 import { BlacklistedTokenModel } from '../auth/tokens/blacklisted-token.schema';
@@ -210,8 +211,13 @@ export const createApplicationComposition = (
     applicationTokenService,
     logger,
   );
+  const profileService = new ProfileService(
+    usersModule.service,
+    jwtService,
+    blacklistService,
+  );
   const authModule = new AuthModule({
-    authController: new AuthController(authService),
+    authController: new AuthController(authService, profileService),
     authenticationMiddleware,
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
     logger,

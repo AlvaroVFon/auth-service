@@ -14,6 +14,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Role-based authorization (user / admin)
 - Home applications with per-user roles (viewer, editor, admin)
 - Login scoped to a concrete application (audience + grant role)
+- Session profile (`GET /auth/me`) and token introspection (`POST /auth/introspect`)
 
 ## Getting Started
 
@@ -65,6 +66,17 @@ access and refresh tokens carrying that app's `aud` and the grant role
 the owner token has no `aud` and is the only one accepted by `/applications` and
 `/users`. A missing grant, unknown app or inactive app returns `403` without tokens,
 while invalid credentials always return the same generic `401`.
+
+### Session profile and introspection
+
+`GET /auth/me` returns the authenticated identity (`id`, `email`), the application
+(audience or `null`) and the role and expiration of the presented token. Apps expose it
+to their own frontends after validating the JWT.
+
+`POST /auth/introspect` takes `{ "token": "..." }` and requires a valid access token as
+the caller. It answers `{ "active": true, ... }` only for the caller's own tokens in the
+same application; revoked, expired or foreign tokens return `{ "active": false }`
+without any extra data.
 
 ### JWT signing keys
 
