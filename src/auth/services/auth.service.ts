@@ -25,7 +25,7 @@ import { Code, CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
 import { ApplicationTokenService } from '../tokens/application-token.service';
 import { RequestContext } from '../tokens/request-context.type';
-import { SessionService } from '../tokens/session.service';
+import { SessionService, SessionView } from '../tokens/session.service';
 import { AuthMailer } from './auth-mailer';
 
 export class AuthService {
@@ -360,6 +360,18 @@ export class AuthService {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
     };
+  }
+
+  async listSessions(userId: string): Promise<SessionView[]> {
+    return this.sessionService.list(userId);
+  }
+
+  async revokeSession(userId: string, sessionId: string): Promise<void> {
+    await this.sessionService.revoke(userId, sessionId);
+  }
+
+  async revokeAllSessions(userId: string): Promise<void> {
+    await this.sessionService.revokeAll(userId);
   }
 
   async logout(
