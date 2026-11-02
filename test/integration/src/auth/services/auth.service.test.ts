@@ -129,6 +129,7 @@ describe('Auth Service', () => {
       blacklistService,
       holdersService,
       applicationTokens,
+      jwtService,
       mockLogger,
     );
   });
@@ -445,6 +446,7 @@ describe('Auth Service', () => {
         blacklistService,
         holdersService,
         applicationTokens,
+        jwtService,
         mockLogger,
       );
     });
@@ -1178,10 +1180,9 @@ describe('Auth Service', () => {
         'NewPass123!',
       );
 
-      await assert.rejects(
-        authService.refreshToken(user._id.toString(), refreshToken),
-        { name: 'UnauthorizedError' },
-      );
+      await assert.rejects(authService.refreshToken(refreshToken), {
+        name: 'UnauthorizedError',
+      });
     });
 
     test('should hash the new password when resetting password', async () => {
@@ -1293,48 +1294,24 @@ describe('Auth Service', () => {
         Roles.USER,
       ).refreshToken;
 
-      await assert.rejects(
-        authService.refreshToken(DEFAULT_USER_ID.toString(), refreshToken),
-        {
-          name: 'ForbiddenError',
-          message: 'An application is required',
-          code: 'FORBIDDEN',
-        },
-      );
+      await assert.rejects(authService.refreshToken(refreshToken), {
+        name: 'ForbiddenError',
+        message: 'An application is required',
+        code: 'FORBIDDEN',
+      });
     });
-
-    test('should throw an error if invalid userId is provided', async () => {
-      await assert.rejects(
-        async () =>
-          await authService.refreshToken('invalid-id', 'some-jwt-token'),
-        {
-          name: 'InvalidArgumentError',
-          message: 'userId is not a valid ObjectId',
-          code: 'INVALID_ARGUMENT',
-        },
-      );
-    });
-
     test('should throw an error if no refreshToken is provided', async () => {
-      await assert.rejects(
-        async () =>
-          await authService.refreshToken(DEFAULT_USER_ID.toString(), ''),
-        {
-          name: 'InvalidArgumentError',
-          message: 'refreshToken is required',
-          code: 'INVALID_ARGUMENT',
-        },
-      );
+      await assert.rejects(async () => await authService.refreshToken(''), {
+        name: 'InvalidArgumentError',
+        message: 'refreshToken is required',
+        code: 'INVALID_ARGUMENT',
+      });
     });
 
     test('should throw if JWT is invalid', async () => {
       await makeOwner();
       await assert.rejects(
-        async () =>
-          await authService.refreshToken(
-            DEFAULT_USER_ID.toString(),
-            'not-a-jwt',
-          ),
+        async () => await authService.refreshToken('not-a-jwt'),
         {
           name: 'InvalidTokenError',
         },
@@ -1349,11 +1326,7 @@ describe('Auth Service', () => {
       ).refreshToken;
 
       await assert.rejects(
-        async () =>
-          await authService.refreshToken(
-            DEFAULT_USER_ID.toString(),
-            refreshToken,
-          ),
+        async () => await authService.refreshToken(refreshToken),
         {
           name: 'UnauthorizedError',
           message: 'Invalid refresh token',
@@ -1380,11 +1353,7 @@ describe('Auth Service', () => {
       });
 
       await assert.rejects(
-        async () =>
-          await authService.refreshToken(
-            DEFAULT_USER_ID.toString(),
-            refreshToken,
-          ),
+        async () => await authService.refreshToken(refreshToken),
         {
           name: 'UnauthorizedError',
           message: 'Refresh token has been revoked',
@@ -1416,11 +1385,7 @@ describe('Auth Service', () => {
       });
 
       await assert.rejects(
-        async () =>
-          await authService.refreshToken(
-            DEFAULT_USER_ID.toString(),
-            refreshToken,
-          ),
+        async () => await authService.refreshToken(refreshToken),
         {
           name: 'ForbiddenError',
           message: 'Email is not verified',
@@ -1429,7 +1394,7 @@ describe('Auth Service', () => {
       );
     });
 
-    test('should succeed with valid userId and refreshToken', async () => {
+    test('should rotate a valid refresh token', async () => {
       await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
@@ -1446,10 +1411,7 @@ describe('Auth Service', () => {
         type: TokenTypes.REFRESH,
       });
 
-      const tokens = await authService.refreshToken(
-        DEFAULT_USER_ID.toString(),
-        refreshToken,
-      );
+      const tokens = await authService.refreshToken(refreshToken);
 
       assert.ok(tokens);
       assert.strictEqual(typeof tokens.accessToken, 'string');
@@ -1481,12 +1443,7 @@ describe('Auth Service', () => {
         application: DEFAULT_APPLICATION.slug,
       });
 
-      const refreshed = await authService.refreshToken(
-        DEFAULT_USER_ID.toString(),
-        login.refreshToken,
-        undefined,
-        DEFAULT_APPLICATION.audience,
-      );
+      const refreshed = await authService.refreshToken(login.refreshToken);
 
       const access = jwtService.verifyToken(refreshed.accessToken, {
         audience: DEFAULT_APPLICATION.audience,
@@ -1512,49 +1469,13 @@ describe('Auth Service', () => {
         { role: GrantRoles.ADMIN },
       );
 
-      const refreshed = await authService.refreshToken(
-        DEFAULT_USER_ID.toString(),
-        login.refreshToken,
-        undefined,
-        DEFAULT_APPLICATION.audience,
-      );
+      const refreshed = await authService.refreshToken(login.refreshToken);
 
       assert.strictEqual(
         jwtService.verifyToken(refreshed.accessToken, {
           audience: DEFAULT_APPLICATION.audience,
         }).role,
         GrantRoles.ADMIN,
-      );
-    });
-
-    test('should reject a refresh token from another application', async () => {
-      const appB = await createApplication({
-        slug: 'app-b',
-        audience: 'audience-b',
-      });
-      await grantRole(
-        DEFAULT_USER_ID.toString(),
-        appB._id.toString(),
-        GrantRoles.VIEWER,
-      );
-      const login = await authService.login({
-        email: DEFAULT_USER.email,
-        password: 'password123',
-        application: DEFAULT_APPLICATION.slug,
-      });
-
-      await assert.rejects(
-        authService.refreshToken(
-          DEFAULT_USER_ID.toString(),
-          login.refreshToken,
-          undefined,
-          appB.audience,
-        ),
-        {
-          name: 'UnauthorizedError',
-          message: 'Invalid refresh token',
-          code: 'UNAUTHORIZED',
-        },
       );
     });
 
@@ -1566,18 +1487,10 @@ describe('Auth Service', () => {
       });
       await fixture.deleteOne<Grant>('Grant', { userId: DEFAULT_USER_ID });
 
-      await assert.rejects(
-        authService.refreshToken(
-          DEFAULT_USER_ID.toString(),
-          login.refreshToken,
-          undefined,
-          DEFAULT_APPLICATION.audience,
-        ),
-        {
-          name: 'ForbiddenError',
-          message: 'User has no access to this application',
-        },
-      );
+      await assert.rejects(authService.refreshToken(login.refreshToken), {
+        name: 'ForbiddenError',
+        message: 'User has no access to this application',
+      });
 
       await grantsService.assignRole({
         userId: DEFAULT_USER_ID.toString(),
@@ -1586,18 +1499,10 @@ describe('Auth Service', () => {
       });
 
       // Restoring the grant must not resurrect the revoked session.
-      await assert.rejects(
-        authService.refreshToken(
-          DEFAULT_USER_ID.toString(),
-          login.refreshToken,
-          undefined,
-          DEFAULT_APPLICATION.audience,
-        ),
-        {
-          name: 'UnauthorizedError',
-          message: 'Refresh token has been revoked',
-        },
-      );
+      await assert.rejects(authService.refreshToken(login.refreshToken), {
+        name: 'UnauthorizedError',
+        message: 'Refresh token has been revoked',
+      });
     });
 
     test('should reject a refresh when the application is inactive', async () => {
@@ -1612,18 +1517,10 @@ describe('Auth Service', () => {
         { active: false },
       );
 
-      await assert.rejects(
-        authService.refreshToken(
-          DEFAULT_USER_ID.toString(),
-          login.refreshToken,
-          undefined,
-          DEFAULT_APPLICATION.audience,
-        ),
-        {
-          name: 'ForbiddenError',
-          message: 'User has no access to this application',
-        },
-      );
+      await assert.rejects(authService.refreshToken(login.refreshToken), {
+        name: 'ForbiddenError',
+        message: 'User has no access to this application',
+      });
 
       await fixture.updateOne<Application>(
         'Application',
@@ -1631,18 +1528,10 @@ describe('Auth Service', () => {
         { active: true },
       );
 
-      await assert.rejects(
-        authService.refreshToken(
-          DEFAULT_USER_ID.toString(),
-          login.refreshToken,
-          undefined,
-          DEFAULT_APPLICATION.audience,
-        ),
-        {
-          name: 'UnauthorizedError',
-          message: 'Refresh token has been revoked',
-        },
-      );
+      await assert.rejects(authService.refreshToken(login.refreshToken), {
+        name: 'UnauthorizedError',
+        message: 'Refresh token has been revoked',
+      });
     });
 
     test('should reject a reused (already revoked) refresh token', async () => {
@@ -1662,14 +1551,10 @@ describe('Auth Service', () => {
         type: TokenTypes.REFRESH,
       });
 
-      await authService.refreshToken(DEFAULT_USER_ID.toString(), refreshToken);
+      await authService.refreshToken(refreshToken);
 
       await assert.rejects(
-        async () =>
-          await authService.refreshToken(
-            DEFAULT_USER_ID.toString(),
-            refreshToken,
-          ),
+        async () => await authService.refreshToken(refreshToken),
         {
           name: 'UnauthorizedError',
           message: 'Refresh token has been revoked',
@@ -1696,8 +1581,8 @@ describe('Auth Service', () => {
       });
 
       const results = await Promise.allSettled([
-        authService.refreshToken(user._id.toString(), refreshToken),
-        authService.refreshToken(user._id.toString(), refreshToken),
+        authService.refreshToken(refreshToken),
+        authService.refreshToken(refreshToken),
       ]);
 
       assert.strictEqual(

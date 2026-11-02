@@ -57,7 +57,6 @@ export class AuthRouter {
 
     this.app.post(
       '/auth/refresh',
-      this.authenticationMiddleware.authenticateAny,
       this.authController.refreshToken.bind(this.authController),
     );
 

@@ -116,11 +116,10 @@ describe('E2E Auth Refresh Token', () => {
   });
 
   test('should keep the application scope on refresh', async () => {
-    const { accessToken, refreshToken, application } = await signupAndLogin();
+    const { refreshToken, application } = await signupAndLogin();
 
     const response = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .send({ refreshToken })
       .expect(200);
 
@@ -196,56 +195,35 @@ describe('E2E Auth Refresh Token', () => {
     assert.strictEqual(access.role, GrantRoles.VIEWER);
   });
 
-  test('should reject a refresh token from another application', async () => {
-    const { accessToken, email, userId } = await signupAndLogin();
-    const other = await createApplicationAccess(userId);
+  test('should reject a refresh token after the grant was revoked', async () => {
+    const { refreshToken, userId } = await signupAndLogin();
+    await fixture.deleteOne('Grant', { userId });
 
-    const otherLogin = await request(app)
-      .post('/auth/login')
-      .send({
-        email,
-        password: DEFAULT_USER_PLAIN_PASSWORD,
-        application: other.application.slug,
-      })
-      .expect(200);
-
-    const response = await request(app)
-      .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({ refreshToken: otherLogin.body.refreshToken })
-      .expect(401);
-
-    assert.strictEqual(response.body.message, 'Invalid refresh token');
+    await request(app).post('/auth/refresh').send({ refreshToken }).expect(403);
   });
 
-  test('should fail refresh without authorization header', async () => {
+  test('AC-3: refreshes without any access token', async () => {
     const { refreshToken } = await signupAndLogin();
 
     const response = await request(app)
       .post('/auth/refresh')
       .send({ refreshToken })
-      .expect(401);
+      .expect(200);
 
-    assert.strictEqual(
-      response.body.message,
-      'Invalid or missing authorization header',
-    );
+    assert.ok(response.body.accessToken);
+    assert.ok(response.body.refreshToken);
   });
 
-  test('should fail refresh with invalid access token', async () => {
+  test('ignores an expired or invalid access token header', async () => {
     const { refreshToken } = await signupAndLogin();
 
     const response = await request(app)
       .post('/auth/refresh')
       .set('Authorization', 'Bearer invalid-token')
       .send({ refreshToken })
-      .expect(401);
+      .expect(200);
 
-    assert.strictEqual(
-      response.body.message,
-      'InvalidTokenError: Token is invalid or has expired',
-    );
-    assert.strictEqual(response.body.code, 'INVALID_TOKEN');
+    assert.ok(response.body.accessToken);
   });
 
   test('should fail refresh with missing refresh token in body', async () => {

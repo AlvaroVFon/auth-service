@@ -15,6 +15,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Home applications with per-user roles (viewer, editor, admin)
 - Login scoped to a concrete application (audience + grant role)
 - Session profile (`GET /auth/me`) and token introspection (`POST /auth/introspect`)
+- Refresh rotation with the refresh token alone, even after the access token expired
 
 ## Getting Started
 

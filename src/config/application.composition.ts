@@ -209,6 +209,7 @@ export const createApplicationComposition = (
     blacklistService,
     holdersService,
     applicationTokenService,
+    jwtService,
     logger,
   );
   const profileService = new ProfileService(

@@ -11,7 +11,7 @@ El objetivo es permitir sesiones largas y seguras sin comprometer la seguridad.
 - [x] **Implementación de Refresh Tokens:**
   - [x] Colección `RefreshToken` para persistir tokens de larga duración.
   - [x] Rotación de tokens (un uso por token, reemplazo vía `replacedByJti`).
-  - [x] Endpoint `POST /auth/refresh` expuesto y funcional (requiere auth).
+  - [x] Endpoint `POST /auth/refresh` expuesto y funcional (solo requiere el refresh token).
 - [x] **Logout / Revocación:**
   - [x] Endpoint `POST /auth/logout` expuesto y funcional — revoca todos los refresh tokens activos del usuario.
 - [ ] **Blacklist de Access Tokens:** No implementada. Dependencia actual en tokens de corta duración (1h).
@@ -67,7 +67,7 @@ El hogar es único; lo que varía es el acceso de cada usuario a cada aplicació
 
 El backlog priorizado vive en GitHub (issues #38–#53). Orden inmediato:
 
-1. Refresh sin access token (#44) y sesiones por dispositivo (#45).
+1. Sesiones por dispositivo (#45).
 2. Invitaciones y reset mediante enlace compartible (#43).
 3. Preparar la imagen Docker de producción y entorno (#48).
 4. Notificaciones por Telegram (#51), MFA (#52) y auditoría (#53).
