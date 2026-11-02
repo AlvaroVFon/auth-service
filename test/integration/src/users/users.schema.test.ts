@@ -39,4 +39,24 @@ describe('User schema owner constraint', () => {
       (error: unknown) => (error as Error).name === 'ValidationError',
     );
   });
+
+  test('should persist a telegram chat id', async () => {
+    const created = await User.create({
+      ...buildUser(Roles.USER, 'telegram'),
+      telegramChatId: '4242',
+    });
+
+    const stored = await User.findById(created._id);
+    assert.strictEqual(stored?.telegramChatId, '4242');
+  });
+
+  test('should reject a malformed telegram chat id', async () => {
+    await assert.rejects(
+      User.create({
+        ...buildUser(Roles.USER, 'telegram-bad'),
+        telegramChatId: 'abc',
+      }),
+      (error: unknown) => (error as Error).name === 'ValidationError',
+    );
+  });
 });

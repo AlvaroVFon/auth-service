@@ -11,4 +11,5 @@ export interface User {
   verified: boolean;
   loginAttempts?: number;
   lockoutUntil?: Date | null;
+  telegramChatId?: string;
 }

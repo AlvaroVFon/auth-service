@@ -1,4 +1,4 @@
-import { Model } from 'mongoose';
+import { Model, UpdateQuery } from 'mongoose';
 
 import {
   EMAIL_REGEX,
@@ -17,6 +17,7 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
+import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
 import type { UserGrantsCleanerPort, UsersPort } from './users.port';
@@ -185,7 +186,22 @@ export class UsersService implements UsersPort {
       );
     }
 
-    const user = await this.usersModel.findByIdAndUpdate(id, updateData, {
+    const update: UpdateQuery<UserInterface> = { $set: { ...updateData } };
+
+    if ('telegramChatId' in updateData) {
+      const telegramChatId = normalizeTelegramChatId(updateData.telegramChatId);
+      const set = update.$set as Record<string, unknown>;
+      delete set.telegramChatId;
+
+      if (telegramChatId === undefined) {
+        // null/empty is an explicit request to unregister the chat.
+        update.$unset = { telegramChatId: 1 };
+      } else {
+        set.telegramChatId = telegramChatId;
+      }
+    }
+
+    const user = await this.usersModel.findByIdAndUpdate(id, update, {
       returnDocument: 'after',
     });
 

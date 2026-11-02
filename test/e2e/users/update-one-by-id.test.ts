@@ -80,6 +80,37 @@ describe('E2E Test - Update User By ID', () => {
     assert.strictEqual(stored?.lockoutUntil, null);
   });
 
+  test('should set and validate a telegram chat id', async () => {
+    const user = await fixture.create<User>('User', {
+      email: generateRandomEmail('telegramupdate'),
+      password: 'password123',
+    });
+
+    const updated = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ telegramChatId: ' 4242 ' })
+      .expect(200);
+
+    assert.strictEqual(updated.body.telegramChatId, '4242');
+
+    await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ telegramChatId: 'abc' })
+      .expect(400);
+
+    const cleared = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ telegramChatId: null })
+      .expect(200);
+
+    assert.strictEqual(cleared.body.telegramChatId, undefined);
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.telegramChatId, undefined);
+  });
+
   test('should ignore a role supplied in the update body', async () => {
     const user = await fixture.create<User>('User', {
       email: generateRandomEmail('roleupdate'),

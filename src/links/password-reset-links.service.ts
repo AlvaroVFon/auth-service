@@ -8,6 +8,10 @@ import { InvalidLinkError } from '../common/exceptions/links.exceptions';
 import { assertObjectId } from '../common/validators/object-id';
 import { LoggerInterface } from '../libs/logger';
 import type { UsersPort } from '../users';
+import {
+  LinkNotificationsService,
+  LinkNotificationResult,
+} from './link-notifications.service';
 import { buildPasswordResetLink } from './link-urls';
 import { LinkType } from './link.interface';
 import type { LinksPort } from './links.port';
@@ -16,6 +20,7 @@ export interface CreatePasswordResetLinkResult {
   link: string;
   expiresAt: Date;
   userId: string;
+  notification: LinkNotificationResult;
 }
 
 export interface AcceptPasswordResetLinkInput {
@@ -30,6 +35,7 @@ export class PasswordResetLinksService {
     private readonly usersService: UsersPort,
     private readonly sessionService: SessionService,
     private readonly publicAppUrl: string,
+    private readonly notifications: LinkNotificationsService,
     private readonly logger: LoggerInterface,
   ) {}
 
@@ -42,11 +48,20 @@ export class PasswordResetLinksService {
     }
 
     const created = await this.linksService.createPasswordReset({ userId });
+    const link = buildPasswordResetLink(this.publicAppUrl, created.token);
+    const notification = await this.notifications.notifyPasswordReset({
+      linkId: created.link._id.toString(),
+      link,
+      ...(user.telegramChatId === undefined
+        ? {}
+        : { chatId: user.telegramChatId }),
+    });
 
     return {
-      link: buildPasswordResetLink(this.publicAppUrl, created.token),
+      link,
       expiresAt: created.link.expiresAt,
       userId,
+      notification,
     };
   }
 

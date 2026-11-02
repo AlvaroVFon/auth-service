@@ -19,9 +19,15 @@ const mailer = {
   sendMailWithTemplate: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
 
+export const telegramMock = {
+  sendMessage: mock.fn((_chatId: string, _text: string) => Promise.resolve()),
+};
+
 const createBaseTestOptions = (): ApplicationCompositionOptions => ({
   logger: silentLogger,
   mailer,
+  telegram: telegramMock,
+  telegramOwnerChatId: '999',
   database: testDatabase,
   trustProxy: 1,
   jwtSecret: getStringEnvVariable('JWT_SECRET'),

@@ -6,6 +6,13 @@ export type {
 } from './invitations.service';
 export { LinkType } from './link.interface';
 export type { OneTimeLink } from './link.interface';
+export {
+  LinkNotificationsService,
+  type LinkNotificationResult,
+  type LinkNotificationsOptions,
+  type NotificationRecipient,
+  type NotifyLinkInput,
+} from './link-notifications.service';
 export { buildInvitationLink, buildPasswordResetLink } from './link-urls';
 export { generateLinkToken, hashLinkToken } from './link-token';
 export { LinksController } from './links.controller';

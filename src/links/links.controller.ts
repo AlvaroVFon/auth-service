@@ -13,11 +13,16 @@ export class LinksController {
 
   @Catch()
   async createInvitation(req: Request, res: Response): Promise<void> {
-    const { email, role } = req.body as { email: string; role: GrantRoles };
+    const { email, role, telegramChatId } = req.body as {
+      email: string;
+      role: GrantRoles;
+      telegramChatId?: string;
+    };
     const result = await this.invitationsService.create({
       email,
       applicationId: req.params.applicationId as string,
       role,
+      ...(telegramChatId === undefined ? {} : { telegramChatId }),
     });
 
     res.status(201).json(result);

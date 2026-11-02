@@ -14,6 +14,7 @@ export interface OneTimeLink {
   email?: string;
   applicationId?: Types.ObjectId;
   role?: GrantRoles;
+  telegramChatId?: string;
   userId?: Types.ObjectId;
   expiresAt: Date;
   usedAt: Date | null;

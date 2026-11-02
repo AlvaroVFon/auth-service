@@ -12,7 +12,7 @@ import {
   generateRandomEmail,
 } from '../../fixtures/defaults';
 import { createApplicationAccess } from '../../helpers/application-access';
-import { getTestAppInstance } from '../../utils/app';
+import { getTestAppInstance, telegramMock } from '../../utils/app';
 
 const bearer = (token: string) => `Bearer ${token}`;
 const OLD_PASSWORD = DEFAULT_USER_PLAIN_PASSWORD;
@@ -46,6 +46,56 @@ describe('E2E password reset links', () => {
     assert.match(response.body.link, /\/reset-password\?token=.+/);
     assert.strictEqual(response.body.userId, user._id.toString());
     assert.ok(response.body.expiresAt);
+  });
+
+  test('notifies the user chat and falls back to the owner', async () => {
+    const user = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('reset-telegram'),
+      telegramChatId: '4242',
+    });
+
+    const notified = await createResetLink(user._id.toString());
+    assert.deepStrictEqual(notified.body.notification, {
+      delivered: true,
+      recipient: 'user',
+    });
+    const [chatId] = telegramMock.sendMessage.mock.calls.at(-1)!.arguments as [
+      string,
+    ];
+    assert.strictEqual(chatId, '4242');
+
+    const plain = await createUser();
+    const fallback = await createResetLink(plain._id.toString());
+    assert.deepStrictEqual(fallback.body.notification, {
+      delivered: true,
+      recipient: 'owner',
+    });
+    const [ownerChat] = telegramMock.sendMessage.mock.calls.at(-1)!
+      .arguments as [string];
+    assert.strictEqual(ownerChat, '999');
+  });
+
+  test('returns a usable link when the bot fails', async () => {
+    const user = await createUser();
+    telegramMock.sendMessage.mock.mockImplementationOnce(() =>
+      Promise.reject(new Error('bot down')),
+    );
+
+    const created = await createResetLink(user._id.toString());
+    assert.strictEqual(created.body.notification.delivered, false);
+    const token = new URL(created.body.link).searchParams.get(
+      'token',
+    ) as string;
+
+    await request(app)
+      .post('/auth/password-reset-links/accept')
+      .send({
+        token,
+        newPassword: NEW_PASSWORD,
+        passwordConfirmation: NEW_PASSWORD,
+      })
+      .expect(204);
   });
 
   test('restricts reset link creation to the global owner', async () => {

@@ -5,6 +5,7 @@ export interface CreateInvitationLinkInput {
   email: string;
   applicationId: string;
   role: GrantRoles;
+  telegramChatId?: string;
 }
 
 export interface CreatePasswordResetLinkInput {
