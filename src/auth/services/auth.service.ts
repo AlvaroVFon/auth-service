@@ -354,13 +354,7 @@ export class AuthService {
       }
     }
 
-    const session = await this.sessionService.rotate(
-      userId,
-      role,
-      refreshToken,
-      ctx,
-      audience,
-    );
+    const session = await this.sessionService.rotate(claims, role, ctx);
 
     return {
       accessToken: session.accessToken,

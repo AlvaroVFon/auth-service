@@ -98,12 +98,11 @@ describe('E2E Auth Refresh Token', () => {
     return { email: signupCredentials.email, userId: String(user!._id) };
   }
 
-  test('should refresh tokens with valid access token and refresh token', async () => {
-    const { accessToken, refreshToken } = await signupAndLogin();
+  test('should refresh tokens with a valid refresh token alone', async () => {
+    const { refreshToken } = await signupAndLogin();
 
     const response = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .send({ refreshToken })
       .expect(200);
 
@@ -111,7 +110,6 @@ describe('E2E Auth Refresh Token', () => {
     assert.ok(JWT_REGEX.test(response.body.accessToken));
     assert.ok(response.body.refreshToken);
     assert.ok(JWT_REGEX.test(response.body.refreshToken));
-    assert.notStrictEqual(response.body.accessToken, accessToken);
     assert.notStrictEqual(response.body.refreshToken, refreshToken);
   });
 
@@ -182,7 +180,6 @@ describe('E2E Auth Refresh Token', () => {
 
     const response = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${loginResponse.body.accessToken}`)
       .send({ refreshToken: loginResponse.body.refreshToken })
       .expect(200);
 
@@ -214,7 +211,7 @@ describe('E2E Auth Refresh Token', () => {
     assert.ok(response.body.refreshToken);
   });
 
-  test('ignores an expired or invalid access token header', async () => {
+  test('ignores an invalid access token header', async () => {
     const { refreshToken } = await signupAndLogin();
 
     const response = await request(app)
@@ -227,11 +224,10 @@ describe('E2E Auth Refresh Token', () => {
   });
 
   test('should fail refresh with missing refresh token in body', async () => {
-    const { accessToken } = await signupAndLogin();
+    await signupAndLogin();
 
     const response = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .send({})
       .expect(400);
 
@@ -239,11 +235,10 @@ describe('E2E Auth Refresh Token', () => {
   });
 
   test('should fail refresh with invalid refresh token', async () => {
-    const { accessToken } = await signupAndLogin();
+    await signupAndLogin();
 
     const response = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .send({ refreshToken: 'invalid-refresh-token' })
       .expect(401);
 
@@ -255,17 +250,12 @@ describe('E2E Auth Refresh Token', () => {
   });
 
   test('should fail refresh with revoked refresh token', async () => {
-    const { accessToken, refreshToken } = await signupAndLogin();
+    const { refreshToken } = await signupAndLogin();
 
-    await request(app)
-      .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({ refreshToken })
-      .expect(200);
+    await request(app).post('/auth/refresh').send({ refreshToken }).expect(200);
 
     const response = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .send({ refreshToken })
       .expect(401);
 
@@ -274,17 +264,15 @@ describe('E2E Auth Refresh Token', () => {
   });
 
   test('should generate new tokens that can be used for subsequent refresh', async () => {
-    const { accessToken, refreshToken } = await signupAndLogin();
+    const { refreshToken } = await signupAndLogin();
 
     const firstRefresh = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .send({ refreshToken })
       .expect(200);
 
     const secondRefresh = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${firstRefresh.body.accessToken}`)
       .send({ refreshToken: firstRefresh.body.refreshToken })
       .expect(200);
 
@@ -297,11 +285,10 @@ describe('E2E Auth Refresh Token', () => {
   });
 
   test('should store new IP and User-Agent on rotated refresh token', async () => {
-    const { accessToken, refreshToken } = await signupAndLogin();
+    const { refreshToken } = await signupAndLogin();
 
     const refreshResponse = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Forwarded-For', '198.51.100.1')
       .set('User-Agent', 'curl/7.0')
       .send({ refreshToken })
@@ -322,11 +309,10 @@ describe('E2E Auth Refresh Token', () => {
   });
 
   test('should set userAgent to null when header is missing on refresh', async () => {
-    const { accessToken, refreshToken } = await signupAndLogin();
+    const { refreshToken } = await signupAndLogin();
 
     const refreshResponse = await request(app)
       .post('/auth/refresh')
-      .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Forwarded-For', '100.200.0.1')
       .send({ refreshToken })
       .expect(200);

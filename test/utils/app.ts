@@ -48,6 +48,10 @@ const createBaseTestOptions = (): ApplicationCompositionOptions => ({
       ),
       max: getNumberEnvVariable('RATE_LIMIT_FORGOT_PASSWORD_MAX', 2),
     },
+    refresh: {
+      windowMs: getNumberEnvVariable('RATE_LIMIT_REFRESH_WINDOW_MS', 5000),
+      max: getNumberEnvVariable('RATE_LIMIT_REFRESH_MAX', 20),
+    },
   },
 });
 

@@ -94,83 +94,77 @@ describe('SessionService', () => {
   test('rotates an application session keeping its audience', async () => {
     const wrappedClaims = { ...claims, aud: 'app-aud' };
     const jwtService = {
-      verifyToken: mock.fn(() => wrappedClaims),
       signTokenPair: mock.fn(() => pair),
     } as unknown as JwtService;
     const refreshTokenService = {
-      findByJti: mock.fn(() => Promise.resolve({ revokedAt: null })),
+      findByJti: mock.fn(() =>
+        Promise.resolve({ userId: claims.userId, revokedAt: null }),
+      ),
       revokeByJti: mock.fn(() => Promise.resolve()),
       create: mock.fn(() => Promise.resolve()),
     } as unknown as RefreshTokenService;
     const service = new SessionService(jwtService, refreshTokenService);
 
-    await service.rotate(
-      claims.userId!,
-      claims.role!,
-      'old-refresh-token',
-      context,
-      'app-aud',
-    );
+    await service.rotate(wrappedClaims, claims.role!, context);
 
     assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists
       jwtService.signTokenPair.mock.calls[0].arguments,
       [claims.userId, claims.role, 'app-aud'],
     );
+    assert.deepStrictEqual(
+      // @ts-expect-error mock.calls exists
+      refreshTokenService.create.mock.calls[0].arguments,
+      [
+        claims.userId,
+        pair.refreshTokenId,
+        pair.refreshExpiresAt,
+        context,
+        'app-aud',
+      ],
+    );
   });
 
-  test('rejects a refresh token from another application', async () => {
-    const wrappedClaims = { ...claims, aud: 'app-a' };
-    const jwtService = {
-      verifyToken: mock.fn(() => wrappedClaims),
-    } as unknown as JwtService;
-    const refreshTokenService = {} as unknown as RefreshTokenService;
+  test('rejects a stored token that belongs to another user', async () => {
+    const jwtService = {} as unknown as JwtService;
+    const refreshTokenService = {
+      findByJti: mock.fn(() =>
+        Promise.resolve({ userId: '1'.repeat(24), revokedAt: null }),
+      ),
+    } as unknown as RefreshTokenService;
     const service = new SessionService(jwtService, refreshTokenService);
 
     await assert.rejects(
-      service.rotate(
-        claims.userId!,
-        claims.role!,
-        'old-refresh-token',
-        context,
-        'app-b',
-      ),
+      service.rotate(claims, claims.role!),
       new UnauthorizedError('Invalid refresh token'),
     );
   });
 
-  test('rejects an application refresh token on a global session', async () => {
-    const wrappedClaims = { ...claims, aud: 'app-a' };
-    const jwtService = {
-      verifyToken: mock.fn(() => wrappedClaims),
-    } as unknown as JwtService;
+  test('rejects a token that is not a refresh token', async () => {
+    const jwtService = {} as unknown as JwtService;
     const refreshTokenService = {} as unknown as RefreshTokenService;
     const service = new SessionService(jwtService, refreshTokenService);
 
     await assert.rejects(
-      service.rotate(claims.userId!, claims.role!, 'old-refresh-token'),
+      service.rotate({ ...claims, type: TokenTypes.ACCESS }, claims.role!),
       new UnauthorizedError('Invalid refresh token'),
     );
   });
 
   test('rotates an active refresh session and links its replacement', async () => {
     const jwtService = {
-      verifyToken: mock.fn(() => claims),
       signTokenPair: mock.fn(() => pair),
     } as unknown as JwtService;
     const refreshTokenService = {
-      findByJti: mock.fn(() => Promise.resolve({ revokedAt: null })),
+      findByJti: mock.fn(() =>
+        Promise.resolve({ userId: claims.userId, revokedAt: null }),
+      ),
       revokeByJti: mock.fn(() => Promise.resolve()),
       create: mock.fn(() => Promise.resolve()),
     } as unknown as RefreshTokenService;
     const service = new SessionService(jwtService, refreshTokenService);
 
-    const result = await service.rotate(
-      claims.userId!,
-      claims.role!,
-      'old-refresh-token',
-      context,
-    );
+    const result = await service.rotate(claims, claims.role!, context);
 
     assert.deepStrictEqual(result, pair);
     assert.deepStrictEqual(
@@ -181,18 +175,19 @@ describe('SessionService', () => {
   });
 
   test('rejects a revoked refresh session', async () => {
-    const jwtService = {
-      verifyToken: mock.fn(() => claims),
-    } as unknown as JwtService;
+    const jwtService = {} as unknown as JwtService;
     const refreshTokenService = {
       findByJti: mock.fn(() =>
-        Promise.resolve({ revokedAt: new Date('2026-01-01') }),
+        Promise.resolve({
+          userId: claims.userId,
+          revokedAt: new Date('2026-01-01'),
+        }),
       ),
     } as unknown as RefreshTokenService;
     const service = new SessionService(jwtService, refreshTokenService);
 
     await assert.rejects(
-      service.rotate(claims.userId!, claims.role!, 'old-refresh-token'),
+      service.rotate(claims, claims.role!),
       new UnauthorizedError('Refresh token has been revoked'),
     );
   });

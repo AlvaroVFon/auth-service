@@ -17,6 +17,10 @@ export interface AuthRateLimitConfig {
     windowMs: number;
     max: number;
   };
+  refresh: {
+    windowMs: number;
+    max: number;
+  };
 }
 
 export class AuthRouter {
@@ -42,6 +46,10 @@ export class AuthRouter {
       this.rateLimitConfig.forgotPassword.windowMs,
       this.rateLimitConfig.forgotPassword.max,
     );
+    const refreshRateLimiter = createRateLimiter(
+      this.rateLimitConfig.refresh.windowMs,
+      this.rateLimitConfig.refresh.max,
+    );
 
     this.app.post(
       '/auth/login',
@@ -57,6 +65,7 @@ export class AuthRouter {
 
     this.app.post(
       '/auth/refresh',
+      refreshRateLimiter,
       this.authController.refreshToken.bind(this.authController),
     );
 

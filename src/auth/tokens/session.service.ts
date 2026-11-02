@@ -1,6 +1,6 @@
 import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
 import { EntityNotFoundError } from '../../common/exceptions/base.exception';
-import type { TokenRole } from '../../libs/jwt';
+import type { TokenClaims, TokenRole } from '../../libs/jwt';
 import { JwtService, TokenPair, TokenTypes } from '../../libs/jwt';
 import { RefreshTokenService } from './refresh-token.service';
 import { RequestContext } from './request-context.type';
@@ -28,21 +28,17 @@ export class SessionService {
     return session;
   }
 
+  /**
+   * Rotates an already verified refresh token. The caller owns verification so
+   * each refresh pays a single signature check; the stored-token guard below
+   * is what actually protects against a forged or swapped jti.
+   */
   async rotate(
-    userId: string,
+    claims: TokenClaims,
     role: TokenRole,
-    refreshToken: string,
     ctx?: RequestContext,
-    audience?: string,
   ): Promise<TokenPair> {
-    const claims = this.jwtService.verifyToken(refreshToken);
-
-    if (
-      claims.type !== TokenTypes.REFRESH ||
-      claims.userId !== userId ||
-      !claims.jti ||
-      claims.aud !== audience
-    ) {
+    if (claims.type !== TokenTypes.REFRESH || !claims.userId || !claims.jti) {
       throw new UnauthorizedError('Invalid refresh token');
     }
 
@@ -56,6 +52,12 @@ export class SessionService {
       throw new UnauthorizedError('Refresh token has been revoked');
     }
 
+    if (storedToken.userId.toString() !== claims.userId) {
+      throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    const userId = claims.userId;
+    const audience = claims.aud;
     const session = this.jwtService.signTokenPair(userId, role, audience);
 
     try {
