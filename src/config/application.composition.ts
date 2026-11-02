@@ -34,7 +34,7 @@ import { HealthModule, isHealthProbe } from '../health';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 import { JwksModule } from '../jwks';
-import { CryptoService } from '../libs/crypto/crypto.service';
+import { CryptoService, SecretCipher } from '../libs/crypto';
 import { JwtKeyring } from '../libs/jwt';
 import { JwtService } from '../libs/jwt/jwt.service';
 import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
@@ -154,6 +154,8 @@ export const createApplicationComposition = (
     options.database ?? new Database(requireEnvVariable('MONGO_URI'), logger);
   const healthModule = new HealthModule(logger, () => database.getReadyState());
   const cryptoService = new CryptoService();
+  const mfaSecretKey = getStringEnvVariable('MFA_SECRET_ENCRYPTION_KEY', '');
+  const mfaCipher = mfaSecretKey ? new SecretCipher(mfaSecretKey) : null;
   const jwtConfig =
     options.jwtConfig ??
     resolveJwtConfig({
@@ -226,6 +228,7 @@ export const createApplicationComposition = (
     options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
+    mfaCipher ?? undefined,
   );
   const grantsModule = new GrantsModule(
     GrantModel,

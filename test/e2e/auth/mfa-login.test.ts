@@ -95,6 +95,22 @@ describe('E2E MFA login', () => {
     assert.strictEqual(me.body.application, application.audience);
   });
 
+  test('AC-5: rejects a replayed TOTP code', async () => {
+    const { user, application, mfa } = await createMfaUser();
+    const challengeToken = await challenge(user, application);
+    const code = mfa.code();
+
+    await request(app)
+      .post('/auth/mfa/verify')
+      .send({ mfaToken: challengeToken, code })
+      .expect(200);
+
+    await request(app)
+      .post('/auth/mfa/verify')
+      .send({ mfaToken: challengeToken, code })
+      .expect(401);
+  });
+
   test('AC-3: locks after repeated invalid codes', async () => {
     const { user, application } = await createMfaUser();
     const challengeToken = await challenge(user, application);

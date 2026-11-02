@@ -49,6 +49,7 @@ const userSchema = new Schema<UserInterface>(
     mfaRecoveryCodes: { type: [String], default: [] },
     mfaFailedAttempts: { type: Number, default: 0 },
     mfaLockoutUntil: { type: Date, default: null },
+    mfaLastUsedStep: { type: Number },
   },
   {
     timestamps: true,
@@ -63,6 +64,7 @@ const userSchema = new Schema<UserInterface>(
         delete ret.mfaRecoveryCodes;
         delete ret.mfaFailedAttempts;
         delete ret.mfaLockoutUntil;
+        delete ret.mfaLastUsedStep;
         delete ret.__v;
         return ret;
       },

@@ -15,7 +15,7 @@ import type { SessionService } from '../tokens/session.service';
 import { MfaActivation, MfaEnrollment } from './mfa.interface';
 import { buildOtpauthUrl } from './otpauth';
 import { generateRecoveryCodes, hashRecoveryCode } from './recovery-codes';
-import { generateTotpSecret, verifyTotp } from './totp';
+import { generateTotpSecret, verifyTotp, verifyTotpStep } from './totp';
 
 export class MfaService {
   constructor(
@@ -84,15 +84,25 @@ export class MfaService {
     return { recoveryCodes };
   }
 
-  async verify(userId: string, code: string): Promise<void> {
-    const user = await this.getUser(userId);
-
+  async verify(user: User, code: string): Promise<void> {
     this.assertEnabled(user);
-    this.assertNotLocked(user);
+    await this.assertNotLocked(user);
 
-    if (user.mfaSecret && verifyTotp(user.mfaSecret, code)) {
-      await this.usersService.resetMfaFailures(userId);
-      return;
+    const userId = user._id.toString();
+
+    if (user.mfaSecret) {
+      const step = verifyTotpStep(user.mfaSecret, code);
+
+      if (step !== null) {
+        // The step is recorded atomically so the same code cannot be
+        // replayed while the challenge and the TOTP window are still valid.
+        if (await this.usersService.recordMfaStep(userId, step)) {
+          await this.usersService.resetMfaFailures(userId);
+          return;
+        }
+
+        throw await this.mfaFailure(userId);
+      }
     }
 
     const consumed = await this.usersService.consumeMfaRecoveryCode(
@@ -105,13 +115,14 @@ export class MfaService {
       return;
     }
 
-    await this.registerFailure(userId);
+    throw await this.mfaFailure(userId);
   }
 
   async disable(userId: string, password: string, code: string): Promise<void> {
     const user = await this.getUser(userId);
 
     this.assertEnabled(user);
+    await this.assertNotLocked(user);
 
     const validPassword = await this.cryptoService.compareString(
       password,
@@ -122,8 +133,6 @@ export class MfaService {
       throw new InvalidCredentialsError('Invalid password');
     }
 
-    this.assertNotLocked(user);
-
     const validCode =
       (user.mfaSecret !== undefined && verifyTotp(user.mfaSecret, code)) ||
       (await this.usersService.consumeMfaRecoveryCode(
@@ -132,23 +141,21 @@ export class MfaService {
       ));
 
     if (!validCode) {
-      await this.registerFailure(userId);
+      throw await this.mfaFailure(userId);
     }
 
     await this.usersService.disableMfa(userId);
     await this.usersService.resetMfaFailures(userId);
   }
 
-  private async registerFailure(userId: string): Promise<never> {
+  private async mfaFailure(userId: string): Promise<Error> {
     const locked = await this.usersService.recordFailedMfa(userId);
 
-    if (locked) {
-      throw new AccountLockedError(
-        'Account is temporarily locked. Please try again later.',
-      );
-    }
-
-    throw new InvalidMfaCodeError();
+    return locked
+      ? new AccountLockedError(
+          'Account is temporarily locked. Please try again later.',
+        )
+      : new InvalidMfaCodeError();
   }
 
   private assertEnabled(user: User): void {
@@ -157,11 +164,17 @@ export class MfaService {
     }
   }
 
-  private assertNotLocked(user: User): void {
+  private async assertNotLocked(user: User): Promise<void> {
     if (user.mfaLockoutUntil && user.mfaLockoutUntil.getTime() > Date.now()) {
       throw new AccountLockedError(
         'Account is temporarily locked. Please try again later.',
       );
+    }
+
+    // An expired lockout must start a fresh attempt window, otherwise the
+    // first wrong code re-locks the account for another full duration.
+    if (user.mfaLockoutUntil) {
+      await this.usersService.resetMfaFailures(user._id.toString());
     }
   }
 

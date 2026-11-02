@@ -3,7 +3,7 @@ import { Application } from 'express';
 import { assertDependencies } from '../common/depencencies-validator';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
-import { CryptoService } from '../libs/crypto';
+import { CryptoService, SecretCipher } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
 import { UsersController } from './users.controller';
 import { UsersRouter } from './users.router';
@@ -21,6 +21,7 @@ export class UsersModule {
     private readonly logger: LoggerInterface,
     private readonly maxLoginAttempts: number = 5,
     private readonly lockoutDurationMs: number = 900000,
+    private readonly mfaCipher?: SecretCipher,
   ) {
     assertDependencies(
       {
@@ -37,6 +38,7 @@ export class UsersModule {
       this.cryptoService,
       this.maxLoginAttempts,
       this.lockoutDurationMs,
+      this.mfaCipher,
     );
     this.controller = new UsersController(this.service);
   }

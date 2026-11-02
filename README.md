@@ -174,14 +174,18 @@ Once enabled, `POST /auth/login` returns
 `{ "mfaRequired": true, "challengeToken": "...", "expiresIn": 300 }` instead of tokens.
 Submit the challenge and a TOTP or recovery code to `POST /auth/mfa/verify`
 (`{ "mfaToken": "...", "code": "..." }`) to receive the access and refresh tokens. The
-challenge is a short-lived JWT (`MFA_CHALLENGE_EXPIRATION`) that cannot be used as a
-Bearer token.
+challenge is a short-lived JWT (`MFA_CHALLENGE_EXPIRATION`) signed with the reserved
+`auth-service:mfa` audience, so it cannot be used as a Bearer token or accepted by
+consumers that verify the application audience. TOTP secrets are encrypted at rest
+with `MFA_SECRET_ENCRYPTION_KEY` (base64-encoded 32-byte key); without it they fall
+back to the legacy plaintext format.
 
 `POST /auth/mfa/disable` requires the current password plus a TOTP or recovery code.
 Repeated invalid codes lock the MFA challenge using `MAX_LOGIN_ATTEMPTS` and
 `LOCKOUT_DURATION_MS` with dedicated counters. Recovery codes are returned once, stored
 only as SHA-256 hashes and consumed atomically. TOTP secrets are stored server-side and
 never serialized or logged.
+
 ### JWT signing keys
 
 Access tokens are signed with RS256. Consumers verify them with the public keys published at `GET /.well-known/jwks.json` (cacheable, never includes private material). Configure the active key with:

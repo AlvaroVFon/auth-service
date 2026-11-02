@@ -107,6 +107,7 @@ export class AuthRouter {
 
     this.app.post(
       '/auth/mfa/enroll',
+      loginRateLimiter,
       this.authenticationMiddleware.authenticateAny,
       this.authController.enrollMfa.bind(this.authController),
     );
@@ -119,6 +120,7 @@ export class AuthRouter {
 
     this.app.post(
       '/auth/mfa/disable',
+      loginRateLimiter,
       this.authenticationMiddleware.authenticateAny,
       this.authController.disableMfa.bind(this.authController),
     );

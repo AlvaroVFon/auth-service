@@ -169,7 +169,6 @@ export class AuthService {
         if (user.mfaEnabled) {
           return this.buildMfaChallenge(
             userId,
-            access.role,
             application,
             access.application.audience,
           );
@@ -205,7 +204,7 @@ export class AuthService {
       }
 
       if (user.mfaEnabled) {
-        return this.buildMfaChallenge(userId, user.role);
+        return this.buildMfaChallenge(userId);
       }
 
       const session = await this.sessionService.create(userId, user.role, ctx);
@@ -294,7 +293,7 @@ export class AuthService {
     }
 
     this.assertVerified(user);
-    await this.mfaService.verify(userId, code);
+    await this.mfaService.verify(user, code);
 
     const application = claims.app;
 
@@ -305,8 +304,8 @@ export class AuthService {
       );
 
       if (
-        claims.aud !== undefined &&
-        claims.aud !== access.application.audience
+        claims.targetAudience !== undefined &&
+        claims.targetAudience !== access.application.audience
       ) {
         throw new UnauthorizedError('Invalid MFA challenge');
       }
@@ -338,11 +337,10 @@ export class AuthService {
 
   private buildMfaChallenge(
     userId: string,
-    role: TokenRole,
     application?: string,
     audience?: string,
   ): MfaChallengeResponse {
-    const challengeToken = this.jwtService.signMfaChallenge(userId, role, {
+    const challengeToken = this.jwtService.signMfaChallenge(userId, {
       ...(application === undefined ? {} : { application }),
       ...(audience === undefined ? {} : { audience }),
     });

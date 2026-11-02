@@ -52,6 +52,12 @@ describe('MfaService', () => {
       verified: true,
     });
 
+  const verify = async (userId: string, code: string): Promise<void> => {
+    const user = await users.findById(userId);
+    assert.ok(user);
+    await service.verify(user!, code);
+  };
+
   const enrollAndActivate = async () => {
     const user = await createUser();
     const enrollment = await service.enroll(user._id.toString(), PASSWORD);
@@ -119,15 +125,25 @@ describe('MfaService', () => {
   test('should verify TOTP and recovery codes once', async () => {
     const { user, enrollment, activation } = await enrollAndActivate();
 
-    await service.verify(user._id.toString(), generateTotp(enrollment.secret));
+    await verify(user._id.toString(), generateTotp(enrollment.secret));
 
     const recoveryCode = activation.recoveryCodes[0]!;
-    await service.verify(user._id.toString(), recoveryCode);
+    await verify(user._id.toString(), recoveryCode);
 
     await assert.rejects(
-      service.verify(user._id.toString(), recoveryCode),
+      verify(user._id.toString(), recoveryCode),
       InvalidMfaCodeError,
     );
+  });
+
+  test('should reject a replayed TOTP code', async () => {
+    const { user, enrollment } = await enrollAndActivate();
+    const code = generateTotp(enrollment.secret);
+    const userId = user._id.toString();
+
+    await verify(userId, code);
+
+    await assert.rejects(verify(userId, code), InvalidMfaCodeError);
   });
 
   test('should lock MFA after repeated invalid codes', async () => {
@@ -135,15 +151,12 @@ describe('MfaService', () => {
     const userId = user._id.toString();
 
     for (let attempt = 0; attempt < 4; attempt++) {
-      await assert.rejects(
-        service.verify(userId, '000000'),
-        InvalidMfaCodeError,
-      );
+      await assert.rejects(verify(userId, '000000'), InvalidMfaCodeError);
     }
 
-    await assert.rejects(service.verify(userId, '000000'), AccountLockedError);
+    await assert.rejects(verify(userId, '000000'), AccountLockedError);
     await assert.rejects(
-      service.verify(userId, generateTotp(enrollment.secret)),
+      verify(userId, generateTotp(enrollment.secret)),
       AccountLockedError,
     );
 
@@ -152,7 +165,7 @@ describe('MfaService', () => {
       { _id: user._id },
       { mfaLockoutUntil: new Date(Date.now() - 1000) },
     );
-    await service.verify(userId, generateTotp(enrollment.secret));
+    await verify(userId, generateTotp(enrollment.secret));
   });
 
   test('should disable MFA with password and a valid code', async () => {

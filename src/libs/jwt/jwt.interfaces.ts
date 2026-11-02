@@ -7,13 +7,14 @@ export type TokenRole = Roles | GrantRoles;
 
 export interface Payload {
   userId: string;
-  role: TokenRole;
+  role?: TokenRole;
   type: TokenTypes;
   jti?: string;
   sub?: string;
   iss?: string;
   aud?: string;
   app?: string;
+  targetAudience?: string;
 }
 
 export interface TokenClaims {
@@ -25,6 +26,7 @@ export interface TokenClaims {
   iss?: string;
   aud?: string;
   app?: string;
+  targetAudience?: string;
   exp: number;
   iat?: number;
 }

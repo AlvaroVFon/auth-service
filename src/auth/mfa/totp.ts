@@ -4,6 +4,7 @@ const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const DEFAULT_DIGITS = 6;
 const DEFAULT_PERIOD_SECONDS = 30;
 const DEFAULT_WINDOW = 1;
+const DEFAULT_CODE_REGEX = /^\d{6}$/;
 
 export const base32Encode = (buffer: Buffer): string => {
   let bits = 0;
@@ -89,26 +90,46 @@ const safeEqual = (left: string, right: string): boolean => {
   return timingSafeEqual(leftBuffer, rightBuffer);
 };
 
+/**
+ * Returns the matched time-step so callers can persist it and reject replays,
+ * or null when the code does not match the accepted window.
+ */
+export const verifyTotpStep = (
+  secret: string,
+  code: string,
+  timestampMs: number = Date.now(),
+  window: number = DEFAULT_WINDOW,
+  digits: number = DEFAULT_DIGITS,
+): number | null => {
+  const codeRegex =
+    digits === DEFAULT_DIGITS
+      ? DEFAULT_CODE_REGEX
+      : new RegExp(`^\\d{${digits}}$`);
+
+  if (!codeRegex.test(code)) {
+    return null;
+  }
+
+  const periodMs = DEFAULT_PERIOD_SECONDS * 1000;
+  const currentStep = Math.floor(timestampMs / periodMs);
+
+  for (let offset = -window; offset <= window; offset++) {
+    const step = currentStep + offset;
+    const candidate = generateTotp(secret, step * periodMs, digits);
+
+    if (safeEqual(candidate, code)) {
+      return step;
+    }
+  }
+
+  return null;
+};
+
 export const verifyTotp = (
   secret: string,
   code: string,
   timestampMs: number = Date.now(),
   window: number = DEFAULT_WINDOW,
-): boolean => {
-  if (!new RegExp(`^\\d{${DEFAULT_DIGITS}}$`).test(code)) {
-    return false;
-  }
-
-  for (let offset = -window; offset <= window; offset++) {
-    const candidate = generateTotp(
-      secret,
-      timestampMs + offset * DEFAULT_PERIOD_SECONDS * 1000,
-    );
-
-    if (safeEqual(candidate, code)) {
-      return true;
-    }
-  }
-
-  return false;
-};
+  digits: number = DEFAULT_DIGITS,
+): boolean =>
+  verifyTotpStep(secret, code, timestampMs, window, digits) !== null;

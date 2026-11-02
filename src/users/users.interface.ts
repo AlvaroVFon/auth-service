@@ -18,4 +18,5 @@ export interface User {
   mfaRecoveryCodes?: string[];
   mfaFailedAttempts?: number;
   mfaLockoutUntil?: Date | null;
+  mfaLastUsedStep?: number;
 }

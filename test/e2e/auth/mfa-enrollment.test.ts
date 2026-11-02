@@ -65,6 +65,8 @@ describe('E2E MFA enrollment', () => {
 
     const stored = await fixture.findById<User>('User', user._id.toString());
     assert.strictEqual(stored?.mfaEnabled, true);
+    assert.notStrictEqual(stored?.mfaSecret, enrollment.body.secret);
+    assert.ok(stored?.mfaSecret?.startsWith('v1:'));
 
     await request(app)
       .post('/auth/mfa/enroll')

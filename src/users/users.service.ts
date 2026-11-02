@@ -18,7 +18,7 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
-import { CryptoService } from '../libs/crypto';
+import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
 import type { UserGrantsCleanerPort, UsersPort } from './users.port';
 
@@ -30,6 +30,7 @@ export class UsersService implements UsersPort {
     private readonly cryptoService: CryptoService,
     private readonly maxLoginAttempts: number = 5,
     private readonly lockoutDurationMs: number = 900000,
+    private readonly mfaCipher?: SecretCipher,
   ) {}
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
@@ -150,6 +151,11 @@ export class UsersService implements UsersPort {
     }
 
     const user = await this.usersModel.findById(id);
+
+    if (user) {
+      this.decryptMfaSecrets(user);
+    }
+
     return user;
   }
 
@@ -233,19 +239,9 @@ export class UsersService implements UsersPort {
     }
   }
 
-  async verifyPassword(id: string, password: string): Promise<boolean> {
-    const user = await this.findById(id);
-
-    if (!user) {
-      throw new EntityNotFoundError('User not found');
-    }
-
-    return this.cryptoService.compareString(password, user.password);
-  }
-
   async setMfaPendingSecret(id: string, secret: string): Promise<void> {
     const user = await this.usersModel.findByIdAndUpdate(id, {
-      $set: { mfaPendingSecret: secret },
+      $set: { mfaPendingSecret: this.encryptMfaSecret(secret) },
     });
 
     if (!user) {
@@ -263,7 +259,7 @@ export class UsersService implements UsersPort {
       {
         $set: {
           mfaEnabled: true,
-          mfaSecret: secret,
+          mfaSecret: this.encryptMfaSecret(secret),
           mfaRecoveryCodes: recoveryCodeHashes,
           mfaFailedAttempts: 0,
           mfaLockoutUntil: null,
@@ -287,6 +283,7 @@ export class UsersService implements UsersPort {
         mfaSecret: '',
         mfaPendingSecret: '',
         mfaRecoveryCodes: '',
+        mfaLastUsedStep: '',
       },
     });
 
@@ -319,6 +316,21 @@ export class UsersService implements UsersPort {
     return true;
   }
 
+  async recordMfaStep(id: string, step: number): Promise<boolean> {
+    const result = await this.usersModel.updateOne(
+      {
+        _id: id,
+        $or: [
+          { mfaLastUsedStep: { $exists: false } },
+          { mfaLastUsedStep: { $lt: step } },
+        ],
+      },
+      { $set: { mfaLastUsedStep: step } },
+    );
+
+    return result.modifiedCount === 1;
+  }
+
   async resetMfaFailures(id: string): Promise<void> {
     await this.usersModel.findByIdAndUpdate(id, {
       $set: { mfaFailedAttempts: 0, mfaLockoutUntil: null },
@@ -332,6 +344,23 @@ export class UsersService implements UsersPort {
     );
 
     return result.modifiedCount === 1;
+  }
+
+  private encryptMfaSecret(secret: string): string {
+    return this.mfaCipher ? this.mfaCipher.encrypt(secret) : secret;
+  }
+
+  private decryptMfaSecrets(user: UserInterface): void {
+    if (!this.mfaCipher) {
+      return;
+    }
+
+    if (user.mfaSecret) {
+      user.mfaSecret = this.mfaCipher.decrypt(user.mfaSecret);
+    }
+    if (user.mfaPendingSecret) {
+      user.mfaPendingSecret = this.mfaCipher.decrypt(user.mfaPendingSecret);
+    }
   }
 
   private isAccountLocked(user: UserInterface): boolean {
