@@ -52,6 +52,10 @@ export class Database {
     return this.connection;
   }
 
+  getReadyState(): number {
+    return this.connection?.readyState ?? 0;
+  }
+
   async drop(): Promise<void> {
     if (this.connection && this.connection.readyState === 1) {
       try {

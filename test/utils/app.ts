@@ -10,6 +10,7 @@ import {
 } from '../../src/config/env.config';
 import { MailerInterface } from '../../src/libs/mailer/mailer.interface';
 import { silentLogger } from '../mocks/logger.mock';
+import { testDatabase } from '../setup.db';
 
 let app: Application;
 
@@ -21,6 +22,8 @@ const mailer = {
 const createBaseTestOptions = (): ApplicationCompositionOptions => ({
   logger: silentLogger,
   mailer,
+  database: testDatabase,
+  trustProxy: 1,
   jwtSecret: getStringEnvVariable('JWT_SECRET'),
   jwtExpiresIn: parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10),
   refreshTokenExpiresIn: parseInt(

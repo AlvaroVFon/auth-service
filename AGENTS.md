@@ -20,7 +20,7 @@
 - **Entry point**: `src/index.ts` -> `src/config/bootstrap.ts`
 - **Manual DI in `bootstrap.ts`**: all services and modules are instantiated and wired there. New services must be added to bootstrap.
 - **Module pattern**: `users/` and `auth/` are the two feature modules. Each has `{module,controller,router,service,interface,schema}` files.
-- **`holders/`**: tenant/ownership abstraction (multi-tenancy foundation, not yet active).
+- **`holders/`**: pre-verification accounts (staging area before a user is verified).
 - **`src/libs/`**: shared infrastructure (logger/winston, crypto, jwt, mailer/nodemailer, templates/handlebars).
 - **`src/common/`**: interceptors, middlewares (authentication, authorization), exceptions.
 
@@ -59,5 +59,5 @@
 ## Project Status
 
 - Core user CRUD and auth scaffolding are in place.
-- Active work areas: refresh tokens, password recovery flow, rate limiting, account lockout, OAuth2, multi-tenancy.
+- Active work areas: applications and per-user permissions, refresh tokens, invitations, MFA, rate limiting.
 - See `ROADMAP.md` for planned phases.

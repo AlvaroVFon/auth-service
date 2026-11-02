@@ -9,18 +9,18 @@ const baseUri = getStringEnvVariable(
 );
 const TEST_DB_URI = `${baseUri}_${process.pid}`;
 
-const database = new Database(TEST_DB_URI, silentLogger);
+export const testDatabase = new Database(TEST_DB_URI, silentLogger);
 
 before(async () => {
-  await database.connect();
+  await testDatabase.connect();
   await registerModels();
 });
 
 beforeEach(async () => {
-  await database.flush();
+  await testDatabase.flush();
 });
 
 after(async () => {
-  await database.drop();
-  await database.close();
+  await testDatabase.drop();
+  await testDatabase.close();
 });

@@ -21,3 +21,14 @@
   - In-memory store means rate limits reset on server restart and are not shared across instances (acceptable for single-instance deployment).
   - The global limiter still applies — a request must pass both the per-route and global limiters.
   - Only three endpoints are rate-limited in this phase; others can be added incrementally.
+
+## ADR-003: Un hogar único con aplicaciones y permisos por usuario
+
+- **Date:** 2026-11-01
+- **Context:** El servicio nació con un módulo `tenants` pensado como app cliente autenticada por `tenantSecret`. Ese modelo no representa el uso real (un hogar con varias apps) y dejó código muerto: el token de tenant no lo aceptaba ningún middleware y el secreto se guardaba en claro.
+- **Decision:** Eliminar `tenants` y modelar un hogar único con dos entidades: `Application` (nombre, slug y audience únicos, activa) y `Grant` (par usuario-aplicación único con rol `viewer`, `editor` o `admin`). Un usuario puede tener roles distintos en cada app y no tener acceso a otras. El rol global `ADMIN`/`USER` no es la fuente de autorización a largo plazo; su sustitución se aborda en la issue #41.
+- **Consequences:**
+  - No existe multi-hogar ni aislamiento por base de datos.
+  - La autorización se resuelve por permiso de aplicación, no por un rol global.
+  - Los endpoints, la emisión de tokens con audiencia y el bootstrap del owner quedan en issues posteriores (#39–#42).
+  - La colección `tenants` y sus `secret` en claro no se borran al eliminar el código: requiere `db.tenants.drop()` en cada entorno (ver `docs/implementations/2026-11-01-applications-and-permissions.md`).

@@ -1,3 +1,12 @@
-import { bootstrap } from './config/bootstrap';
+import type { Server } from 'node:http';
 
-void bootstrap();
+import { bootstrap, composition } from './config/bootstrap';
+import { registerShutdownHandlers } from './config/shutdown.config';
+
+void bootstrap().then((server) => {
+  registerShutdownHandlers({
+    server: server as Server,
+    database: composition.database,
+    logger: composition.logger,
+  });
+});

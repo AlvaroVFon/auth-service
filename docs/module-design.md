@@ -5,6 +5,8 @@ status: 'review'
 scope: 'whole-repository'
 ---
 
+> **Nota (2026-11-01):** el módulo `tenants` analizado aquí fue retirado en la issue #38. El modelo vigente es un hogar único con `Application` + `Grant`; ver `docs/implementations/2026-11-01-applications-and-permissions.md`.
+
 # Module Design Review — auth-service
 
 ## Scope & Method
