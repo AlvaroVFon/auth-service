@@ -9,6 +9,7 @@ import { Roles } from '../../common/enums/roles.enum';
 import {
   AccountLockedError,
   ForbiddenError,
+  InvalidCredentialsError,
   UnauthorizedError,
 } from '../../common/exceptions/auth.exceptions';
 import {
@@ -121,43 +122,78 @@ export class AuthService {
         credentials.password,
       );
     } catch (error) {
-      await this.auditService.record({
-        event:
+      if (
+        error instanceof AccountLockedError ||
+        error instanceof InvalidCredentialsError
+      ) {
+        await this.recordLoginFailure(
           error instanceof AccountLockedError
             ? AuditEvent.ACCOUNT_LOCKED
             : AuditEvent.LOGIN_FAILED,
-        result: AuditResult.FAILURE,
-        email,
-        ...(application ? { audience: application } : {}),
-        ...this.auditContext(ctx),
-      });
+          email,
+          application,
+          ctx,
+        );
+      } else {
+        // Do not label an infrastructure failure as a credential attack.
+        this.logger.warn(`Unexpected login failure for ${email}`, error);
+      }
+
       throw error;
     }
 
-    this.assertVerified(user);
-
     const userId = user._id.toString();
+    let applicationId: string | undefined;
+    let audience: string | undefined;
 
-    if (application) {
-      const access = await this.applicationTokens.resolveAccess(
-        userId,
-        application,
-        user,
-      );
-      const session = await this.sessionService.create(
-        userId,
-        access.role,
-        ctx,
-        access.application.audience,
-      );
+    try {
+      this.assertVerified(user);
+
+      if (application) {
+        const access = await this.applicationTokens.resolveAccess(
+          userId,
+          application,
+          user,
+        );
+        applicationId = access.application._id.toString();
+        audience = access.application.audience;
+
+        const session = await this.sessionService.create(
+          userId,
+          access.role,
+          ctx,
+          access.application.audience,
+        );
+        await this.auditService.record({
+          event: AuditEvent.LOGIN_SUCCEEDED,
+          result: AuditResult.SUCCESS,
+          userId,
+          email,
+          applicationId,
+          audience,
+          role: access.role,
+          ...this.auditContext(ctx),
+        });
+
+        return {
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+        };
+      }
+
+      // Only the global owner can log in without an application; every other
+      // account must prove a grant on the application it wants a token for.
+      if (user.role !== Roles.OWNER) {
+        throw new ForbiddenError('An application is required');
+      }
+
+      const session = await this.sessionService.create(userId, user.role, ctx);
       await this.auditService.record({
         event: AuditEvent.LOGIN_SUCCEEDED,
         result: AuditResult.SUCCESS,
         userId,
         email,
-        applicationId: access.application._id.toString(),
-        audience: access.application.audience,
-        role: access.role,
+        role: user.role,
         ...this.auditContext(ctx),
       });
 
@@ -165,28 +201,45 @@ export class AuthService {
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
       };
+    } catch (error) {
+      // Post-credential denials (unverified account, missing grant, non-owner
+      // without application) are the probing pattern an audit log must show.
+      await this.auditService.record({
+        event: AuditEvent.LOGIN_FAILED,
+        result: AuditResult.FAILURE,
+        userId,
+        email,
+        ...(applicationId === undefined ? {} : { applicationId }),
+        ...(application ? { audience: audience ?? application } : {}),
+        ...this.auditContext(ctx),
+      });
+      throw error;
+    }
+  }
+
+  private async recordLoginFailure(
+    event: AuditEvent,
+    email: string,
+    application: string,
+    ctx?: RequestContext,
+  ): Promise<void> {
+    let userId: string | undefined;
+
+    try {
+      const failedUser = await this.usersService.findByEmail(email);
+      userId = failedUser?._id.toString();
+    } catch (error) {
+      this.logger.warn(`Failed to resolve the user for ${email}`, error);
     }
 
-    // Only the global owner can log in without an application; every other
-    // account must prove a grant on the application it wants a token for.
-    if (user.role !== Roles.OWNER) {
-      throw new ForbiddenError('An application is required');
-    }
-
-    const session = await this.sessionService.create(userId, user.role, ctx);
     await this.auditService.record({
-      event: AuditEvent.LOGIN_SUCCEEDED,
-      result: AuditResult.SUCCESS,
-      userId,
+      event,
+      result: AuditResult.FAILURE,
+      ...(userId === undefined ? {} : { userId }),
       email,
-      role: user.role,
+      ...(application ? { audience: application } : {}),
       ...this.auditContext(ctx),
     });
-
-    return {
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
-    };
   }
 
   private auditContext(ctx?: RequestContext): {
@@ -371,6 +424,7 @@ export class AuthService {
 
     const audience = claims.aud;
     let role: TokenRole = user.role;
+    let applicationId: string | undefined;
 
     if (audience === undefined) {
       // Global tokens are owner-only. Refresh tokens issued before the
@@ -386,6 +440,7 @@ export class AuthService {
           user,
         );
         role = access.role;
+        applicationId = access.application._id.toString();
       } catch (error) {
         // A revoked grant or inactive application must end the session
         // permanently, not just fail until access is restored.
@@ -406,6 +461,8 @@ export class AuthService {
       event: AuditEvent.TOKEN_REFRESHED,
       result: AuditResult.SUCCESS,
       userId,
+      email: user.email,
+      ...(applicationId === undefined ? {} : { applicationId }),
       ...(audience === undefined ? {} : { audience }),
       role,
       ...this.auditContext(ctx),
@@ -421,21 +478,28 @@ export class AuthService {
     return this.sessionService.list(userId);
   }
 
-  async revokeSession(userId: string, sessionId: string): Promise<void> {
+  async revokeSession(
+    userId: string,
+    sessionId: string,
+    ctx?: RequestContext,
+  ): Promise<void> {
     await this.sessionService.revoke(userId, sessionId);
     await this.auditService.record({
       event: AuditEvent.SESSION_REVOKED,
       result: AuditResult.SUCCESS,
       userId,
+      sessionId,
+      ...this.auditContext(ctx),
     });
   }
 
-  async revokeAllSessions(userId: string): Promise<void> {
+  async revokeAllSessions(userId: string, ctx?: RequestContext): Promise<void> {
     await this.sessionService.revokeAll(userId);
     await this.auditService.record({
       event: AuditEvent.SESSIONS_REVOKED,
       result: AuditResult.SUCCESS,
       userId,
+      ...this.auditContext(ctx),
     });
   }
 

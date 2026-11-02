@@ -28,8 +28,9 @@ export class GrantsModule {
       grantModel,
       applicationsService,
       usersService,
+      auditService,
     );
-    this.controller = new GrantsController(this.service, auditService);
+    this.controller = new GrantsController(this.service);
   }
 
   initialize(app: Application): void {

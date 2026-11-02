@@ -23,6 +23,7 @@ export interface AuditEventRecord {
   result: AuditResult;
   userId?: Types.ObjectId;
   email?: string;
+  sessionId?: string;
   applicationId?: Types.ObjectId;
   audience?: string;
   role?: string;

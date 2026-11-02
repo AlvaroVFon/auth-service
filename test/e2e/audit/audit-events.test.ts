@@ -25,6 +25,7 @@ interface AuditResponse {
   result: string;
   userId?: string;
   email?: string;
+  sessionId?: string;
   applicationId?: string;
   audience?: string;
   role?: string;
@@ -42,10 +43,11 @@ describe('E2E audit events', () => {
     app = await getTestAppInstance();
   });
 
-  const createUser = () =>
+  const createUser = (overrides: Partial<User> = {}) =>
     fixture.create<User>('User', {
       _id: new Types.ObjectId(),
       email: generateRandomEmail('audit'),
+      ...overrides,
     });
 
   const createApplication = () =>
@@ -102,6 +104,174 @@ describe('E2E audit events', () => {
 
     assert.strictEqual((failed.body as AuditResponse[]).length, 1);
     assert.strictEqual((failed.body as AuditResponse[])[0]?.email, user.email);
+    assert.strictEqual(
+      (failed.body as AuditResponse[])[0]?.userId,
+      user._id.toString(),
+    );
+  });
+
+  test('records post-credential login denials with the user id', async () => {
+    const unverified = await createUser({ verified: false });
+    const { application: unverifiedApp } = await createApplicationAccess(
+      unverified._id.toString(),
+    );
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: unverified.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: unverifiedApp.slug,
+      })
+      .expect(403);
+
+    const withoutGrant = await createUser();
+    const application = await createApplication();
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: withoutGrant.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(403);
+
+    const noApplication = await createUser();
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: noApplication.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+      })
+      .expect(403);
+
+    for (const user of [unverified, withoutGrant, noApplication]) {
+      const response = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({
+          userId: user._id.toString(),
+          event: AuditEvent.LOGIN_FAILED,
+        })
+        .expect(200);
+
+      const [event] = response.body as AuditResponse[];
+      assert.ok(event);
+      assert.strictEqual(event?.userId, user._id.toString());
+      assert.strictEqual(event?.result, AuditResult.FAILURE);
+    }
+  });
+
+  test('records the application and email on token refresh', async () => {
+    const user = await createUser();
+    const { application } = await createApplicationAccess(user._id.toString());
+
+    const login = await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(200);
+
+    await request(app)
+      .post('/auth/refresh')
+      .send({ refreshToken: login.body.refreshToken })
+      .expect(200);
+
+    const response = await request(app)
+      .get('/audit-events')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .query({
+        applicationId: application._id.toString(),
+        event: AuditEvent.TOKEN_REFRESHED,
+      })
+      .expect(200);
+
+    const [event] = response.body as AuditResponse[];
+    assert.ok(event);
+    assert.strictEqual(event?.email, user.email);
+    assert.strictEqual(event?.applicationId, application._id.toString());
+    assert.strictEqual(event?.audience, application.audience);
+  });
+
+  test('records the session id and request context on revocation', async () => {
+    const user = await createUser();
+    const { application } = await createApplicationAccess(user._id.toString());
+    const login = await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(200);
+
+    const sessions = await request(app)
+      .get('/auth/sessions')
+      .set('Authorization', bearer(login.body.accessToken))
+      .expect(200);
+    const [session] = sessions.body as Array<{ id: string }>;
+
+    await request(app)
+      .delete(`/auth/sessions/${session!.id}`)
+      .set('Authorization', bearer(login.body.accessToken))
+      .set('X-Forwarded-For', '203.0.113.10')
+      .set('User-Agent', 'Revoke Browser')
+      .expect(204);
+
+    await request(app)
+      .delete('/auth/sessions')
+      .set('Authorization', bearer(login.body.accessToken))
+      .set('X-Forwarded-For', '203.0.113.11')
+      .set('User-Agent', 'Revoke All Browser')
+      .expect(204);
+
+    const revoked = await request(app)
+      .get('/audit-events')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .query({ event: AuditEvent.SESSION_REVOKED })
+      .expect(200);
+    const [single] = revoked.body as AuditResponse[];
+    assert.strictEqual(single?.sessionId, session!.id);
+    assert.strictEqual(single?.ipAddress, '203.0.113.10');
+    assert.strictEqual(single?.userAgent, 'Revoke Browser');
+
+    const revokedAll = await request(app)
+      .get('/audit-events')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .query({ event: AuditEvent.SESSIONS_REVOKED })
+      .expect(200);
+    const [all] = revokedAll.body as AuditResponse[];
+    assert.strictEqual(all?.ipAddress, '203.0.113.11');
+    assert.strictEqual(all?.userAgent, 'Revoke All Browser');
+  });
+
+  test('records grants removed when the user is deleted', async () => {
+    const target = await createUser();
+    const { application } = await createApplicationAccess(
+      target._id.toString(),
+    );
+
+    await request(app)
+      .delete(`/users/${target._id.toString()}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(204);
+
+    const response = await request(app)
+      .get('/audit-events')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .query({
+        event: AuditEvent.GRANT_REVOKED,
+      })
+      .expect(200);
+
+    const event = (response.body as AuditResponse[]).find(
+      (item) => item.targetUserId === target._id.toString(),
+    );
+    assert.ok(event);
+    assert.strictEqual(event?.applicationId, application._id.toString());
+    assert.ok(event?.actorId);
   });
 
   test('AC-2: records who changed which grant', async () => {
@@ -203,6 +373,30 @@ describe('E2E audit events', () => {
           event.createdAt <= to,
       ),
     );
+  });
+
+  test('treats a date-only to as inclusive', async () => {
+    const user = await createUser();
+    const { application } = await createApplicationAccess(user._id.toString());
+
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(200);
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const response = await request(app)
+      .get('/audit-events')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .query({ from: today, to: today, event: AuditEvent.LOGIN_SUCCEEDED })
+      .expect(200);
+
+    assert.ok((response.body as AuditResponse[]).length >= 1);
   });
 
   test('restricts the audit log to the owner', async () => {

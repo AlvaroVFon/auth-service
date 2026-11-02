@@ -2,10 +2,16 @@ import { Request, Response } from 'express';
 
 import { Catch } from '../common/decorators/catch.decorator';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
-import { AuditEvent, AuditEventRecord } from './audit.interface';
+import { AuditEventRecord } from './audit.interface';
 import { AuditEventFilter, AuditPort } from './audit.port';
 
-const parseDate = (value: unknown, name: string): Date | undefined => {
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+const parseDate = (
+  value: unknown,
+  name: string,
+  endOfDay = false,
+): Date | undefined => {
   if (value === undefined) {
     return undefined;
   }
@@ -13,7 +19,15 @@ const parseDate = (value: unknown, name: string): Date | undefined => {
     throw new InvalidArgumentError(`${name} must be a valid date`);
   }
 
-  return new Date(value);
+  const parsed = new Date(value);
+
+  // A date-only `to` is inclusive: cover the whole day instead of stopping at
+  // 00:00:00Z and excluding every event of that day.
+  if (endOfDay && DATE_ONLY_REGEX.test(value)) {
+    parsed.setUTCHours(23, 59, 59, 999);
+  }
+
+  return parsed;
 };
 
 const parseString = (value: unknown): string | undefined =>
@@ -29,15 +43,8 @@ export class AuditController {
     const email = parseString(req.query.email);
     const applicationId = parseString(req.query.applicationId);
     const from = parseDate(req.query.from, 'from');
-    const to = parseDate(req.query.to, 'to');
+    const to = parseDate(req.query.to, 'to', true);
     const limitParam = parseString(req.query.limit);
-
-    if (
-      event !== undefined &&
-      !Object.values(AuditEvent).includes(event as AuditEvent)
-    ) {
-      throw new InvalidArgumentError('Invalid event');
-    }
 
     const filter: AuditEventFilter = {};
 
@@ -51,7 +58,7 @@ export class AuditController {
       filter.applicationId = applicationId;
     }
     if (event !== undefined) {
-      filter.event = event as AuditEvent;
+      filter.event = event;
     }
     if (from !== undefined) {
       filter.from = from;

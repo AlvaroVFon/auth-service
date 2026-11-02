@@ -2,7 +2,7 @@ import fixture from '.';
 import { Application } from '../../src/applications/applications.interface';
 import { ApplicationModel } from '../../src/applications/applications.schema';
 import { AuditEventRecord } from '../../src/audit/audit.interface';
-import { AuditEventModel } from '../../src/audit/audit.schema';
+import { createAuditEventModel } from '../../src/audit/audit.schema';
 import { Code as CodeInterface } from '../../src/auth/codes/code.interface';
 import { CodesModel } from '../../src/auth/codes/codes.schema';
 import { BlacklistedToken } from '../../src/auth/tokens/blacklisted-token.interface';
@@ -46,9 +46,11 @@ export const registerModels = async (): Promise<void> => {
     LinkModel.schema,
   );
 
+  const auditEventModel = createAuditEventModel();
+
   await fixture.registerModel<AuditEventRecord>(
-    AuditEventModel.modelName,
-    AuditEventModel.schema,
+    auditEventModel.modelName,
+    auditEventModel.schema,
   );
 };
 

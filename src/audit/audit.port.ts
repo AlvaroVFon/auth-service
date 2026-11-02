@@ -5,6 +5,7 @@ export interface RecordAuditEventInput {
   result: AuditResult;
   userId?: string;
   email?: string;
+  sessionId?: string;
   applicationId?: string;
   audience?: string;
   role?: string;
@@ -18,7 +19,7 @@ export interface AuditEventFilter {
   userId?: string;
   email?: string;
   applicationId?: string;
-  event?: AuditEvent;
+  event?: string;
   from?: Date;
   to?: Date;
   limit?: number;

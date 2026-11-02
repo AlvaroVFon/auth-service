@@ -5,6 +5,7 @@ export interface AssignRoleInput {
   userId: string;
   applicationId: string;
   role: GrantRoles;
+  actorId?: string;
 }
 
 export interface GrantsPort {
@@ -16,6 +17,10 @@ export interface GrantsPort {
   ): Promise<Grant | null>;
   listByUser(userId: string): Promise<Grant[]>;
   listByApplication(applicationId: string): Promise<Grant[]>;
-  revokeRole(userId: string, applicationId: string): Promise<void>;
-  deleteByUser(userId: string): Promise<void>;
+  revokeRole(
+    userId: string,
+    applicationId: string,
+    actorId?: string,
+  ): Promise<void>;
+  deleteByUser(userId: string, actorId?: string): Promise<void>;
 }

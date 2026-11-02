@@ -5,12 +5,30 @@ import {
   AuditEventRecord,
   AuditResult,
 } from '../../../../src/audit/audit.interface';
+import { createAuditSchema } from '../../../../src/audit/audit.schema';
 import { AuditService } from '../../../../src/audit/audit.service';
 import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
 import { LoggerInterface } from '../../../../src/libs/logger';
 
 const USER_ID = '507f191e810c19729de860ea';
 const APP_ID = '64b64c4f4f4f4f4f4f4f4f4f';
+
+describe('createAuditSchema', () => {
+  test('should reject an invalid retention value', () => {
+    assert.throws(() => createAuditSchema(0), /AUDIT_RETENTION_DAYS/);
+    assert.throws(() => createAuditSchema(Number.NaN), /AUDIT_RETENTION_DAYS/);
+  });
+
+  test('should index the documented filters', () => {
+    const keys = createAuditSchema(90)
+      .indexes()
+      .map(([fields]) => Object.keys(fields).join(','));
+
+    assert.ok(keys.includes('event,createdAt'));
+    assert.ok(keys.includes('email,createdAt'));
+    assert.ok(keys.includes('actorId,createdAt'));
+  });
+});
 
 describe('AuditService', () => {
   let create: ReturnType<typeof mock.fn>;

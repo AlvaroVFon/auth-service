@@ -7,5 +7,5 @@ export type {
   AuditPort,
   RecordAuditEventInput,
 } from './audit.port';
-export { AuditEventModel } from './audit.schema';
+export { createAuditEventModel } from './audit.schema';
 export { AuditService } from './audit.service';

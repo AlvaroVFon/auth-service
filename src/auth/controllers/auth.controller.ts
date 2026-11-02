@@ -149,6 +149,7 @@ export class AuthController {
     await this.authService.revokeSession(
       req.user?.id as string,
       req.params.sessionId as string,
+      this.buildRequestContext(req),
     );
 
     res.status(204).send();
@@ -156,7 +157,10 @@ export class AuthController {
 
   @Catch()
   async revokeAllSessions(req: Request, res: Response): Promise<void> {
-    await this.authService.revokeAllSessions(req.user?.id as string);
+    await this.authService.revokeAllSessions(
+      req.user?.id as string,
+      this.buildRequestContext(req),
+    );
 
     res.status(204).send();
   }

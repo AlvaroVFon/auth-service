@@ -31,6 +31,9 @@ export class AuditService implements AuditPort {
         ...(input.email === undefined
           ? {}
           : { email: normalizeEmail(input.email) }),
+        ...(input.sessionId === undefined
+          ? {}
+          : { sessionId: input.sessionId }),
         ...(input.applicationId === undefined
           ? {}
           : { applicationId: new Types.ObjectId(input.applicationId) }),
@@ -70,7 +73,7 @@ export class AuditService implements AuditPort {
       query.email = normalizeEmail(filter.email);
     }
     if (filter.event !== undefined) {
-      if (!Object.values(AuditEvent).includes(filter.event)) {
+      if (!Object.values(AuditEvent).includes(filter.event as AuditEvent)) {
         throw new InvalidArgumentError('Invalid event');
       }
       query.event = filter.event;

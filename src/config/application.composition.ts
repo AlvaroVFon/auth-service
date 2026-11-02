@@ -4,9 +4,9 @@ import type { ApplicationsPort } from '../applications';
 import { ApplicationsModule } from '../applications/applications.module';
 import {
   AuditController,
-  AuditEventModel,
   AuditModule,
   AuditService,
+  createAuditEventModel,
 } from '../audit';
 import { AuthModule } from '../auth';
 import type { AuthRateLimitConfig } from '../auth';
@@ -134,7 +134,7 @@ export const createApplicationComposition = (
   options: ApplicationCompositionOptions = {},
 ): ApplicationComposition => {
   const logger = options.logger ?? new WinstonLogger();
-  const auditService = new AuditService(AuditEventModel, logger);
+  const auditService = new AuditService(createAuditEventModel(), logger);
   const database =
     options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
   const healthModule = new HealthModule(logger, () => database.getReadyState());
