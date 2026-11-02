@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import { Catch } from '../../common/decorators/catch.decorator';
+import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { AuthService } from '../services/auth.service';
 import { RequestContext } from '../tokens/request-context.type';
 
@@ -20,6 +21,11 @@ export class AuthController {
       string,
       unknown
     >;
+
+    if (application !== undefined && typeof application !== 'string') {
+      throw new InvalidArgumentError('application must be a string');
+    }
+
     const tokens = await this.authService.login(
       {
         email: email as string,

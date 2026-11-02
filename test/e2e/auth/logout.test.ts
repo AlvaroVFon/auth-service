@@ -156,7 +156,7 @@ describe('E2E Auth Logout', () => {
   });
 
   test('should not revoke sessions from another application', async () => {
-    const { accessToken, email, userId } = await signupAndLogin();
+    const { accessToken, refreshToken, email, userId } = await signupAndLogin();
     const other = await createApplicationAccess(userId);
 
     const otherLogin = await request(app)
@@ -166,6 +166,13 @@ describe('E2E Auth Logout', () => {
         password: DEFAULT_USER_PLAIN_PASSWORD,
         application: other.application.slug,
       })
+      .expect(200);
+
+    // Logging into another application must not revoke app A's session.
+    await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ refreshToken })
       .expect(200);
 
     await request(app)

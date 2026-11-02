@@ -38,10 +38,10 @@ describe('SessionService', () => {
     const result = await service.create(claims.userId!, claims.role!, context);
 
     assert.deepStrictEqual(result, pair);
-    assert.strictEqual(
+    assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists
-      refreshTokenService.revokeAllByUserId.mock.calls[0].arguments[0],
-      claims.userId,
+      refreshTokenService.revokeAllByUserId.mock.calls[0].arguments,
+      [claims.userId, undefined],
     );
     assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists
@@ -72,6 +72,11 @@ describe('SessionService', () => {
       // @ts-expect-error mock.calls exists
       jwtService.signTokenPair.mock.calls[0].arguments,
       [claims.userId, claims.role, 'app-aud'],
+    );
+    assert.deepStrictEqual(
+      // @ts-expect-error mock.calls exists
+      refreshTokenService.revokeAllByUserId.mock.calls[0].arguments,
+      [claims.userId, 'app-aud'],
     );
     assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists

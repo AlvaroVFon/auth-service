@@ -24,19 +24,20 @@ const buildRequest = (
 
 describe('ApplicationAuthorizationMiddleware', () => {
   let findByUserAndApplication: ReturnType<typeof mock.fn>;
-  let findById: ReturnType<typeof mock.fn>;
+  let findAssignableById: ReturnType<typeof mock.fn>;
   let middleware: ApplicationAuthorizationMiddleware;
   let next: ReturnType<typeof mock.fn>;
 
   beforeEach(() => {
     findByUserAndApplication = mock.fn();
-    findById = mock.fn(async () => ({
+    findAssignableById = mock.fn(async () => ({
       _id: APPLICATION_ID,
       audience: 'app-aud',
+      active: true,
     }));
     middleware = new ApplicationAuthorizationMiddleware(
       { findByUserAndApplication } as never,
-      { findById } as never,
+      { findAssignableById } as never,
     );
     next = mock.fn();
   });
@@ -78,7 +79,12 @@ describe('ApplicationAuthorizationMiddleware', () => {
     );
 
     assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
-    assert.strictEqual(findById.mock.callCount(), 1);
+    assert.strictEqual(findAssignableById.mock.callCount(), 1);
+    assert.deepStrictEqual(findByUserAndApplication.mock.calls[0]?.arguments, [
+      '507f191e810c19729de860ea',
+      APPLICATION_ID,
+      { _id: APPLICATION_ID, audience: 'app-aud', active: true },
+    ]);
   });
 
   test('should reject an application token for another application', async () => {
@@ -97,7 +103,7 @@ describe('ApplicationAuthorizationMiddleware', () => {
   });
 
   test('should reject an application token when the target app does not exist', async () => {
-    findById.mock.mockImplementation(async () => null);
+    findAssignableById.mock.mockImplementation(async () => null);
 
     await middleware.allowApplicationAdmin(
       buildRequest(GrantRoles.ADMIN, 'app-aud') as Request,

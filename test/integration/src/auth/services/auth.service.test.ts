@@ -1578,6 +1578,26 @@ describe('Auth Service', () => {
           message: 'User has no access to this application',
         },
       );
+
+      await grantsService.assignRole({
+        userId: DEFAULT_USER_ID.toString(),
+        applicationId: DEFAULT_APPLICATION._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+
+      // Restoring the grant must not resurrect the revoked session.
+      await assert.rejects(
+        authService.refreshToken(
+          DEFAULT_USER_ID.toString(),
+          login.refreshToken,
+          undefined,
+          DEFAULT_APPLICATION.audience,
+        ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
+        },
+      );
     });
 
     test('should reject a refresh when the application is inactive', async () => {
@@ -1602,6 +1622,25 @@ describe('Auth Service', () => {
         {
           name: 'ForbiddenError',
           message: 'User has no access to this application',
+        },
+      );
+
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: true },
+      );
+
+      await assert.rejects(
+        authService.refreshToken(
+          DEFAULT_USER_ID.toString(),
+          login.refreshToken,
+          undefined,
+          DEFAULT_APPLICATION.audience,
+        ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
         },
       );
     });

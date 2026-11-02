@@ -204,6 +204,23 @@ describe('E2E login against an application', () => {
       .expect(403);
   });
 
+  test('rejects a non-string application instead of dropping it', async () => {
+    const user = await createUser();
+
+    for (const application of [123, ['app']]) {
+      const response = await request(app)
+        .post('/auth/login')
+        .send({
+          email: user.email,
+          password: DEFAULT_USER_PLAIN_PASSWORD,
+          application,
+        })
+        .expect(400);
+
+      assert.strictEqual(response.body.message, 'application must be a string');
+    }
+  });
+
   test('lets the owner log in without an application', async () => {
     const owner = await createUser({ role: Roles.OWNER });
 

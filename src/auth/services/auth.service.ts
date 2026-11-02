@@ -324,12 +324,26 @@ export class AuthService {
         throw new ForbiddenError('An application is required');
       }
     } else {
-      const access = await this.applicationTokens.resolveAccessByAudience(
-        userId,
-        audience,
-        user,
-      );
-      role = access.role;
+      try {
+        const access = await this.applicationTokens.resolveAccessByAudience(
+          userId,
+          audience,
+          user,
+        );
+        role = access.role;
+      } catch (error) {
+        // A revoked grant or inactive application must end the session
+        // permanently, not just fail until access is restored.
+        try {
+          await this.sessionService.revokeByRefreshToken(userId, refreshToken);
+        } catch (revokeError) {
+          this.logger.warn(
+            `Failed to revoke refresh token after access denial for user ${userId}`,
+            revokeError,
+          );
+        }
+        throw error;
+      }
     }
 
     const session = await this.sessionService.rotate(

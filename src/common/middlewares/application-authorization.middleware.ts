@@ -37,18 +37,20 @@ export class ApplicationAuthorizationMiddleware {
         throw new ForbiddenError('Access denied');
       }
 
-      if (user.audience !== undefined) {
-        const application =
-          await this.applicationsService.findById(applicationId);
+      const application =
+        await this.applicationsService.findAssignableById(applicationId);
 
-        if (!application || application.audience !== user.audience) {
-          throw new ForbiddenError('Access denied');
-        }
+      if (
+        !application ||
+        (user.audience !== undefined && application.audience !== user.audience)
+      ) {
+        throw new ForbiddenError('Access denied');
       }
 
       const grant = await this.grantsService.findByUserAndApplication(
         user.id,
         applicationId,
+        application,
       );
 
       if (!grant || grant.role !== GrantRoles.ADMIN) {
