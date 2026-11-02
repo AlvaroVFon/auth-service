@@ -10,6 +10,7 @@ const linkSchema = new Schema<OneTimeLink>(
     email: { type: String, lowercase: true, trim: true },
     applicationId: { type: Schema.Types.ObjectId, ref: 'Application' },
     role: { type: String, enum: Object.values(GrantRoles) },
+    telegramChatId: { type: String, trim: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     expiresAt: { type: Date, required: true },
     usedAt: { type: Date, default: null },
@@ -21,6 +22,7 @@ const linkSchema = new Schema<OneTimeLink>(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       transform: (_doc, ret: any) => {
         delete ret.tokenHash;
+        delete ret.telegramChatId;
         delete ret.__v;
         return ret;
       },

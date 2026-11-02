@@ -4,6 +4,7 @@ import { EMAIL_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { InvalidLinkError } from '../common/exceptions/links.exceptions';
+import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { assertObjectId } from '../common/validators/object-id';
 import { GrantRoles } from '../grants';
 import { generateLinkToken, hashLinkToken } from './link-token';
@@ -37,6 +38,7 @@ export class LinksService implements LinksPort {
     if (!Object.values(GrantRoles).includes(input.role)) {
       throw new InvalidArgumentError('Invalid role');
     }
+    const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
 
     await this.invalidateActive({
       type: LinkType.INVITATION,
@@ -50,6 +52,7 @@ export class LinksService implements LinksPort {
         email,
         applicationId: new Types.ObjectId(input.applicationId),
         role: input.role,
+        ...(telegramChatId === undefined ? {} : { telegramChatId }),
       },
       this.invitationExpirationMs,
     );

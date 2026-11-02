@@ -38,6 +38,11 @@ const userSchema = new Schema<UserInterface>(
       type: Date,
       default: null,
     },
+    telegramChatId: {
+      type: String,
+      trim: true,
+      match: /^-?\d{1,20}$/,
+    },
   },
   {
     timestamps: true,

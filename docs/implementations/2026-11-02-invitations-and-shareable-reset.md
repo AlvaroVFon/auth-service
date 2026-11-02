@@ -62,7 +62,8 @@ solo uso y compartirlos por el canal que prefiera.
 
 ## Fuera de alcance
 
-- Envío automático de enlaces por email o Telegram (el owner los comparte).
+- Envío automático de enlaces por email; Telegram se añade en
+  `2026-11-02-telegram-link-notifications.md`.
 - Eliminar los flujos existentes de verificación por código y `/auth/forgot-password`.
 - Invitar a un usuario ya registrado a otra app (se usan grants).
 - Páginas frontend de aceptación y listado/revocación de enlaces.

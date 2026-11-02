@@ -14,7 +14,7 @@ import {
 } from '../../fixtures/defaults';
 import { ApplicationFactory } from '../../helpers/factories/application.factory';
 import { GrantFactory } from '../../helpers/factories/grant.factory';
-import { getTestAppInstance } from '../../utils/app';
+import { getTestAppInstance, telegramMock } from '../../utils/app';
 
 const bearer = (token: string) => `Bearer ${token}`;
 const PASSWORD = DEFAULT_USER_PLAIN_PASSWORD;
@@ -56,7 +56,7 @@ describe('E2E invitations', () => {
     const response = await request(app)
       .post(`/applications/${application._id.toString()}/invitations`)
       .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
-      .send({ email, role: GrantRoles.EDITOR })
+      .send({ email, role: GrantRoles.EDITOR, telegramChatId: '4242' })
       .expect(201);
 
     assert.match(response.body.link, /\/invitations\/accept\?token=.+/);
@@ -64,8 +64,60 @@ describe('E2E invitations', () => {
     assert.strictEqual(response.body.applicationId, application._id.toString());
     assert.strictEqual(response.body.role, GrantRoles.EDITOR);
     assert.ok(response.body.expiresAt);
+    assert.deepStrictEqual(response.body.notification, {
+      delivered: true,
+      recipient: 'invitee',
+    });
+    const [chatId, text] = telegramMock.sendMessage.mock.calls.at(-1)!
+      .arguments as [string, string];
+    assert.strictEqual(chatId, '4242');
+    assert.ok(
+      text.includes(
+        new URL(response.body.link).searchParams.get('token') as string,
+      ),
+    );
 
     await loginToApplication(email, application.slug).expect(401);
+  });
+
+  test('AC-2: falls back to the owner chat when the invitee has none', async () => {
+    const application = await createApplication();
+
+    const response = await request(app)
+      .post(`/applications/${application._id.toString()}/invitations`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .send({ email: generateRandomEmail('guest'), role: GrantRoles.VIEWER })
+      .expect(201);
+
+    assert.deepStrictEqual(response.body.notification, {
+      delivered: true,
+      recipient: 'owner',
+    });
+    const [chatId] = telegramMock.sendMessage.mock.calls.at(-1)!.arguments as [
+      string,
+    ];
+    assert.strictEqual(chatId, '999');
+    assert.strictEqual(response.body.telegramChatId, undefined);
+  });
+
+  test('AC-3: returns the link when the bot fails', async () => {
+    const application = await createApplication();
+    telegramMock.sendMessage.mock.mockImplementationOnce(() =>
+      Promise.reject(new Error('bot down')),
+    );
+
+    const response = await request(app)
+      .post(`/applications/${application._id.toString()}/invitations`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .send({
+        email: generateRandomEmail('guest'),
+        role: GrantRoles.VIEWER,
+        telegramChatId: '4242',
+      })
+      .expect(201);
+
+    assert.strictEqual(response.body.notification.delivered, false);
+    assert.ok(new URL(response.body.link).searchParams.get('token'));
   });
 
   test('lets an app admin create an invitation for its app', async () => {

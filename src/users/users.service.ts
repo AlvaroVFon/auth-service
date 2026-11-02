@@ -17,6 +17,7 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
+import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
 import type { UserGrantsCleanerPort, UsersPort } from './users.port';
@@ -82,6 +83,7 @@ export class UsersService implements UsersPort {
   async createVerifiedUser(input: {
     email: string;
     passwordHash: string;
+    telegramChatId?: string;
   }): Promise<UserInterface> {
     const email = normalizeEmail(input.email);
     const existingUser = await this.usersModel.findOne({ email });
@@ -89,10 +91,13 @@ export class UsersService implements UsersPort {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
+    const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
+
     return this.usersModel.create({
       email,
       password: input.passwordHash,
       verified: true,
+      ...(telegramChatId === undefined ? {} : { telegramChatId }),
     });
   }
 
@@ -183,6 +188,16 @@ export class UsersService implements UsersPort {
       updateData.password = await this.cryptoService.hashString(
         updateData.password,
       );
+    }
+
+    if ('telegramChatId' in updateData) {
+      const telegramChatId = normalizeTelegramChatId(updateData.telegramChatId);
+
+      if (telegramChatId === undefined) {
+        delete updateData.telegramChatId;
+      } else {
+        updateData.telegramChatId = telegramChatId;
+      }
     }
 
     const user = await this.usersModel.findByIdAndUpdate(id, updateData, {

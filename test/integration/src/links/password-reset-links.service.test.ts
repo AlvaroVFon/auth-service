@@ -12,6 +12,7 @@ import { InvalidLinkError } from '../../../../src/common/exceptions/links.except
 import { CryptoService } from '../../../../src/libs/crypto';
 import { JwtKeyring } from '../../../../src/libs/jwt';
 import { JwtService } from '../../../../src/libs/jwt/jwt.service';
+import { LinkNotificationsService } from '../../../../src/links/link-notifications.service';
 import { LinkModel } from '../../../../src/links/links.schema';
 import { LinksService } from '../../../../src/links/links.service';
 import { PasswordResetLinksService } from '../../../../src/links/password-reset-links.service';
@@ -29,6 +30,8 @@ describe('PasswordResetLinksService', () => {
   let links: LinksService;
   let users: UsersService;
   let refreshTokens: RefreshTokenService;
+  let telegramSend: ReturnType<typeof mock.fn>;
+  let notifications: LinkNotificationsService;
 
   before(() => {
     const crypto = new CryptoService();
@@ -42,11 +45,20 @@ describe('PasswordResetLinksService', () => {
     );
     const sessionService = new SessionService(jwtService, refreshTokens);
     links = new LinksService(LinkModel, 60_000, 30_000);
+    telegramSend = mock.fn(() => Promise.resolve());
+    notifications = new LinkNotificationsService({
+      telegram: { sendMessage: telegramSend },
+      usersService: users,
+      ownerChatId: '999',
+      logger: silentLogger,
+      timeoutMs: 50,
+    });
     service = new PasswordResetLinksService(
       links,
       users,
       sessionService,
       'https://app.test',
+      notifications,
       silentLogger,
     );
   });
@@ -64,6 +76,27 @@ describe('PasswordResetLinksService', () => {
     );
     assert.strictEqual(created.userId, user._id.toString());
     assert.ok(created.expiresAt.getTime() > Date.now());
+  });
+
+  test('should notify the user chat and fall back to the owner', async () => {
+    const user = await fixture.create(
+      'User',
+      UserFactory.generate({ verified: true, telegramChatId: '4242' }),
+    );
+
+    const notified = await service.create(user._id.toString());
+    assert.deepStrictEqual(notified.notification, {
+      delivered: true,
+      recipient: 'invitee',
+    });
+    assert.strictEqual(telegramSend.mock.calls.at(-1)!.arguments[0], '4242');
+
+    const plain = await createUser();
+    const fallback = await service.create(plain._id.toString());
+    assert.deepStrictEqual(fallback.notification, {
+      delivered: true,
+      recipient: 'owner',
+    });
   });
 
   test('should reject unknown or invalid users', async () => {
@@ -173,6 +206,7 @@ describe('PasswordResetLinksService', () => {
         },
       } as unknown as SessionService,
       'https://app.test',
+      notifications,
       silentLogger,
     );
     const created = await failing.create(user._id.toString());

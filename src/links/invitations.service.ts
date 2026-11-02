@@ -6,12 +6,17 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { InvalidLinkError } from '../common/exceptions/links.exceptions';
+import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import type { GrantsPort } from '../grants';
 import { GrantRoles } from '../grants';
 import type { HoldersPort } from '../holders';
 import { CryptoService } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
 import type { UsersPort } from '../users';
+import {
+  LinkNotificationsService,
+  LinkNotificationResult,
+} from './link-notifications.service';
 import { buildInvitationLink } from './link-urls';
 import { LinkType } from './link.interface';
 import type { LinksPort } from './links.port';
@@ -20,6 +25,7 @@ export interface CreateInvitationInput {
   email: string;
   applicationId: string;
   role: GrantRoles;
+  telegramChatId?: string;
 }
 
 export interface CreatedInvitation {
@@ -28,6 +34,7 @@ export interface CreatedInvitation {
   email: string;
   applicationId: string;
   role: GrantRoles;
+  notification: LinkNotificationResult;
 }
 
 export interface AcceptInvitationInput {
@@ -45,11 +52,14 @@ export class InvitationsService {
     private readonly applicationsService: ApplicationsPort,
     private readonly cryptoService: CryptoService,
     private readonly publicAppUrl: string,
+    private readonly notifications: LinkNotificationsService,
     private readonly logger: LoggerInterface,
   ) {}
 
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
     const email = normalizeEmail(input.email ?? '');
+
+    const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
 
     const application = await this.applicationsService.findAssignableById(
       input.applicationId,
@@ -70,14 +80,23 @@ export class InvitationsService {
       email,
       applicationId: input.applicationId,
       role: input.role,
+      ...(telegramChatId === undefined ? {} : { telegramChatId }),
+    });
+
+    const link = buildInvitationLink(this.publicAppUrl, created.token);
+    const notification = await this.notifications.notifyInvitation({
+      linkId: created.link._id.toString(),
+      link,
+      ...(telegramChatId === undefined ? {} : { chatId: telegramChatId }),
     });
 
     return {
-      link: buildInvitationLink(this.publicAppUrl, created.token),
+      link,
       expiresAt: created.link.expiresAt,
       email,
       applicationId: input.applicationId,
       role: input.role,
+      notification,
     };
   }
 
@@ -104,6 +123,9 @@ export class InvitationsService {
       user = await this.usersService.createVerifiedUser({
         email: link.email,
         passwordHash,
+        ...(link.telegramChatId === undefined
+          ? {}
+          : { telegramChatId: link.telegramChatId }),
       });
     } catch (error) {
       await this.release(link._id.toString());

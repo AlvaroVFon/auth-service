@@ -12,6 +12,7 @@ import { HoldersModel } from '../../../../src/holders/holders.schema';
 import { HoldersService } from '../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../src/libs/crypto';
 import { InvitationsService } from '../../../../src/links/invitations.service';
+import { LinkNotificationsService } from '../../../../src/links/link-notifications.service';
 import { LinkModel } from '../../../../src/links/links.schema';
 import { LinksService } from '../../../../src/links/links.service';
 import { User } from '../../../../src/users/users.schema';
@@ -30,6 +31,7 @@ describe('InvitationsService', () => {
   let grants: GrantsService;
   let holders: HoldersService;
   let links: LinksService;
+  let telegramSend: ReturnType<typeof mock.fn>;
 
   before(() => {
     const crypto = new CryptoService();
@@ -39,6 +41,14 @@ describe('InvitationsService', () => {
     users.setGrantsCleaner(grants);
     holders = new HoldersService(HoldersModel, crypto);
     links = new LinksService(LinkModel, 60_000);
+    telegramSend = mock.fn(() => Promise.resolve());
+    const notifications = new LinkNotificationsService({
+      telegram: { sendMessage: telegramSend },
+      usersService: users,
+      ownerChatId: '999',
+      logger: silentLogger,
+      timeoutMs: 50,
+    });
     invitations = new InvitationsService(
       links,
       users,
@@ -47,6 +57,7 @@ describe('InvitationsService', () => {
       applications,
       crypto,
       'https://app.test',
+      notifications,
       silentLogger,
     );
   });
@@ -77,6 +88,82 @@ describe('InvitationsService', () => {
     assert.strictEqual(created.role, GrantRoles.EDITOR);
     assert.ok(created.expiresAt.getTime() > Date.now());
     assert.strictEqual(await users.findByEmail('guest@example.com'), null);
+  });
+
+  test('should notify the invitee chat and copy it to the new user', async () => {
+    const application = await createApplication();
+    const created = await invitations.create({
+      email: 'guest@example.com',
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+      telegramChatId: ' 4242 ',
+    });
+
+    assert.deepStrictEqual(created.notification, {
+      delivered: true,
+      recipient: 'invitee',
+    });
+    assert.strictEqual(telegramSend.mock.calls.at(-1)!.arguments[0], '4242');
+    assert.ok(
+      String(telegramSend.mock.calls.at(-1)!.arguments[1]).includes(
+        'https://app.test/invitations/accept?token=',
+      ),
+    );
+
+    const token = new URL(created.link).searchParams.get('token') as string;
+    await invitations.accept({
+      token,
+      password: PASSWORD,
+      passwordConfirmation: PASSWORD,
+    });
+
+    const user = await users.findByEmail('guest@example.com');
+    assert.strictEqual(user?.telegramChatId, '4242');
+  });
+
+  test('should fall back to the owner chat and survive a bot failure', async () => {
+    const application = await createApplication();
+    const notified = await invitations.create({
+      email: 'guest@example.com',
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+    });
+
+    assert.deepStrictEqual(notified.notification, {
+      delivered: true,
+      recipient: 'owner',
+    });
+    assert.strictEqual(telegramSend.mock.calls.at(-1)!.arguments[0], '999');
+
+    telegramSend.mock.mockImplementationOnce(() =>
+      Promise.reject(new Error('bot down')),
+    );
+    const failed = await invitations.create({
+      email: 'other@example.com',
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+    });
+
+    assert.strictEqual(failed.notification.delivered, false);
+    assert.match(failed.link, /invitations\/accept\?token=.+/);
+  });
+
+  test('should reject a malformed telegram chat id before creating the link', async () => {
+    const application = await createApplication();
+
+    await assert.rejects(
+      invitations.create({
+        email: 'guest@example.com',
+        applicationId: application._id.toString(),
+        role: GrantRoles.VIEWER,
+        telegramChatId: 'abc',
+      }),
+      InvalidArgumentError,
+    );
+    assert.strictEqual(
+      await LinkModel.countDocuments({ email: 'guest@example.com' }),
+      0,
+    );
   });
 
   test('should reject an existing user or holder', async () => {

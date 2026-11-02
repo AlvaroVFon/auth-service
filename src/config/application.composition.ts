@@ -40,6 +40,7 @@ import { WinstonLogger } from '../libs/logger/adapters/winston.logger';
 import { LoggerInterface } from '../libs/logger/logger.interface';
 import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
+import { TelegramAdapter, type TelegramPort } from '../libs/telegram';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
 import {
   InvitationsService,
@@ -47,6 +48,7 @@ import {
   LinksController,
   LinksModule,
   LinksService,
+  LinkNotificationsService,
   PasswordResetLinksService,
 } from '../links';
 import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
@@ -60,6 +62,7 @@ import {
 } from './env.config';
 import { JwtConfig, resolveJwtConfig } from './jwt.config';
 import { GlobalMiddlewares } from './middlewares.config';
+import { resolveTelegramConfig } from './telegram.config';
 import { resolveTrustProxy } from './trust-proxy.config';
 
 export interface ApplicationComposition {
@@ -92,6 +95,9 @@ export interface ApplicationCompositionOptions {
   rateLimitConfig?: AuthRateLimitConfig;
   corsOrigins?: string[];
   trustProxy?: boolean | number;
+  telegram?: TelegramPort | null;
+  telegramOwnerChatId?: string;
+  telegramTimeoutMs?: number;
 }
 
 const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
@@ -222,6 +228,28 @@ export const createApplicationComposition = (
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
   const ownerBootstrap = new OwnerBootstrapService(usersModule.service);
+  const telegramConfig =
+    options.telegram === undefined ? resolveTelegramConfig() : null;
+  const telegram =
+    options.telegram !== undefined
+      ? options.telegram
+      : telegramConfig
+        ? new TelegramAdapter({
+            botToken: telegramConfig.botToken,
+            timeoutMs: telegramConfig.timeoutMs,
+          })
+        : null;
+  const telegramOwnerChatId =
+    options.telegramOwnerChatId ?? telegramConfig?.ownerChatId;
+  const linkNotifications = new LinkNotificationsService({
+    telegram,
+    usersService: usersModule.service,
+    ...(telegramOwnerChatId === undefined
+      ? {}
+      : { ownerChatId: telegramOwnerChatId }),
+    logger,
+    timeoutMs: options.telegramTimeoutMs ?? telegramConfig?.timeoutMs ?? 3000,
+  });
   const applicationTokenService = new ApplicationTokenService(
     jwtService,
     applicationsModule.service,
@@ -263,6 +291,7 @@ export const createApplicationComposition = (
     applicationsModule.service,
     cryptoService,
     publicAppUrl,
+    linkNotifications,
     logger,
   );
   const passwordResetLinksService = new PasswordResetLinksService(
@@ -270,6 +299,7 @@ export const createApplicationComposition = (
     usersModule.service,
     sessionService,
     publicAppUrl,
+    linkNotifications,
     logger,
   );
   const linksModule = new LinksModule({
