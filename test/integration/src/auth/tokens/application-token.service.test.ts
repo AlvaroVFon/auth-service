@@ -89,6 +89,52 @@ describe('ApplicationTokenService', () => {
     assert.ok(claims.exp > 0);
   });
 
+  test('should resolve access from a slug or an audience', async () => {
+    const { userId, application } = await createUserAndApplication();
+    await grantsService.assignRole({
+      userId,
+      applicationId: String(application._id),
+      role: GrantRoles.ADMIN,
+    });
+
+    const bySlug = await service.resolveAccess(userId, application.slug);
+    const byAudience = await service.resolveAccess(
+      userId,
+      application.audience,
+    );
+
+    assert.strictEqual(bySlug.role, GrantRoles.ADMIN);
+    assert.strictEqual(bySlug.application.audience, application.audience);
+    assert.strictEqual(byAudience.application.audience, application.audience);
+  });
+
+  test('should reject an inactive application on resolveAccess', async () => {
+    const { userId, application } = await createUserAndApplication();
+    await grantsService.assignRole({
+      userId,
+      applicationId: String(application._id),
+      role: GrantRoles.VIEWER,
+    });
+    await ApplicationModel.updateOne(
+      { _id: application._id },
+      { active: false },
+    );
+
+    await assert.rejects(
+      service.resolveAccess(userId, application.slug),
+      ForbiddenError,
+    );
+  });
+
+  test('should reject a blank application identifier', async () => {
+    const { userId } = await createUserAndApplication();
+
+    await assert.rejects(
+      service.resolveAccess(userId, '   '),
+      InvalidArgumentError,
+    );
+  });
+
   test('should reject a user without a grant on the application', async () => {
     const { userId, application } = await createUserAndApplication();
 

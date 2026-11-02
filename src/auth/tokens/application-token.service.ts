@@ -1,14 +1,20 @@
-import type { ApplicationsPort } from '../../applications';
+import type { Application, ApplicationsPort } from '../../applications';
 import { ForbiddenError } from '../../common/exceptions/auth.exceptions';
+import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { assertObjectId } from '../../common/validators/object-id';
 import type { GrantsPort } from '../../grants';
 import { GrantRoles } from '../../grants';
 import { JwtService } from '../../libs/jwt';
-import type { UsersPort } from '../../users';
+import type { User, UsersPort } from '../../users';
 
 export interface IssuedApplicationToken {
   accessToken: string;
   audience: string;
+  role: GrantRoles;
+}
+
+export interface ApplicationAccess {
+  application: Application;
   role: GrantRoles;
 }
 
@@ -29,11 +35,70 @@ export class ApplicationTokenService {
 
     const application =
       await this.applicationsService.findAssignableById(applicationId);
-    const user = await this.usersService.findById(userId);
+    const access = await this.authorize(userId, application);
+
+    return {
+      accessToken: this.jwtService.signAccessToken(
+        userId,
+        access.role,
+        access.application.audience,
+      ),
+      audience: access.application.audience,
+      role: access.role,
+    };
+  }
+
+  async resolveAccess(
+    userId: string,
+    applicationIdentifier: string,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    assertObjectId(userId, 'userId');
+
+    if (!applicationIdentifier || !applicationIdentifier.trim()) {
+      throw new InvalidArgumentError('Application identifier is required');
+    }
+
+    const application = await this.applicationsService.findBySlugOrAudience(
+      applicationIdentifier,
+    );
+
+    return this.authorize(userId, application, loadedUser);
+  }
+
+  /**
+   * Resolves access from an audience claim. The value is unambiguous, so it
+   * must never fall back to a slug lookup: another application's slug could
+   * otherwise match the audience and yield a role for the wrong application.
+   */
+  async resolveAccessByAudience(
+    userId: string,
+    audience: string,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    assertObjectId(userId, 'userId');
+
+    if (!audience || !audience.trim()) {
+      throw new InvalidArgumentError('Audience is required');
+    }
+
+    const application = await this.applicationsService.findByAudience(
+      audience.trim(),
+    );
+
+    return this.authorize(userId, application, loadedUser);
+  }
+
+  private async authorize(
+    userId: string,
+    application: Application | null,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    const user = loadedUser ?? (await this.usersService.findById(userId));
 
     // Collapse "missing user", "inactive application" and "no grant" into one
     // response so the caller cannot use this path to enumerate ids.
-    if (!application || !user) {
+    if (!application || !application.active || !user) {
       throw new ForbiddenError('User has no access to this application');
     }
 
@@ -43,21 +108,13 @@ export class ApplicationTokenService {
 
     const grant = await this.grantsService.findByUserAndApplication(
       userId,
-      applicationId,
+      application._id.toString(),
     );
 
     if (!grant) {
       throw new ForbiddenError('User has no access to this application');
     }
 
-    return {
-      accessToken: this.jwtService.signAccessToken(
-        userId,
-        grant.role,
-        application.audience,
-      ),
-      audience: application.audience,
-      role: grant.role,
-    };
+    return { application, role: grant.role };
   }
 }

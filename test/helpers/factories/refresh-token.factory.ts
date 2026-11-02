@@ -12,6 +12,7 @@ export class RefreshTokenFactory {
       replacedByJti: null,
       ipAddress: null,
       userAgent: null,
+      audience: null,
       jti: MotherFactory.uuid(),
       userId: MotherFactory.objectId(),
       ...overrides,

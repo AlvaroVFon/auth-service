@@ -14,17 +14,26 @@ export class AuthenticationMiddleware {
     await this.authenticateRequest(req, next);
   };
 
+  authenticateAny = async (
+    req: Request,
+    _res: Response,
+    next: NextFunction,
+  ) => {
+    await this.authenticateRequest(req, next, { anyAudience: true });
+  };
+
   authenticateForAudience(audience: string) {
     return async (req: Request, _res: Response, next: NextFunction) => {
-      await this.authenticateRequest(req, next, audience);
+      await this.authenticateRequest(req, next, { audience });
     };
   }
 
   private async authenticateRequest(
     req: Request,
     next: NextFunction,
-    audience?: string,
+    options: { audience?: string; anyAudience?: boolean } = {},
   ): Promise<void> {
+    const { audience } = options;
     try {
       const authHeader = req.headers.authorization;
 
@@ -53,12 +62,15 @@ export class AuthenticationMiddleware {
         throw new InvalidCredentialsError('Invalid token payload');
       }
 
-      if (
-        audience === undefined
-          ? payload.aud !== undefined
-          : payload.aud !== audience
-      ) {
-        throw new InvalidCredentialsError('Invalid token payload');
+      if (!options.anyAudience) {
+        const audienceMismatch =
+          audience === undefined
+            ? payload.aud !== undefined
+            : payload.aud !== audience;
+
+        if (audienceMismatch) {
+          throw new InvalidCredentialsError('Invalid token payload');
+        }
       }
 
       const isBlacklisted = await this.blacklistService.isBlacklisted(

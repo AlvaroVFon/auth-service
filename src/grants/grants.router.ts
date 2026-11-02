@@ -16,7 +16,7 @@ export class GrantsRouter {
 
   private initializeRoutes() {
     const appAdminOnly = [
-      this.authenticationMiddleware.authenticate,
+      this.authenticationMiddleware.authenticateAny,
       this.applicationAuthorizationMiddleware.allowApplicationAdmin,
     ];
 

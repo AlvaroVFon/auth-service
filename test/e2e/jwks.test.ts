@@ -10,6 +10,7 @@ import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../fixtures/defaults';
+import { createApplicationAccess } from '../helpers/application-access';
 import { getTestAppInstance } from '../utils/app';
 
 describe('E2E JWKS', () => {
@@ -66,9 +67,17 @@ describe('E2E JWKS', () => {
       .send({ code: code.code })
       .expect(204);
 
+    const user = await fixture.findOne<{ _id: string }>('User', { email });
+    assert.ok(user);
+    const { application } = await createApplicationAccess(String(user!._id));
+
     const loginResponse = await request(app)
       .post('/auth/login')
-      .send({ email, password: DEFAULT_USER_PLAIN_PASSWORD })
+      .send({
+        email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
       .expect(200);
 
     const token = loginResponse.body.accessToken;

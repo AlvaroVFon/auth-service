@@ -52,6 +52,35 @@ describe('JwtService', () => {
       assert.strictEqual(session.refreshTokenId, refresh.jti);
     });
 
+    test('should scope both tokens with the session audience', () => {
+      const session = jwtService.signTokenPair(
+        userId,
+        GrantRoles.EDITOR,
+        'app-audience',
+      );
+      const access = jwtService.verifyToken(session.accessToken, {
+        audience: 'app-audience',
+      });
+      const refresh = jwtService.verifyToken(session.refreshToken, {
+        audience: 'app-audience',
+      });
+
+      assert.strictEqual(access.aud, 'app-audience');
+      assert.strictEqual(refresh.aud, 'app-audience');
+      assert.strictEqual(access.role, GrantRoles.EDITOR);
+      assert.strictEqual(refresh.role, GrantRoles.EDITOR);
+      assert.strictEqual(session.refreshTokenId, refresh.jti);
+    });
+
+    test('should omit the audience when none is provided', () => {
+      const session = jwtService.signTokenPair(userId, Roles.USER);
+      const access = jwtService.verifyToken(session.accessToken);
+      const refresh = jwtService.verifyToken(session.refreshToken);
+
+      assert.strictEqual(access.aud, undefined);
+      assert.strictEqual(refresh.aud, undefined);
+    });
+
     test('should sign refresh tokens with the refresh token expiry', () => {
       const accessExpiresIn = 1000;
       const refreshExpiresIn = 5000;

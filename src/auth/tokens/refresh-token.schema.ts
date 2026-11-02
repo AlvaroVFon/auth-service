@@ -7,6 +7,7 @@ const RefreshTokenSchema = new Schema<RefreshToken>(
   {
     userId: { type: Schema.Types.ObjectId, required: true },
     jti: { type: String, required: true, unique: true },
+    audience: { type: String, default: null },
     expiresAt: { type: Date, required: true },
     revokedAt: { type: Date, default: null },
     replacedByJti: { type: String, default: null },

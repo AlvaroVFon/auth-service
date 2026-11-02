@@ -4,6 +4,7 @@ import {
   PASSWORD_REGEX,
 } from '../../common/constants/regex';
 import { normalizeEmail } from '../../common/email';
+import { Roles } from '../../common/enums/roles.enum';
 import { ForbiddenError } from '../../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
@@ -12,11 +13,13 @@ import {
 import { AlreadyGeneratedCodeError } from '../../common/exceptions/codes.exceptions';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
+import type { TokenRole } from '../../libs/jwt';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
 import { User, UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
 import { Code, CodeType } from '../codes/code.interface';
 import { CodesService } from '../codes/codes.service';
+import { ApplicationTokenService } from '../tokens/application-token.service';
 import { RequestContext } from '../tokens/request-context.type';
 import { SessionService } from '../tokens/session.service';
 import { AuthMailer } from './auth-mailer';
@@ -29,6 +32,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly blacklistService: TokenBlacklistPort,
     private readonly holdersService: HoldersPort,
+    private readonly applicationTokens: ApplicationTokenService,
     private readonly logger: LoggerInterface,
   ) {}
 
@@ -104,11 +108,38 @@ export class AuthService {
 
     this.assertVerified(user);
 
-    const session = await this.sessionService.create(
-      user._id.toString(),
-      user.role,
-      ctx,
-    );
+    const userId = user._id.toString();
+    const application =
+      typeof credentials.application === 'string'
+        ? credentials.application.trim()
+        : '';
+
+    if (application) {
+      const access = await this.applicationTokens.resolveAccess(
+        userId,
+        application,
+        user,
+      );
+      const session = await this.sessionService.create(
+        userId,
+        access.role,
+        ctx,
+        access.application.audience,
+      );
+
+      return {
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      };
+    }
+
+    // Only the global owner can log in without an application; every other
+    // account must prove a grant on the application it wants a token for.
+    if (user.role !== Roles.OWNER) {
+      throw new ForbiddenError('An application is required');
+    }
+
+    const session = await this.sessionService.create(userId, user.role, ctx);
 
     return {
       accessToken: session.accessToken,
@@ -268,6 +299,7 @@ export class AuthService {
     userId: string,
     refreshToken: string,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     if (OBJECTID_REGEX.test(userId) === false) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
@@ -283,11 +315,43 @@ export class AuthService {
 
     this.assertVerified(user);
 
+    let role: TokenRole = user.role;
+
+    if (audience === undefined) {
+      // Global tokens are owner-only. Refresh tokens issued before the
+      // application scoping must not keep minting global tokens for users.
+      if (user.role !== Roles.OWNER) {
+        throw new ForbiddenError('An application is required');
+      }
+    } else {
+      try {
+        const access = await this.applicationTokens.resolveAccessByAudience(
+          userId,
+          audience,
+          user,
+        );
+        role = access.role;
+      } catch (error) {
+        // A revoked grant or inactive application must end the session
+        // permanently, not just fail until access is restored.
+        try {
+          await this.sessionService.revokeByRefreshToken(userId, refreshToken);
+        } catch (revokeError) {
+          this.logger.warn(
+            `Failed to revoke refresh token after access denial for user ${userId}`,
+            revokeError,
+          );
+        }
+        throw error;
+      }
+    }
+
     const session = await this.sessionService.rotate(
       userId,
-      user.role,
+      role,
       refreshToken,
       ctx,
+      audience,
     );
 
     return {
@@ -300,6 +364,7 @@ export class AuthService {
     userId: string,
     accessJti?: string,
     accessExpiresAt?: Date,
+    audience?: string,
   ): Promise<void> {
     if (!userId) {
       throw new InvalidArgumentError('userId is required');
@@ -312,6 +377,8 @@ export class AuthService {
       await this.blacklistService.blacklist(accessJti, accessExpiresAt);
     }
 
-    await this.sessionService.revokeAll(userId);
+    // An application-scoped token may only revoke sessions of its own
+    // audience; otherwise any app could terminate sessions of every other app.
+    await this.sessionService.revokeAll(userId, audience);
   }
 }

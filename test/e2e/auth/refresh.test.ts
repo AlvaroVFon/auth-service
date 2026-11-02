@@ -1,14 +1,20 @@
 import { Application } from 'express';
 import jwt from 'jsonwebtoken';
+import { Types } from 'mongoose';
 import request from 'supertest';
 
+import type { Application as ApplicationInterface } from '../../../src/applications/applications.interface';
 import { RefreshToken } from '../../../src/auth/tokens/refresh-token.interface';
 import { JWT_REGEX } from '../../../src/common/constants/regex';
+import { Grant, GrantRoles } from '../../../src/grants/grants.interface';
 import fixture from '../../fixtures';
 import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
+import { createApplicationAccess } from '../../helpers/application-access';
+import { ApplicationFactory } from '../../helpers/factories/application.factory';
+import { GrantFactory } from '../../helpers/factories/grant.factory';
 import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Refresh Token', () => {
@@ -39,11 +45,18 @@ describe('E2E Auth Refresh Token', () => {
       .send({ code: codeDoc.code })
       .expect(204);
 
+    const user = await fixture.findOne<{ _id: string }>('User', {
+      email: signupCredentials.email,
+    });
+    assert.ok(user);
+    const { application } = await createApplicationAccess(String(user!._id));
+
     const loginResponse = await request(app)
       .post('/auth/login')
       .send({
         email: signupCredentials.email,
         password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
       })
       .expect(200);
 
@@ -51,7 +64,38 @@ describe('E2E Auth Refresh Token', () => {
       accessToken: loginResponse.body.accessToken,
       refreshToken: loginResponse.body.refreshToken,
       email: signupCredentials.email,
+      application,
+      userId: String(user!._id),
     };
+  }
+
+  async function createVerifiedUser(prefix: string) {
+    const signupCredentials = {
+      email: generateRandomEmail(prefix),
+      password: DEFAULT_USER_PLAIN_PASSWORD,
+      passwordConfirmation: DEFAULT_USER_PLAIN_PASSWORD,
+    };
+
+    const signupResponse = await request(app)
+      .post('/auth/signup')
+      .send(signupCredentials)
+      .expect(201);
+
+    const holderId = signupResponse.body._id;
+    const codeDoc: any = await fixture.findOne('Code', { subjectId: holderId });
+
+    await request(app)
+      .post('/auth/verify')
+      .query({ holderId })
+      .send({ code: codeDoc.code })
+      .expect(204);
+
+    const user = await fixture.findOne<{ _id: string }>('User', {
+      email: signupCredentials.email,
+    });
+    assert.ok(user);
+
+    return { email: signupCredentials.email, userId: String(user!._id) };
   }
 
   test('should refresh tokens with valid access token and refresh token', async () => {
@@ -69,6 +113,109 @@ describe('E2E Auth Refresh Token', () => {
     assert.ok(JWT_REGEX.test(response.body.refreshToken));
     assert.notStrictEqual(response.body.accessToken, accessToken);
     assert.notStrictEqual(response.body.refreshToken, refreshToken);
+  });
+
+  test('should keep the application scope on refresh', async () => {
+    const { accessToken, refreshToken, application } = await signupAndLogin();
+
+    const response = await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ refreshToken })
+      .expect(200);
+
+    const access = jwt.decode(response.body.accessToken) as {
+      aud?: string;
+      role?: string;
+    };
+    const refresh = jwt.decode(response.body.refreshToken) as {
+      aud?: string;
+    };
+
+    assert.strictEqual(access.aud, application.audience);
+    assert.strictEqual(access.role, 'viewer');
+    assert.strictEqual(refresh.aud, application.audience);
+  });
+
+  test('should resolve the refresh role from the audience when a slug collides', async () => {
+    const { email, userId } = await createVerifiedUser('refresh-collision');
+
+    const applicationX = await fixture.create<ApplicationInterface>(
+      'Application',
+      ApplicationFactory.generate({
+        slug: 'collision-x',
+        audience: 'collision-shared',
+      }),
+    );
+    const applicationY = await fixture.create<ApplicationInterface>(
+      'Application',
+      ApplicationFactory.generate({
+        slug: 'collision-shared',
+        audience: 'collision-y',
+      }),
+    );
+
+    await fixture.create<Grant>(
+      'Grant',
+      GrantFactory.generate({
+        userId: new Types.ObjectId(userId),
+        applicationId: applicationX._id,
+        role: GrantRoles.VIEWER,
+      }),
+    );
+    await fixture.create<Grant>(
+      'Grant',
+      GrantFactory.generate({
+        userId: new Types.ObjectId(userId),
+        applicationId: applicationY._id,
+        role: GrantRoles.ADMIN,
+      }),
+    );
+
+    const loginResponse = await request(app)
+      .post('/auth/login')
+      .send({
+        email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: applicationX.slug,
+      })
+      .expect(200);
+
+    const response = await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${loginResponse.body.accessToken}`)
+      .send({ refreshToken: loginResponse.body.refreshToken })
+      .expect(200);
+
+    const access = jwt.decode(response.body.accessToken) as {
+      aud?: string;
+      role?: string;
+    };
+
+    assert.strictEqual(access.aud, applicationX.audience);
+    assert.strictEqual(access.role, GrantRoles.VIEWER);
+  });
+
+  test('should reject a refresh token from another application', async () => {
+    const { accessToken, email, userId } = await signupAndLogin();
+    const other = await createApplicationAccess(userId);
+
+    const otherLogin = await request(app)
+      .post('/auth/login')
+      .send({
+        email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: other.application.slug,
+      })
+      .expect(200);
+
+    const response = await request(app)
+      .post('/auth/refresh')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ refreshToken: otherLogin.body.refreshToken })
+      .expect(401);
+
+    assert.strictEqual(response.body.message, 'Invalid refresh token');
   });
 
   test('should fail refresh without authorization header', async () => {

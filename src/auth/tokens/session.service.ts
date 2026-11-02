@@ -15,11 +15,15 @@ export class SessionService {
     userId: string,
     role: TokenRole,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<TokenPair> {
-    const session = this.jwtService.signTokenPair(userId, role);
+    const session = this.jwtService.signTokenPair(userId, role, audience);
 
-    await this.refreshTokenService.revokeAllByUserId(userId);
-    await this.persistRefreshToken(userId, session, ctx);
+    // Only the audience being logged into is rotated; other applications keep
+    // their own refresh tokens. A global (owner) login passes undefined and
+    // still revokes every session.
+    await this.refreshTokenService.revokeAllByUserId(userId, audience);
+    await this.persistRefreshToken(userId, session, ctx, audience);
 
     return session;
   }
@@ -29,13 +33,15 @@ export class SessionService {
     role: TokenRole,
     refreshToken: string,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<TokenPair> {
     const claims = this.jwtService.verifyToken(refreshToken);
 
     if (
       claims.type !== TokenTypes.REFRESH ||
       claims.userId !== userId ||
-      !claims.jti
+      !claims.jti ||
+      claims.aud !== audience
     ) {
       throw new UnauthorizedError('Invalid refresh token');
     }
@@ -50,7 +56,7 @@ export class SessionService {
       throw new UnauthorizedError('Refresh token has been revoked');
     }
 
-    const session = this.jwtService.signTokenPair(userId, role);
+    const session = this.jwtService.signTokenPair(userId, role, audience);
 
     try {
       await this.refreshTokenService.revokeByJti(
@@ -63,25 +69,50 @@ export class SessionService {
       }
       throw error;
     }
-    await this.persistRefreshToken(userId, session, ctx);
+    await this.persistRefreshToken(userId, session, ctx, audience);
 
     return session;
   }
 
-  async revokeAll(userId: string): Promise<void> {
-    await this.refreshTokenService.revokeAllByUserId(userId);
+  async revokeAll(userId: string, audience?: string): Promise<void> {
+    await this.refreshTokenService.revokeAllByUserId(userId, audience);
+  }
+
+  async revokeByRefreshToken(
+    userId: string,
+    refreshToken: string,
+  ): Promise<void> {
+    const claims = this.jwtService.verifyToken(refreshToken);
+
+    if (
+      claims.type !== TokenTypes.REFRESH ||
+      claims.userId !== userId ||
+      !claims.jti
+    ) {
+      return;
+    }
+
+    try {
+      await this.refreshTokenService.revokeByJti(claims.jti);
+    } catch (error) {
+      if (!(error instanceof EntityNotFoundError)) {
+        throw error;
+      }
+    }
   }
 
   private async persistRefreshToken(
     userId: string,
     session: TokenPair,
     ctx?: RequestContext,
+    audience?: string,
   ): Promise<void> {
     await this.refreshTokenService.create(
       userId,
       session.refreshTokenId,
       session.refreshExpiresAt,
       ctx,
+      audience,
     );
   }
 }

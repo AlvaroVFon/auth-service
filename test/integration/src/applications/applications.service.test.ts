@@ -185,6 +185,111 @@ describe('ApplicationsService', () => {
     });
   });
 
+  describe('findByAudience', () => {
+    test('should return the application for an existing audience', async () => {
+      const application = ApplicationFactory.generate();
+      const created = await applicationsService.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+      });
+
+      const found = await applicationsService.findByAudience(
+        application.audience,
+      );
+
+      assert.strictEqual(found?._id.toString(), created._id.toString());
+    });
+
+    test('should keep the audience case-sensitive', async () => {
+      const application = ApplicationFactory.generate();
+      await applicationsService.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+      });
+
+      const found = await applicationsService.findByAudience(
+        application.audience.toUpperCase(),
+      );
+
+      assert.strictEqual(found, null);
+    });
+
+    test('should return null for an unknown audience', async () => {
+      const found =
+        await applicationsService.findByAudience('unknown-audience');
+
+      assert.strictEqual(found, null);
+    });
+
+    test('should reject a blank audience', async () => {
+      await assert.rejects(
+        applicationsService.findByAudience('  '),
+        new InvalidArgumentError('Audience is required'),
+      );
+    });
+  });
+
+  describe('findBySlugOrAudience', () => {
+    test('should resolve a slug case-insensitively', async () => {
+      const application = ApplicationFactory.generate();
+      const created = await applicationsService.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+      });
+
+      const found = await applicationsService.findBySlugOrAudience(
+        application.slug.toUpperCase(),
+      );
+
+      assert.strictEqual(found?._id.toString(), created._id.toString());
+    });
+
+    test('should resolve an audience', async () => {
+      const application = ApplicationFactory.generate();
+      const created = await applicationsService.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+      });
+
+      const found = await applicationsService.findBySlugOrAudience(
+        application.audience,
+      );
+
+      assert.strictEqual(found?._id.toString(), created._id.toString());
+    });
+
+    test('should resolve an inactive application so the caller decides', async () => {
+      const application = ApplicationFactory.generate();
+      const created = await fixture.create<Application>('Application', {
+        ...application,
+        active: false,
+      });
+
+      const found = await applicationsService.findBySlugOrAudience(
+        application.slug,
+      );
+
+      assert.strictEqual(found?._id.toString(), created._id.toString());
+    });
+
+    test('should return null for an unknown identifier', async () => {
+      const found = await applicationsService.findBySlugOrAudience('unknown');
+
+      assert.strictEqual(found, null);
+    });
+
+    test('should reject a blank identifier', async () => {
+      await assert.rejects(
+        applicationsService.findBySlugOrAudience('  '),
+        new InvalidArgumentError('Application identifier is required'),
+      );
+    });
+  });
+
   describe('findAll', () => {
     test('should return every application', async () => {
       const first = ApplicationFactory.generate();

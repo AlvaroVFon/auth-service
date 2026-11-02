@@ -1,3 +1,4 @@
+import type { Application } from '../applications';
 import { Grant, GrantRoles } from './grants.interface';
 
 export interface AssignRoleInput {
@@ -11,6 +12,7 @@ export interface GrantsPort {
   findByUserAndApplication(
     userId: string,
     applicationId: string,
+    application?: Application,
   ): Promise<Grant | null>;
   listByUser(userId: string): Promise<Grant[]>;
   listByApplication(applicationId: string): Promise<Grant[]>;

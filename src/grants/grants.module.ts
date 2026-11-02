@@ -17,7 +17,7 @@ export class GrantsModule {
 
   constructor(
     grantModel: Model<Grant>,
-    applicationsService: ApplicationsPort,
+    private readonly applicationsService: ApplicationsPort,
     usersService: UsersPort,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly logger: LoggerInterface,
@@ -32,7 +32,10 @@ export class GrantsModule {
 
   initialize(app: Application): void {
     const applicationAuthorizationMiddleware =
-      new ApplicationAuthorizationMiddleware(this.service);
+      new ApplicationAuthorizationMiddleware(
+        this.service,
+        this.applicationsService,
+      );
 
     new GrantsRouter(
       this.authenticationMiddleware,

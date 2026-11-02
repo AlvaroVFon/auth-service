@@ -1,6 +1,6 @@
 import { Model, Types } from 'mongoose';
 
-import type { ApplicationsPort } from '../applications';
+import type { Application, ApplicationsPort } from '../applications';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -48,6 +48,7 @@ export class GrantsService implements GrantsPort {
   async findByUserAndApplication(
     userId: string,
     applicationId: string,
+    loadedApplication?: Application,
   ): Promise<Grant | null> {
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
@@ -62,9 +63,10 @@ export class GrantsService implements GrantsPort {
     }
 
     const application =
-      await this.applicationsService.findAssignableById(applicationId);
+      loadedApplication ??
+      (await this.applicationsService.findAssignableById(applicationId));
 
-    return application ? grant : null;
+    return application?.active ? grant : null;
   }
 
   async listByUser(userId: string): Promise<Grant[]> {

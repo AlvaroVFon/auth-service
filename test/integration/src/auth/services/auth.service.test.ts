@@ -1,10 +1,14 @@
 import { Types } from 'mongoose';
 
+import { Application } from '../../../../../src/applications/applications.interface';
+import { ApplicationModel } from '../../../../../src/applications/applications.schema';
+import { ApplicationsService } from '../../../../../src/applications/applications.service';
 import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
 import { CodesService } from '../../../../../src/auth/codes/codes.service';
 import { AuthMailer } from '../../../../../src/auth/services/auth-mailer';
 import { AuthService } from '../../../../../src/auth/services/auth.service';
+import { ApplicationTokenService } from '../../../../../src/auth/tokens/application-token.service';
 import { BlacklistService } from '../../../../../src/auth/tokens/blacklist.service';
 import { BlacklistedTokenModel } from '../../../../../src/auth/tokens/blacklisted-token.schema';
 import { RefreshToken } from '../../../../../src/auth/tokens/refresh-token.interface';
@@ -13,6 +17,9 @@ import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-toke
 import { SessionService } from '../../../../../src/auth/tokens/session.service';
 import { JWT_REGEX } from '../../../../../src/common/constants/regex';
 import { Roles } from '../../../../../src/common/enums/roles.enum';
+import { Grant, GrantRoles } from '../../../../../src/grants/grants.interface';
+import { GrantModel } from '../../../../../src/grants/grants.schema';
+import { GrantsService } from '../../../../../src/grants/grants.service';
 import { Holder } from '../../../../../src/holders/holders.interface';
 import { HoldersModel } from '../../../../../src/holders/holders.schema';
 import { HoldersService } from '../../../../../src/holders/holders.service';
@@ -30,7 +37,10 @@ import {
   DEFAULT_USER_ID,
   generateRandomEmail,
 } from '../../../../fixtures/defaults';
+import { DEFAULT_APPLICATION } from '../../../../fixtures/defaults/applications.default';
 import { DEFAULT_HOLDER } from '../../../../fixtures/defaults/holders.default';
+import { ApplicationFactory } from '../../../../helpers/factories/application.factory';
+import { GrantFactory } from '../../../../helpers/factories/grant.factory';
 import { createRsaKeyPair } from '../../../../helpers/jwt-keyring.helper';
 
 describe('Auth Service', () => {
@@ -42,6 +52,9 @@ describe('Auth Service', () => {
   let sessionService: SessionService;
   let blacklistService: BlacklistService;
   let jwtService: JwtService;
+  let applicationsService: ApplicationsService;
+  let grantsService: GrantsService;
+  let applicationTokens: ApplicationTokenService;
 
   const mockCryptoService = {
     compareString: mock.fn(() => true),
@@ -68,7 +81,10 @@ describe('Auth Service', () => {
   );
 
   beforeEach(async () => {
+    mockCryptoService.compareString = mock.fn(async () => true);
     await fixture.create('User');
+    await fixture.create('Application');
+    await fixture.create('Grant');
 
     userService = new UsersService(
       User,
@@ -92,6 +108,18 @@ describe('Auth Service', () => {
     refreshTokenService = new RefreshTokenService(RefreshTokenModel);
     sessionService = new SessionService(jwtService, refreshTokenService);
     blacklistService = new BlacklistService(BlacklistedTokenModel);
+    applicationsService = new ApplicationsService(ApplicationModel);
+    grantsService = new GrantsService(
+      GrantModel,
+      applicationsService,
+      userService,
+    );
+    applicationTokens = new ApplicationTokenService(
+      jwtService,
+      applicationsService,
+      grantsService,
+      userService,
+    );
 
     authService = new AuthService(
       userService,
@@ -100,9 +128,28 @@ describe('Auth Service', () => {
       sessionService,
       blacklistService,
       holdersService,
+      applicationTokens,
       mockLogger,
     );
   });
+
+  const createApplication = (
+    overrides: Partial<Application> = {},
+  ): Promise<Application> =>
+    ApplicationModel.create(ApplicationFactory.generate(overrides));
+
+  const grantRole = (
+    userId: string,
+    applicationId: string,
+    role: GrantRoles,
+  ): Promise<Grant> =>
+    GrantModel.create(
+      GrantFactory.generate({
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+        role,
+      }),
+    );
 
   test('should be defined', () => {
     assert.ok(authService);
@@ -113,6 +160,7 @@ describe('Auth Service', () => {
       const result = await authService.login({
         email: DEFAULT_USER.email,
         password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
       });
 
       assert.ok(result);
@@ -122,6 +170,166 @@ describe('Auth Service', () => {
       assert.ok(JWT_REGEX.test(result.refreshToken));
     });
 
+    test('should scope tokens to the application and grant role (AC-1)', async () => {
+      await fixture.updateOne<Grant>(
+        'Grant',
+        { applicationId: DEFAULT_APPLICATION._id },
+        { role: GrantRoles.EDITOR },
+      );
+
+      const result = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+
+      const access = jwtService.verifyToken(result.accessToken, {
+        audience: DEFAULT_APPLICATION.audience,
+      });
+      const refresh = jwtService.verifyToken(result.refreshToken, {
+        audience: DEFAULT_APPLICATION.audience,
+      });
+
+      assert.strictEqual(access.aud, DEFAULT_APPLICATION.audience);
+      assert.strictEqual(access.role, GrantRoles.EDITOR);
+      assert.strictEqual(refresh.aud, DEFAULT_APPLICATION.audience);
+      assert.strictEqual(refresh.role, GrantRoles.EDITOR);
+    });
+
+    test('should accept the application audience as identifier', async () => {
+      const result = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.audience,
+      });
+
+      const access = jwtService.verifyToken(result.accessToken, {
+        audience: DEFAULT_APPLICATION.audience,
+      });
+
+      assert.strictEqual(access.aud, DEFAULT_APPLICATION.audience);
+    });
+
+    test('should reject a user without a grant on the app (AC-2)', async () => {
+      const otherApplication = await createApplication({
+        slug: 'other-app',
+        audience: 'other-audience',
+      });
+      await fixture.deleteOne<Grant>('Grant', {
+        userId: DEFAULT_USER_ID,
+        applicationId: otherApplication._id,
+      });
+
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'password123',
+          application: otherApplication.slug,
+        }),
+        {
+          name: 'ForbiddenError',
+          message: 'User has no access to this application',
+          code: 'FORBIDDEN',
+        },
+      );
+    });
+
+    test('should issue the role of each application (AC-3)', async () => {
+      const appA = await createApplication({
+        slug: 'app-a',
+        audience: 'audience-a',
+      });
+      const appB = await createApplication({
+        slug: 'app-b',
+        audience: 'audience-b',
+      });
+      await fixture.deleteOne<Grant>('Grant', {
+        userId: DEFAULT_USER_ID,
+      });
+      await grantRole(
+        DEFAULT_USER_ID.toString(),
+        appA._id.toString(),
+        GrantRoles.VIEWER,
+      );
+      await grantRole(
+        DEFAULT_USER_ID.toString(),
+        appB._id.toString(),
+        GrantRoles.ADMIN,
+      );
+
+      const tokensA = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: appA.slug,
+      });
+      const tokensB = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: appB.slug,
+      });
+
+      assert.strictEqual(
+        jwtService.verifyToken(tokensA.accessToken, {
+          audience: appA.audience,
+        }).role,
+        GrantRoles.VIEWER,
+      );
+      assert.strictEqual(
+        jwtService.verifyToken(tokensB.accessToken, {
+          audience: appB.audience,
+        }).role,
+        GrantRoles.ADMIN,
+      );
+    });
+
+    test('should keep a generic 401 for invalid credentials with an application (AC-4)', async () => {
+      mockCryptoService.compareString = mock.fn(async () => false);
+
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'wrongpassword',
+          application: DEFAULT_APPLICATION.slug,
+        }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+        },
+      );
+    });
+
+    test('should allow the global owner to log in without an application', async () => {
+      const owner = await fixture.create<UserInterface>('User', {
+        email: generateRandomEmail('owner-login'),
+        role: Roles.OWNER,
+        verified: true,
+      });
+
+      const result = await authService.login({
+        email: owner.email,
+        password: 'password123',
+      });
+
+      const access = jwtService.verifyToken(result.accessToken);
+
+      assert.strictEqual(access.aud, undefined);
+      assert.strictEqual(access.role, Roles.OWNER);
+    });
+
+    test('should reject a regular user without an application', async () => {
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'password123',
+        }),
+        {
+          name: 'ForbiddenError',
+          message: 'An application is required',
+          code: 'FORBIDDEN',
+        },
+      );
+    });
+
     test('should authenticate regardless of email casing and spaces', async () => {
       const email = generateRandomEmail('login-normalize');
       await fixture.create<UserInterface>('User', { email });
@@ -129,6 +337,7 @@ describe('Auth Service', () => {
       const result = await authService.login({
         email: `  ${email.toUpperCase()} `,
         password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
       });
 
       assert.ok(result.accessToken);
@@ -235,6 +444,7 @@ describe('Auth Service', () => {
         sessionService,
         blacklistService,
         holdersService,
+        applicationTokens,
         mockLogger,
       );
     });
@@ -281,6 +491,7 @@ describe('Auth Service', () => {
       const result = await authService.login({
         email,
         password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
       });
 
       assert.ok(result);
@@ -364,6 +575,7 @@ describe('Auth Service', () => {
       const result = await authService.login({
         email,
         password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
       });
 
       assert.ok(result);
@@ -934,6 +1146,11 @@ describe('Auth Service', () => {
 
     test('should revoke refresh tokens issued before a password reset', async () => {
       const user = await fixture.create<UserInterface>('User');
+      await fixture.updateOne<UserInterface>(
+        'User',
+        { _id: user._id },
+        { role: Roles.OWNER },
+      );
       const refreshToken = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,
@@ -1061,6 +1278,31 @@ describe('Auth Service', () => {
   });
 
   describe('refreshToken()', () => {
+    const makeOwner = (
+      userId: Types.ObjectId | string = DEFAULT_USER_ID,
+    ): Promise<void> =>
+      fixture.updateOne<UserInterface>(
+        'User',
+        { _id: userId },
+        { role: Roles.OWNER },
+      );
+
+    test('should reject a global refresh token from a non-owner', async () => {
+      const refreshToken = jwtService.signTokenPair(
+        DEFAULT_USER_ID.toString(),
+        Roles.USER,
+      ).refreshToken;
+
+      await assert.rejects(
+        authService.refreshToken(DEFAULT_USER_ID.toString(), refreshToken),
+        {
+          name: 'ForbiddenError',
+          message: 'An application is required',
+          code: 'FORBIDDEN',
+        },
+      );
+    });
+
     test('should throw an error if invalid userId is provided', async () => {
       await assert.rejects(
         async () =>
@@ -1086,6 +1328,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if JWT is invalid', async () => {
+      await makeOwner();
       await assert.rejects(
         async () =>
           await authService.refreshToken(
@@ -1099,6 +1342,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if no stored token is found for the jti', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1119,6 +1363,7 @@ describe('Auth Service', () => {
     });
 
     test('should throw if stored token has been revoked', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1185,6 +1430,7 @@ describe('Auth Service', () => {
     });
 
     test('should succeed with valid userId and refreshToken', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1228,7 +1474,179 @@ describe('Auth Service', () => {
       assert.notStrictEqual(newToken!.jti, decoded.jti);
     });
 
+    test('should keep the application scope when refreshing', async () => {
+      const login = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+
+      const refreshed = await authService.refreshToken(
+        DEFAULT_USER_ID.toString(),
+        login.refreshToken,
+        undefined,
+        DEFAULT_APPLICATION.audience,
+      );
+
+      const access = jwtService.verifyToken(refreshed.accessToken, {
+        audience: DEFAULT_APPLICATION.audience,
+      });
+      const refresh = jwtService.verifyToken(refreshed.refreshToken, {
+        audience: DEFAULT_APPLICATION.audience,
+      });
+
+      assert.strictEqual(access.aud, DEFAULT_APPLICATION.audience);
+      assert.strictEqual(access.role, GrantRoles.VIEWER);
+      assert.strictEqual(refresh.aud, DEFAULT_APPLICATION.audience);
+    });
+
+    test('should re-derive the grant role on refresh', async () => {
+      const login = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+      await fixture.updateOne<Grant>(
+        'Grant',
+        { userId: DEFAULT_USER_ID, applicationId: DEFAULT_APPLICATION._id },
+        { role: GrantRoles.ADMIN },
+      );
+
+      const refreshed = await authService.refreshToken(
+        DEFAULT_USER_ID.toString(),
+        login.refreshToken,
+        undefined,
+        DEFAULT_APPLICATION.audience,
+      );
+
+      assert.strictEqual(
+        jwtService.verifyToken(refreshed.accessToken, {
+          audience: DEFAULT_APPLICATION.audience,
+        }).role,
+        GrantRoles.ADMIN,
+      );
+    });
+
+    test('should reject a refresh token from another application', async () => {
+      const appB = await createApplication({
+        slug: 'app-b',
+        audience: 'audience-b',
+      });
+      await grantRole(
+        DEFAULT_USER_ID.toString(),
+        appB._id.toString(),
+        GrantRoles.VIEWER,
+      );
+      const login = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+
+      await assert.rejects(
+        authService.refreshToken(
+          DEFAULT_USER_ID.toString(),
+          login.refreshToken,
+          undefined,
+          appB.audience,
+        ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Invalid refresh token',
+          code: 'UNAUTHORIZED',
+        },
+      );
+    });
+
+    test('should reject a refresh when the grant was revoked', async () => {
+      const login = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+      await fixture.deleteOne<Grant>('Grant', { userId: DEFAULT_USER_ID });
+
+      await assert.rejects(
+        authService.refreshToken(
+          DEFAULT_USER_ID.toString(),
+          login.refreshToken,
+          undefined,
+          DEFAULT_APPLICATION.audience,
+        ),
+        {
+          name: 'ForbiddenError',
+          message: 'User has no access to this application',
+        },
+      );
+
+      await grantsService.assignRole({
+        userId: DEFAULT_USER_ID.toString(),
+        applicationId: DEFAULT_APPLICATION._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+
+      // Restoring the grant must not resurrect the revoked session.
+      await assert.rejects(
+        authService.refreshToken(
+          DEFAULT_USER_ID.toString(),
+          login.refreshToken,
+          undefined,
+          DEFAULT_APPLICATION.audience,
+        ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
+        },
+      );
+    });
+
+    test('should reject a refresh when the application is inactive', async () => {
+      const login = await authService.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: false },
+      );
+
+      await assert.rejects(
+        authService.refreshToken(
+          DEFAULT_USER_ID.toString(),
+          login.refreshToken,
+          undefined,
+          DEFAULT_APPLICATION.audience,
+        ),
+        {
+          name: 'ForbiddenError',
+          message: 'User has no access to this application',
+        },
+      );
+
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: true },
+      );
+
+      await assert.rejects(
+        authService.refreshToken(
+          DEFAULT_USER_ID.toString(),
+          login.refreshToken,
+          undefined,
+          DEFAULT_APPLICATION.audience,
+        ),
+        {
+          name: 'UnauthorizedError',
+          message: 'Refresh token has been revoked',
+        },
+      );
+    });
+
     test('should reject a reused (already revoked) refresh token', async () => {
+      await makeOwner();
       const refreshToken = jwtService.signTokenPair(
         DEFAULT_USER_ID.toString(),
         Roles.USER,
@@ -1262,6 +1680,7 @@ describe('Auth Service', () => {
 
     test('should allow only one concurrent refresh rotation', async () => {
       const user = await fixture.create<UserInterface>('User');
+      await makeOwner(user._id);
       const refreshToken = jwtService.signTokenPair(
         user._id.toString(),
         Roles.USER,

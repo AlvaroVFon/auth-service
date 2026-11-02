@@ -12,6 +12,7 @@ export const DEFAULT_REFRESH_TOKEN: RefreshToken = {
   _id: DEFAULT_REFRESH_TOKEN_ID,
   userId: DEFAULT_USER_ID,
   jti: DEFAULT_REFRESH_TOKEN_JTI,
+  audience: null,
   expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
   revokedAt: null,
   replacedByJti: null,

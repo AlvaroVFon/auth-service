@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 
 import { Catch } from '../../common/decorators/catch.decorator';
+import { InvalidArgumentError } from '../../common/exceptions/base.exception';
 import { AuthService } from '../services/auth.service';
 import { RequestContext } from '../tokens/request-context.type';
 
@@ -16,9 +17,21 @@ export class AuthController {
 
   @Catch()
   async login(req: Request, res: Response): Promise<void> {
-    const credentials = req.body;
+    const { email, password, application } = req.body as Record<
+      string,
+      unknown
+    >;
+
+    if (application !== undefined && typeof application !== 'string') {
+      throw new InvalidArgumentError('application must be a string');
+    }
+
     const tokens = await this.authService.login(
-      credentials,
+      {
+        email: email as string,
+        password: password as string,
+        ...(typeof application === 'string' ? { application } : {}),
+      },
       this.buildRequestContext(req),
     );
 
@@ -41,6 +54,7 @@ export class AuthController {
       userId,
       refreshToken,
       this.buildRequestContext(req),
+      req.user?.audience,
     );
 
     res.status(200).json(tokens);
@@ -82,7 +96,7 @@ export class AuthController {
     const userId = req.user?.id as string;
     const jti = req.user?.jti;
     const expiresAt = req.user?.expiresAt;
-    await this.authService.logout(userId, jti, expiresAt);
+    await this.authService.logout(userId, jti, expiresAt, req.user?.audience);
 
     res.status(204).send();
   }

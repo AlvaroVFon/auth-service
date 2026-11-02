@@ -10,6 +10,7 @@ import {
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
+import { createApplicationAccess } from '../../helpers/application-access';
 import { getTestAppInstance } from '../../utils/app';
 
 describe('E2E Auth Login', () => {
@@ -21,10 +22,12 @@ describe('E2E Auth Login', () => {
 
   test('should login an existing user successfully', async () => {
     const user = await fixture.create<User>('User');
+    const { application } = await createApplicationAccess(user._id.toString());
 
     const loginCredentials = {
       email: user.email,
       password: DEFAULT_USER_PLAIN_PASSWORD,
+      application: application.slug,
     };
 
     const response = await request(app)
@@ -122,9 +125,16 @@ describe('E2E Auth Login', () => {
       .send({ code: codeDoc.code })
       .expect(204);
 
+    const user = await fixture.findOne<User>('User', {
+      email: signupCredentials.email,
+    });
+    assert.ok(user);
+    const { application } = await createApplicationAccess(user!._id.toString());
+
     const loginCredentials = {
       email: signupCredentials.email,
       password: 'StrongPassword123!',
+      application: application.slug,
     };
 
     const firstResponse = await request(app)
@@ -173,10 +183,12 @@ describe('E2E Auth Login', () => {
       loginAttempts: 5,
       lockoutUntil: new Date(Date.now() - 1000),
     });
+    const { application } = await createApplicationAccess(user._id.toString());
 
     const loginCredentials = {
       email: user.email,
       password: DEFAULT_USER_PLAIN_PASSWORD,
+      application: application.slug,
     };
 
     const response = await request(app)
@@ -191,10 +203,12 @@ describe('E2E Auth Login', () => {
 
   test('should store IP and User-Agent from request headers in the refresh token', async () => {
     const user = await fixture.create<User>('User');
+    const { application } = await createApplicationAccess(user._id.toString());
 
     const loginCredentials = {
       email: user.email,
       password: DEFAULT_USER_PLAIN_PASSWORD,
+      application: application.slug,
     };
 
     const response = await request(app)

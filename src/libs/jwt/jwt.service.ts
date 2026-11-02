@@ -46,14 +46,15 @@ export class JwtService {
     this.logger = options.logger;
   }
 
-  signTokenPair(userId: string, role: TokenRole): TokenPair {
+  signTokenPair(userId: string, role: TokenRole, audience?: string): TokenPair {
+    const scope = audience ? { aud: audience } : {};
     const refreshTokenId = randomUUID();
     const accessToken = this.signUserToken(
-      { userId, role, type: TokenTypes.ACCESS },
+      { userId, role, type: TokenTypes.ACCESS, ...scope },
       this.expiresIn,
     );
     const refreshToken = this.signUserToken(
-      { userId, role, type: TokenTypes.REFRESH, jti: refreshTokenId },
+      { userId, role, type: TokenTypes.REFRESH, jti: refreshTokenId, ...scope },
       this.refreshTokenExpiresIn,
     );
 
