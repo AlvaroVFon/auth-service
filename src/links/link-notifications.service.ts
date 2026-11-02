@@ -3,7 +3,7 @@ import { LoggerInterface } from '../libs/logger';
 import type { TelegramPort } from '../libs/telegram';
 import type { UsersPort } from '../users';
 
-export type NotificationRecipient = 'invitee' | 'owner' | null;
+export type NotificationRecipient = 'invitee' | 'user' | 'owner' | null;
 
 export interface LinkNotificationResult {
   delivered: boolean;
@@ -49,6 +49,7 @@ export class LinkNotificationsService {
       input,
       (link) =>
         `You have been invited. Open this single-use link to set your password: ${link}`,
+      'invitee',
     );
   }
 
@@ -60,6 +61,7 @@ export class LinkNotificationsService {
       input,
       (link) =>
         `A password reset was requested. Open this single-use link to set a new password: ${link}`,
+      'user',
     );
   }
 
@@ -67,21 +69,22 @@ export class LinkNotificationsService {
     kind: string,
     input: NotifyLinkInput,
     buildMessage: (link: string) => string,
+    chatRecipient: 'invitee' | 'user',
   ): Promise<LinkNotificationResult> {
-    const target = await this.resolveRecipient(input.chatId);
+    if (!this.telegram) {
+      this.logger.info(
+        `Telegram is disabled; skipped ${kind} link ${input.linkId}`,
+      );
+      return { delivered: false, recipient: null };
+    }
+
+    const target = await this.resolveRecipient(input.chatId, chatRecipient);
 
     if (!target) {
       this.logger.info(
         `No Telegram recipient for ${kind} link ${input.linkId}; skipped`,
       );
       return { delivered: false, recipient: null };
-    }
-
-    if (!this.telegram) {
-      this.logger.info(
-        `Telegram is disabled; skipped ${kind} link ${input.linkId}`,
-      );
-      return { delivered: false, recipient: target.recipient };
     }
 
     try {
@@ -108,12 +111,15 @@ export class LinkNotificationsService {
     }
   }
 
-  private async resolveRecipient(chatId?: string): Promise<{
+  private async resolveRecipient(
+    chatId: string | undefined,
+    chatRecipient: 'invitee' | 'user',
+  ): Promise<{
     chatId: string;
     recipient: Exclude<NotificationRecipient, null>;
   } | null> {
     if (chatId) {
-      return { chatId, recipient: 'invitee' };
+      return { chatId, recipient: chatRecipient };
     }
     if (this.ownerChatId) {
       return { chatId: this.ownerChatId, recipient: 'owner' };

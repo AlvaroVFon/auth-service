@@ -90,7 +90,7 @@ describe('InvitationsService', () => {
     assert.strictEqual(await users.findByEmail('guest@example.com'), null);
   });
 
-  test('should notify the invitee chat and copy it to the new user', async () => {
+  test('should notify the invitee chat without persisting it on the user', async () => {
     const application = await createApplication();
     const created = await invitations.create({
       email: 'guest@example.com',
@@ -118,7 +118,8 @@ describe('InvitationsService', () => {
     });
 
     const user = await users.findByEmail('guest@example.com');
-    assert.strictEqual(user?.telegramChatId, '4242');
+    assert.ok(user);
+    assert.strictEqual(user?.telegramChatId, undefined);
   });
 
   test('should fall back to the owner chat and survive a bot failure', async () => {

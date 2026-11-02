@@ -4,7 +4,6 @@ import { User } from './users.interface';
 export interface CreateVerifiedUserInput {
   email: string;
   passwordHash: string;
-  telegramChatId?: string;
 }
 
 export interface UserGrantsCleanerPort {

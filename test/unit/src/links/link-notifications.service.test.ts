@@ -12,9 +12,9 @@ describe('LinkNotificationsService', () => {
   let findByRole: ReturnType<typeof mock.fn>;
   let logger: LoggerInterface;
 
-  const build = (ownerChatId?: string) =>
+  const build = (ownerChatId?: string, telegram = true) =>
     new LinkNotificationsService({
-      telegram: { sendMessage } as unknown as TelegramPort,
+      telegram: telegram ? ({ sendMessage } as unknown as TelegramPort) : null,
       usersService: { findByRole } as unknown as UsersPort,
       ...(ownerChatId === undefined ? {} : { ownerChatId }),
       logger,
@@ -72,6 +72,28 @@ describe('LinkNotificationsService', () => {
     assert.deepStrictEqual(result, { delivered: true, recipient: 'owner' });
     assert.strictEqual(sendMessage.mock.calls[0]?.arguments[0], '777');
     assert.deepStrictEqual(findByRole.mock.calls[0]?.arguments, [Roles.OWNER]);
+  });
+
+  test('should label a password-reset chat as the user', async () => {
+    const result = await build().notifyPasswordReset({
+      linkId: LINK_ID,
+      link: LINK,
+      chatId: '4242',
+    });
+
+    assert.deepStrictEqual(result, { delivered: true, recipient: 'user' });
+  });
+
+  test('should skip recipient resolution when Telegram is disabled', async () => {
+    const result = await build(undefined, false).notifyInvitation({
+      linkId: LINK_ID,
+      link: LINK,
+      chatId: '4242',
+    });
+
+    assert.deepStrictEqual(result, { delivered: false, recipient: null });
+    assert.strictEqual(findByRole.mock.callCount(), 0);
+    assert.strictEqual(sendMessage.mock.callCount(), 0);
   });
 
   test('should skip when there is no recipient', async () => {

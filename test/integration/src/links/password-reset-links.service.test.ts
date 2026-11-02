@@ -87,7 +87,7 @@ describe('PasswordResetLinksService', () => {
     const notified = await service.create(user._id.toString());
     assert.deepStrictEqual(notified.notification, {
       delivered: true,
-      recipient: 'invitee',
+      recipient: 'user',
     });
     assert.strictEqual(telegramSend.mock.calls.at(-1)!.arguments[0], '4242');
 

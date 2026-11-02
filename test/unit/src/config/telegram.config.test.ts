@@ -31,6 +31,21 @@ describe('resolveTelegramConfig', () => {
     assert.strictEqual(config?.ownerChatId, undefined);
   });
 
+  test('should reject an invalid owner chat id at startup', () => {
+    assert.throws(
+      () =>
+        resolveTelegramConfig({
+          env: {
+            TELEGRAM_BOT_TOKEN: 'token',
+            TELEGRAM_OWNER_CHAT_ID: 'not-a-chat',
+          },
+        }),
+      new InvalidArgumentError(
+        'TELEGRAM_OWNER_CHAT_ID must be a numeric chat id',
+      ),
+    );
+  });
+
   test('should reject an invalid timeout', () => {
     for (const value of ['0', '-1', 'abc']) {
       assert.throws(

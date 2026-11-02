@@ -1,4 +1,5 @@
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 
 const DEFAULT_TIMEOUT_MS = 3000;
 
@@ -22,7 +23,16 @@ export const resolveTelegramConfig = (
     return null;
   }
 
-  const ownerChatId = env.TELEGRAM_OWNER_CHAT_ID?.trim();
+  let ownerChatId: string | undefined;
+
+  try {
+    ownerChatId = normalizeTelegramChatId(env.TELEGRAM_OWNER_CHAT_ID);
+  } catch {
+    throw new InvalidArgumentError(
+      'TELEGRAM_OWNER_CHAT_ID must be a numeric chat id',
+    );
+  }
+
   const rawTimeout = env.TELEGRAM_TIMEOUT_MS?.trim();
   const timeoutMs = rawTimeout ? Number(rawTimeout) : DEFAULT_TIMEOUT_MS;
 

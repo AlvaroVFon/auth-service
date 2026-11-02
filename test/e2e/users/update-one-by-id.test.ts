@@ -99,6 +99,16 @@ describe('E2E Test - Update User By ID', () => {
       .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
       .send({ telegramChatId: 'abc' })
       .expect(400);
+
+    const cleared = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ telegramChatId: null })
+      .expect(200);
+
+    assert.strictEqual(cleared.body.telegramChatId, undefined);
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.telegramChatId, undefined);
   });
 
   test('should ignore a role supplied in the update body', async () => {

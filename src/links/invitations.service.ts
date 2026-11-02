@@ -120,12 +120,11 @@ export class InvitationsService {
 
     let user;
     try {
+      // Never copy the invitee-supplied chat id onto the account: an app admin
+      // could otherwise redirect every future password-reset link.
       user = await this.usersService.createVerifiedUser({
         email: link.email,
         passwordHash,
-        ...(link.telegramChatId === undefined
-          ? {}
-          : { telegramChatId: link.telegramChatId }),
       });
     } catch (error) {
       await this.release(link._id.toString());

@@ -58,7 +58,7 @@ describe('E2E password reset links', () => {
     const notified = await createResetLink(user._id.toString());
     assert.deepStrictEqual(notified.body.notification, {
       delivered: true,
-      recipient: 'invitee',
+      recipient: 'user',
     });
     const [chatId] = telegramMock.sendMessage.mock.calls.at(-1)!.arguments as [
       string,

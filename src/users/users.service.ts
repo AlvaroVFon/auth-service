@@ -1,4 +1,4 @@
-import { Model } from 'mongoose';
+import { Model, UpdateQuery } from 'mongoose';
 
 import {
   EMAIL_REGEX,
@@ -83,7 +83,6 @@ export class UsersService implements UsersPort {
   async createVerifiedUser(input: {
     email: string;
     passwordHash: string;
-    telegramChatId?: string;
   }): Promise<UserInterface> {
     const email = normalizeEmail(input.email);
     const existingUser = await this.usersModel.findOne({ email });
@@ -91,13 +90,10 @@ export class UsersService implements UsersPort {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
-    const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
-
     return this.usersModel.create({
       email,
       password: input.passwordHash,
       verified: true,
-      ...(telegramChatId === undefined ? {} : { telegramChatId }),
     });
   }
 
@@ -190,17 +186,22 @@ export class UsersService implements UsersPort {
       );
     }
 
+    const update: UpdateQuery<UserInterface> = { $set: { ...updateData } };
+
     if ('telegramChatId' in updateData) {
       const telegramChatId = normalizeTelegramChatId(updateData.telegramChatId);
+      const set = update.$set as Record<string, unknown>;
+      delete set.telegramChatId;
 
       if (telegramChatId === undefined) {
-        delete updateData.telegramChatId;
+        // null/empty is an explicit request to unregister the chat.
+        update.$unset = { telegramChatId: 1 };
       } else {
-        updateData.telegramChatId = telegramChatId;
+        set.telegramChatId = telegramChatId;
       }
     }
 
-    const user = await this.usersModel.findByIdAndUpdate(id, updateData, {
+    const user = await this.usersModel.findByIdAndUpdate(id, update, {
       returnDocument: 'after',
     });
 
