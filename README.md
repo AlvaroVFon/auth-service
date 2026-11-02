@@ -16,6 +16,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Login scoped to a concrete application (audience + grant role)
 - Session profile (`GET /auth/me`) and token introspection (`POST /auth/introspect`)
 - Refresh rotation with the refresh token alone, even after the access token expired
+- Independent device sessions with listing and selective revocation
 
 ## Getting Started
 
@@ -78,6 +79,14 @@ to their own frontends after validating the JWT.
 the caller. It answers `{ "active": true, ... }` only for the caller's own tokens in the
 same application; revoked, expired or foreign tokens return `{ "active": false }`
 without any extra data.
+
+### Device sessions
+
+Every login creates an independent session; logging in from another device no longer
+ends the previous one. `GET /auth/sessions` lists the user's active sessions with the
+device (user-agent), application, IP, creation time and last activity, and
+`DELETE /auth/sessions/:sessionId` revokes one session without touching the rest.
+`DELETE /auth/sessions` revokes them all.
 
 ### JWT signing keys
 

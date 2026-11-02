@@ -8,6 +8,11 @@ import {
 import { RefreshToken } from './refresh-token.interface';
 import { RequestContext } from './request-context.type';
 
+export interface SessionOptions {
+  sessionId?: string;
+  audience?: string;
+}
+
 export class RefreshTokenService {
   constructor(private refreshTokenModel: Model<RefreshToken>) {}
 
@@ -16,7 +21,7 @@ export class RefreshTokenService {
     jti: string,
     expiresAt: Date,
     ctx?: RequestContext,
-    audience?: string,
+    options: SessionOptions = {},
   ): Promise<RefreshToken> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
@@ -24,16 +29,21 @@ export class RefreshTokenService {
     if (!UUID_REGEX.test(jti)) {
       throw new InvalidArgumentError('jti is not a valid UUID');
     }
+    if (options.sessionId && !UUID_REGEX.test(options.sessionId)) {
+      throw new InvalidArgumentError('sessionId is not a valid UUID');
+    }
 
     return this.refreshTokenModel.create({
       userId,
+      ...(options.sessionId ? { sessionId: options.sessionId } : {}),
       jti,
-      audience: audience ?? null,
       expiresAt,
+      lastActivityAt: new Date(),
       revokedAt: null,
       replacedByJti: null,
       ipAddress: ctx?.ipAddress ?? null,
       userAgent: ctx?.userAgent ?? null,
+      audience: options.audience ?? null,
     });
   }
 
@@ -43,6 +53,20 @@ export class RefreshTokenService {
     }
 
     return this.refreshTokenModel.findOne({ jti });
+  }
+
+  async listActiveByUserId(userId: string): Promise<RefreshToken[]> {
+    if (!OBJECTID_REGEX.test(userId)) {
+      throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+
+    return this.refreshTokenModel
+      .find({
+        userId,
+        revokedAt: null,
+        expiresAt: { $gt: new Date() },
+      })
+      .sort({ lastActivityAt: -1 });
   }
 
   async revokeByJti(jti: string, replacedByJti?: string): Promise<void> {
@@ -60,6 +84,24 @@ export class RefreshTokenService {
 
     if (result.matchedCount === 0) {
       throw new EntityNotFoundError('Refresh token not found');
+    }
+  }
+
+  async revokeBySessionId(userId: string, sessionId: string): Promise<void> {
+    if (!OBJECTID_REGEX.test(userId)) {
+      throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+    if (!UUID_REGEX.test(sessionId)) {
+      throw new InvalidArgumentError('sessionId is not a valid UUID');
+    }
+
+    const result = await this.refreshTokenModel.updateMany(
+      { userId, sessionId, revokedAt: null },
+      { revokedAt: new Date() },
+    );
+
+    if (result.matchedCount === 0) {
+      throw new EntityNotFoundError('Session not found');
     }
   }
 

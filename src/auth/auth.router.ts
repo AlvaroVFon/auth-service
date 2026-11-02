@@ -92,6 +92,24 @@ export class AuthRouter {
     );
 
     this.app.get(
+      '/auth/sessions',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.listSessions.bind(this.authController),
+    );
+
+    this.app.delete(
+      '/auth/sessions/:sessionId',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.revokeSession.bind(this.authController),
+    );
+
+    this.app.delete(
+      '/auth/sessions',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.revokeAllSessions.bind(this.authController),
+    );
+
+    this.app.get(
       '/auth/me',
       this.authenticationMiddleware.authenticateAny,
       this.authController.me.bind(this.authController),

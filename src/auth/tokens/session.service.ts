@@ -1,9 +1,22 @@
+import { randomUUID } from 'node:crypto';
+
 import { UnauthorizedError } from '../../common/exceptions/auth.exceptions';
 import { EntityNotFoundError } from '../../common/exceptions/base.exception';
 import type { TokenClaims, TokenRole } from '../../libs/jwt';
 import { JwtService, TokenPair, TokenTypes } from '../../libs/jwt';
+import { RefreshToken } from './refresh-token.interface';
 import { RefreshTokenService } from './refresh-token.service';
 import { RequestContext } from './request-context.type';
+
+export interface SessionView {
+  id: string;
+  device: string | null;
+  application: string | null;
+  ipAddress: string | null;
+  createdAt: Date | null;
+  lastActivityAt: Date;
+  expiresAt: Date;
+}
 
 export class SessionService {
   constructor(
@@ -19,11 +32,13 @@ export class SessionService {
   ): Promise<TokenPair> {
     const session = this.jwtService.signTokenPair(userId, role, audience);
 
-    // Only the audience being logged into is rotated; other applications keep
-    // their own refresh tokens. A global (owner) login passes undefined and
-    // still revokes every session.
-    await this.refreshTokenService.revokeAllByUserId(userId, audience);
-    await this.persistRefreshToken(userId, session, ctx, audience);
+    await this.persistRefreshToken(
+      userId,
+      session,
+      randomUUID(),
+      ctx,
+      audience,
+    );
 
     return session;
   }
@@ -71,7 +86,13 @@ export class SessionService {
       }
       throw error;
     }
-    await this.persistRefreshToken(userId, session, ctx, audience);
+    await this.persistRefreshToken(
+      userId,
+      session,
+      storedToken.sessionId ?? claims.jti,
+      ctx,
+      audience,
+    );
 
     return session;
   }
@@ -103,9 +124,33 @@ export class SessionService {
     }
   }
 
+  async list(userId: string): Promise<SessionView[]> {
+    const tokens = await this.refreshTokenService.listActiveByUserId(userId);
+
+    return tokens.map((token) => this.toView(token));
+  }
+
+  async revoke(userId: string, sessionId: string): Promise<void> {
+    await this.refreshTokenService.revokeBySessionId(userId, sessionId);
+  }
+
+  private toView(token: RefreshToken): SessionView {
+    return {
+      id: token.sessionId ?? token.jti,
+      device: token.userAgent ?? null,
+      application: token.audience ?? null,
+      ipAddress: token.ipAddress ?? null,
+      createdAt: token.createdAt ?? null,
+      lastActivityAt:
+        token.lastActivityAt ?? token.createdAt ?? token.expiresAt,
+      expiresAt: token.expiresAt,
+    };
+  }
+
   private async persistRefreshToken(
     userId: string,
     session: TokenPair,
+    sessionId: string,
     ctx?: RequestContext,
     audience?: string,
   ): Promise<void> {
@@ -114,7 +159,10 @@ export class SessionService {
       session.refreshTokenId,
       session.refreshExpiresAt,
       ctx,
-      audience,
+      {
+        sessionId,
+        ...(audience === undefined ? {} : { audience }),
+      },
     );
   }
 }

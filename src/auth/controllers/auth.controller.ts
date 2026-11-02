@@ -136,6 +136,32 @@ export class AuthController {
   }
 
   @Catch()
+  async listSessions(req: Request, res: Response): Promise<void> {
+    const sessions = await this.authService.listSessions(
+      req.user?.id as string,
+    );
+
+    res.status(200).json(sessions);
+  }
+
+  @Catch()
+  async revokeSession(req: Request, res: Response): Promise<void> {
+    await this.authService.revokeSession(
+      req.user?.id as string,
+      req.params.sessionId as string,
+    );
+
+    res.status(204).send();
+  }
+
+  @Catch()
+  async revokeAllSessions(req: Request, res: Response): Promise<void> {
+    await this.authService.revokeAllSessions(req.user?.id as string);
+
+    res.status(204).send();
+  }
+
+  @Catch()
   async logout(req: Request, res: Response): Promise<void> {
     const userId = req.user?.id as string;
     const jti = req.user?.jti;

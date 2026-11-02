@@ -297,6 +297,131 @@ describe('RefreshTokenService', () => {
       assert.ok(allTokens[1]?.revokedAt instanceof Date);
     });
   });
+
+  describe('sessions', () => {
+    const sessionA = '6f1c2a2e-1111-4111-a111-111111111111';
+    const sessionB = '6f1c2a2e-2222-4222-a222-222222222222';
+
+    test('should persist the session id and audience', async () => {
+      const userId = new Types.ObjectId();
+      const jti = '550e8400-e29b-41d4-a716-446655440011';
+
+      const token = await refreshTokenService.create(
+        userId.toString(),
+        jti,
+        new Date(Date.now() + 60_000),
+        undefined,
+        { sessionId: sessionA, audience: 'app-aud' },
+      );
+
+      assert.strictEqual(token.sessionId, sessionA);
+      assert.strictEqual(token.audience, 'app-aud');
+      assert.ok(token.lastActivityAt instanceof Date);
+    });
+
+    test('should default a session id when none is provided', async () => {
+      const userId = new Types.ObjectId();
+      const token = await refreshTokenService.create(
+        userId.toString(),
+        '550e8400-e29b-41d4-a716-446655440012',
+        new Date(Date.now() + 60_000),
+      );
+
+      assert.match(token.sessionId ?? '', /^[0-9a-f-]{36}$/);
+    });
+
+    test('should reject an invalid session id', async () => {
+      await assert.rejects(
+        refreshTokenService.create(
+          new Types.ObjectId().toString(),
+          '550e8400-e29b-41d4-a716-446655440013',
+          new Date(Date.now() + 60_000),
+          undefined,
+          { sessionId: 'not-a-uuid' },
+        ),
+        new InvalidArgumentError('sessionId is not a valid UUID'),
+      );
+    });
+
+    test('should list only active and non-expired sessions', async () => {
+      const userId = new Types.ObjectId();
+      await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionA,
+          audience: 'app-a',
+          userAgent: 'Desktop',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionB,
+          audience: 'app-b',
+          userAgent: 'Mobile',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: '6f1c2a2e-3333-4333-a333-333333333333',
+          revokedAt: new Date(),
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: '6f1c2a2e-4444-4444-a444-444444444444',
+          expiresAt: new Date(Date.now() - 60_000),
+        }),
+      ]);
+
+      const sessions = await refreshTokenService.listActiveByUserId(
+        userId.toString(),
+      );
+
+      assert.strictEqual(sessions.length, 2);
+      assert.deepStrictEqual(
+        new Set(sessions.map((session) => session.sessionId)),
+        new Set([sessionA, sessionB]),
+      );
+    });
+
+    test('should revoke only the requested session', async () => {
+      const userId = new Types.ObjectId();
+      await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
+        RefreshTokenFactory.generate({ userId, sessionId: sessionA }),
+        RefreshTokenFactory.generate({ userId, sessionId: sessionB }),
+      ]);
+
+      await refreshTokenService.revokeBySessionId(userId.toString(), sessionA);
+
+      const sessions = await fixture.find<RefreshToken>(
+        RefreshTokenModel.modelName,
+        { userId, revokedAt: null },
+      );
+
+      assert.strictEqual(sessions.length, 1);
+      assert.strictEqual(sessions[0]?.sessionId, sessionB);
+    });
+
+    test('should throw when the session does not exist', async () => {
+      await assert.rejects(
+        refreshTokenService.revokeBySessionId(
+          new Types.ObjectId().toString(),
+          sessionA,
+        ),
+        new EntityNotFoundError('Session not found'),
+      );
+    });
+
+    test('should reject an invalid session id', async () => {
+      await assert.rejects(
+        refreshTokenService.revokeBySessionId(
+          new Types.ObjectId().toString(),
+          'not-a-uuid',
+        ),
+        new InvalidArgumentError('sessionId is not a valid UUID'),
+      );
+    });
+  });
 });
 
 describe('RefreshToken TTL', () => {
