@@ -19,6 +19,7 @@ import { HoldersService } from '../../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../../src/libs/crypto/crypto.service';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
+import { LoggerInterface } from '../../../../../src/libs/logger/logger.interface';
 import { User as UserInterface } from '../../../../../src/users/users.interface';
 import { User } from '../../../../../src/users/users.schema';
 import { UsersService } from '../../../../../src/users/users.service';
@@ -49,6 +50,13 @@ describe('Auth Service', () => {
     sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
     sendResetPasswordEmail: mock.fn(() => Promise.resolve()),
   } as unknown as AuthMailer;
+
+  const mockLogger: LoggerInterface = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
 
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = parseInt(process.env.JWT_EXPIRATION || '3600', 10);
@@ -86,6 +94,7 @@ describe('Auth Service', () => {
       sessionService,
       blacklistService,
       holdersService,
+      mockLogger,
     );
   });
 
@@ -105,6 +114,18 @@ describe('Auth Service', () => {
       assert.strictEqual(typeof result.refreshToken, 'string');
       assert.ok(JWT_REGEX.test(result.accessToken));
       assert.ok(JWT_REGEX.test(result.refreshToken));
+    });
+
+    test('should authenticate regardless of email casing and spaces', async () => {
+      const email = generateRandomEmail('login-normalize');
+      await fixture.create<UserInterface>('User', { email });
+
+      const result = await authService.login({
+        email: `  ${email.toUpperCase()} `,
+        password: 'password123',
+      });
+
+      assert.ok(result.accessToken);
     });
 
     test('should throw an error for non existing email', async () => {
@@ -132,6 +153,21 @@ describe('Auth Service', () => {
         {
           name: 'InvalidArgumentError',
           message: 'Email and password are required',
+          code: 'INVALID_ARGUMENT',
+        },
+      );
+    });
+
+    test('should reject a non-string email as invalid input', async () => {
+      await assert.rejects(
+        async () =>
+          await authService.login({
+            email: 123 as unknown as string,
+            password: 'password123',
+          }),
+        {
+          name: 'InvalidArgumentError',
+          message: 'Invalid email or password',
           code: 'INVALID_ARGUMENT',
         },
       );
@@ -193,6 +229,7 @@ describe('Auth Service', () => {
         sessionService,
         blacklistService,
         holdersService,
+        mockLogger,
       );
     });
 
@@ -521,6 +558,17 @@ describe('Auth Service', () => {
       );
     });
 
+    test('should normalize the email before storing the holder', async () => {
+      const email = generateRandomEmail('signup-normalize');
+      const holder = await authService.signup({
+        email: `  ${email.toUpperCase()} `,
+        password: 'ValidPass123!',
+        passwordConfirmation: 'ValidPass123!',
+      });
+
+      assert.strictEqual(holder.email, email);
+    });
+
     test('should clean up holder and code when verification email fails', async () => {
       const email = generateRandomEmail('mail-failure+');
       // @ts-expect-error Node test mocks expose mock at runtime.
@@ -615,16 +663,34 @@ describe('Auth Service', () => {
       );
     });
 
-    test('should throw an error if user does not exist', async () => {
-      const email = generateRandomEmail('auth+');
+    test('should reject a non-string email as invalid input', async () => {
       await assert.rejects(
-        async () => await authService.forgotPassword(email),
+        async () => await authService.forgotPassword(123 as unknown as string),
         {
-          name: 'EntityNotFoundError',
-          message: `user with email ${email} not found`,
-          code: 'NOT_FOUND',
+          name: 'InvalidArgumentError',
+          message: 'email has invalid format',
+          code: 'INVALID_ARGUMENT',
         },
       );
+    });
+
+    test('should not reveal whether the user exists', async () => {
+      const email = generateRandomEmail('auth+');
+      const callsBefore = (
+        mockAuthMailer.sendResetPasswordEmail as unknown as {
+          mock: { calls: unknown[] };
+        }
+      ).mock.calls.length;
+
+      await authService.forgotPassword(email);
+
+      const callsAfter = (
+        mockAuthMailer.sendResetPasswordEmail as unknown as {
+          mock: { calls: unknown[] };
+        }
+      ).mock.calls.length;
+
+      assert.strictEqual(callsAfter, callsBefore);
     });
 
     test('on yellow brick road', async () => {
@@ -646,6 +712,89 @@ describe('Auth Service', () => {
         mockAuthMailer.sendResetPasswordEmail.mock.calls[0].arguments,
         [email, user._id.toString(), code!.code],
       );
+    });
+
+    test('should normalize the email before looking up the user', async () => {
+      const email = generateRandomEmail('forgot-normalize');
+      const user = await fixture.create<UserInterface>('User', { email });
+
+      await authService.forgotPassword(`  ${email.toUpperCase()} `);
+
+      const calls = (
+        mockAuthMailer.sendResetPasswordEmail as unknown as {
+          mock: { calls: { arguments: unknown[] }[] };
+        }
+      ).mock.calls;
+      const lastCall = calls[calls.length - 1];
+
+      assert.strictEqual(lastCall?.arguments[0], email);
+      assert.strictEqual(lastCall?.arguments[1], user._id.toString());
+    });
+
+    test('should resend an existing valid reset code', async () => {
+      const email = generateRandomEmail('forgot-resend');
+      const user = await fixture.create<UserInterface>('User', { email });
+      const mailCalls = () =>
+        (
+          mockAuthMailer.sendResetPasswordEmail as unknown as {
+            mock: { calls: { arguments: unknown[] }[] };
+          }
+        ).mock.calls;
+
+      await authService.forgotPassword(email);
+      const code = await fixture.findOne<Code>('Code', {
+        subjectId: user._id.toString(),
+        used: false,
+      });
+      const callsBefore = mailCalls().length;
+
+      await authService.forgotPassword(email);
+      const calls = mailCalls();
+
+      assert.strictEqual(calls.length, callsBefore + 1);
+      assert.strictEqual(calls[calls.length - 1]?.arguments[2], code!.code);
+    });
+
+    test('should not fail when the reset email cannot be sent', async () => {
+      const email = generateRandomEmail('forgot-mail-failure');
+      const user = await fixture.create<UserInterface>('User', { email });
+      const mailMock = mockAuthMailer.sendResetPasswordEmail as unknown as {
+        mock: { mockImplementation(fn: () => Promise<void>): void };
+      };
+
+      mailMock.mock.mockImplementation(async () => {
+        throw new Error('SMTP down');
+      });
+
+      try {
+        await assert.doesNotReject(authService.forgotPassword(email));
+
+        const subjectId = user._id.toString();
+        const codeRemoved = async () =>
+          (await fixture.findOne<Code>('Code', {
+            subjectId,
+            used: false,
+          })) === null;
+
+        for (
+          let attempt = 0;
+          attempt < 20 && !(await codeRemoved());
+          attempt++
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+
+        assert.ok(await codeRemoved());
+        assert.ok(
+          (
+            mockLogger.warn as unknown as {
+              mock: { calls: unknown[] };
+            }
+          ).mock.calls.length >= 1,
+        );
+      } finally {
+        mailMock.mock.mockImplementation(async () => {});
+      }
     });
   });
 

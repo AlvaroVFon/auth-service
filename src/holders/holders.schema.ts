@@ -7,7 +7,13 @@ const holderExpiration = getNumberEnvVariable('HOLDER_EXPIRATION_MS', 3600000);
 
 const HoldersSchema = new Schema<Holder>(
   {
-    email: { type: String, required: true, unique: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
     password: { type: String, required: true },
     expiresAt: {
       type: Date,

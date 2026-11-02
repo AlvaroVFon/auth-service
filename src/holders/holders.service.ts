@@ -5,6 +5,7 @@ import {
   OBJECTID_REGEX,
   PASSWORD_REGEX,
 } from '../common/constants/regex';
+import { normalizeEmail } from '../common/email';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto';
 import { Holder } from './holders.interface';
@@ -20,7 +21,10 @@ export class HoldersService implements HoldersPort {
     if (!email) {
       throw new InvalidArgumentError('Email is required');
     }
-    if (!EMAIL_REGEX.test(email)) {
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('Email format is invalid');
     }
     if (!password) {
@@ -32,25 +36,33 @@ export class HoldersService implements HoldersPort {
       );
     }
 
-    const existingHolder = await this.holderModel.findOne({ email });
+    const existingHolder = await this.holderModel.findOne({
+      email: normalizedEmail,
+    });
     if (existingHolder) {
       throw new InvalidArgumentError('Invalid email or password');
     }
 
     const hashedPassword = await this.cryptoService.hashString(password);
 
-    return this.holderModel.create({ email, password: hashedPassword });
+    return this.holderModel.create({
+      email: normalizedEmail,
+      password: hashedPassword,
+    });
   }
 
   async findByEmail(email: string): Promise<Holder | null> {
     if (!email) {
       throw new InvalidArgumentError('Email is required');
     }
-    if (!EMAIL_REGEX.test(email)) {
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('Email format is invalid');
     }
 
-    return await this.holderModel.findOne({ email });
+    return await this.holderModel.findOne({ email: normalizedEmail });
   }
 
   async findById(id: string): Promise<Holder | null> {

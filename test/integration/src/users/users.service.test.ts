@@ -575,3 +575,59 @@ describe('UsersService', () => {
     });
   });
 });
+
+describe('UsersService email normalization', () => {
+  let usersService: UsersService;
+
+  before(() => {
+    usersService = new UsersService(User, new CryptoService());
+  });
+
+  test('should store the email trimmed and lowercased', async () => {
+    const user = await usersService.create({
+      email: '  Ana@Example.COM ',
+      password: 'StrongPassword123!',
+    });
+
+    assert.strictEqual(user.email, 'ana@example.com');
+  });
+
+  test('should find a user regardless of email casing', async () => {
+    await usersService.create({
+      email: 'ana@example.com',
+      password: 'StrongPassword123!',
+    });
+
+    const found = await usersService.findByEmail('ANA@EXAMPLE.COM');
+
+    assert.ok(found);
+    assert.strictEqual(found!.email, 'ana@example.com');
+  });
+
+  test('should not mutate the caller input', async () => {
+    const data = {
+      email: '  Ana@Example.COM ',
+      password: 'StrongPassword123!',
+    };
+
+    await usersService.create(data);
+
+    assert.strictEqual(data.email, '  Ana@Example.COM ');
+    assert.strictEqual(data.password, 'StrongPassword123!');
+  });
+
+  test('should not create two users with the same email in different casing', async () => {
+    await usersService.create({
+      email: 'ana@example.com',
+      password: 'StrongPassword123!',
+    });
+
+    await assert.rejects(
+      usersService.create({
+        email: 'ANA@EXAMPLE.COM',
+        password: 'StrongPassword123!',
+      }),
+      new EntityAlreadyExistsError('Email already exists'),
+    );
+  });
+});

@@ -112,3 +112,38 @@ describe('HoldersService', () => {
     });
   });
 });
+
+describe('HoldersService email normalization', () => {
+  let holdersService: HoldersService;
+
+  before(() => {
+    holdersService = new HoldersService(HoldersModel, new CryptoService());
+  });
+
+  test('should store the email trimmed and lowercased', async () => {
+    const holder = await holdersService.create(
+      '  Ana@Example.COM ',
+      'StrongPassword123!',
+    );
+
+    assert.strictEqual(holder.email, 'ana@example.com');
+  });
+
+  test('should find a holder regardless of email casing', async () => {
+    await holdersService.create('ana@example.com', 'StrongPassword123!');
+
+    const found = await holdersService.findByEmail('ANA@EXAMPLE.COM');
+
+    assert.ok(found);
+    assert.strictEqual(found!.email, 'ana@example.com');
+  });
+
+  test('should normalize the email at the schema boundary', async () => {
+    const holder = await HoldersModel.create({
+      email: ' Ana@Example.COM ',
+      password: 'hashed_password',
+    });
+
+    assert.strictEqual(holder.email, 'ana@example.com');
+  });
+});

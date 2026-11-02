@@ -1,6 +1,7 @@
 import { Model } from 'mongoose';
 
 import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
+import { normalizeEmail } from '../common/email';
 import {
   AccountLockedError,
   InvalidCredentialsError,
@@ -26,34 +27,43 @@ export class UsersService implements UsersPort {
     if (!data.email) {
       throw new InvalidArgumentError('Email is required to create a user');
     }
-    if (!EMAIL_REGEX.test(data.email)) {
+
+    const email = normalizeEmail(data.email);
+
+    if (!EMAIL_REGEX.test(email)) {
       throw new InvalidArgumentError('Invalid email format');
     }
     if (!data.password) {
       throw new InvalidArgumentError('Password is required to create a user');
     }
 
-    data.password = await this.cryptoService.hashString(data.password);
+    const password = await this.cryptoService.hashString(data.password);
 
-    const existingUser = await this.usersModel.findOne({ email: data.email });
+    const existingUser = await this.usersModel.findOne({ email });
     if (existingUser) {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
-    return this.usersModel.create({ ...data, verified: data.verified ?? true });
+    return this.usersModel.create({
+      ...data,
+      email,
+      password,
+      verified: data.verified ?? true,
+    });
   }
 
   async createVerifiedUser(input: {
     email: string;
     passwordHash: string;
   }): Promise<UserInterface> {
-    const existingUser = await this.usersModel.findOne({ email: input.email });
+    const email = normalizeEmail(input.email);
+    const existingUser = await this.usersModel.findOne({ email });
     if (existingUser) {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
     return this.usersModel.create({
-      email: input.email,
+      email,
       password: input.passwordHash,
       verified: true,
     });
@@ -94,11 +104,13 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Email is required');
     }
 
-    if (!EMAIL_REGEX.test(email)) {
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('Invalid email format');
     }
 
-    return this.usersModel.findOne({ email });
+    return this.usersModel.findOne({ email: normalizedEmail });
   }
 
   async findById(id: string): Promise<UserInterface | null> {
