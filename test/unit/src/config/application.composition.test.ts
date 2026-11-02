@@ -34,6 +34,31 @@ describe('application composition configuration', () => {
   test('prefers an explicit access token ttl override', () => {
     assert.strictEqual(resolveAccessTokenTtl({ jwtExpiresIn: 456 }), 456);
   });
+
+  test('fails fast when MONGO_URI is missing', () => {
+    const original = process.env.MONGO_URI;
+    delete process.env.MONGO_URI;
+
+    try {
+      assert.throws(
+        () =>
+          createApplicationComposition({
+            logger: silentLogger,
+            mailer: {
+              sendEmail: mock.fn(() => Promise.resolve()),
+              sendMailWithTemplate: mock.fn(() => Promise.resolve()),
+            } as unknown as MailerInterface,
+          }),
+        new InvalidArgumentError('MONGO_URI is required'),
+      );
+    } finally {
+      if (original === undefined) {
+        delete process.env.MONGO_URI;
+      } else {
+        process.env.MONGO_URI = original;
+      }
+    }
+  });
 });
 
 describe('application composition wiring', () => {
