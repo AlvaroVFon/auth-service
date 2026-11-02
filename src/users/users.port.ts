@@ -7,7 +7,7 @@ export interface CreateVerifiedUserInput {
 }
 
 export interface UserGrantsCleanerPort {
-  deleteByUser(userId: string): Promise<void>;
+  deleteByUser(userId: string, actorId?: string): Promise<void>;
 }
 
 export interface UsersPort {
@@ -18,6 +18,6 @@ export interface UsersPort {
   findById(id: string): Promise<User | null>;
   findByRole(role: Roles): Promise<User | null>;
   setPassword(id: string, newPassword: string): Promise<void>;
-  deleteOneById(id: string): Promise<User | null>;
+  deleteOneById(id: string, actorId?: string): Promise<User | null>;
   setGrantsCleaner(cleaner: UserGrantsCleanerPort): void;
 }

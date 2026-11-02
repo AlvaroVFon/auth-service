@@ -1,6 +1,7 @@
 import { Model, Types } from 'mongoose';
 
 import type { Application, ApplicationsPort } from '../applications';
+import { AuditEvent, AuditPort, AuditResult } from '../audit';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -16,10 +17,11 @@ export class GrantsService implements GrantsPort {
     private readonly grantModel: Model<Grant>,
     private readonly applicationsService: ApplicationsPort,
     private readonly usersService: UsersPort,
+    private readonly auditService?: AuditPort,
   ) {}
 
   async assignRole(input: AssignRoleInput): Promise<Grant> {
-    const { userId, applicationId, role } = input;
+    const { userId, applicationId, role, actorId } = input;
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
     if (!Object.values(GrantRoles).includes(role)) {
@@ -41,6 +43,13 @@ export class GrantsService implements GrantsPort {
     if (!grant) {
       throw new EntityNotFoundError('Grant not found');
     }
+
+    await this.recordGrantEvent(AuditEvent.GRANT_ASSIGNED, {
+      targetUserId: userId,
+      applicationId,
+      role,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
 
     return grant;
   }
@@ -102,7 +111,11 @@ export class GrantsService implements GrantsPort {
     });
   }
 
-  async revokeRole(userId: string, applicationId: string): Promise<void> {
+  async revokeRole(
+    userId: string,
+    applicationId: string,
+    actorId?: string,
+  ): Promise<void> {
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
 
@@ -114,13 +127,54 @@ export class GrantsService implements GrantsPort {
     if (result.deletedCount === 0) {
       throw new EntityNotFoundError('Grant not found');
     }
+
+    await this.recordGrantEvent(AuditEvent.GRANT_REVOKED, {
+      targetUserId: userId,
+      applicationId,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
   }
 
-  async deleteByUser(userId: string): Promise<void> {
+  async deleteByUser(userId: string, actorId?: string): Promise<void> {
     assertObjectId(userId, 'userId');
+
+    const grants = await this.grantModel
+      .find({ userId: new Types.ObjectId(userId) })
+      .select('applicationId')
+      .lean();
 
     await this.grantModel.deleteMany({
       userId: new Types.ObjectId(userId),
+    });
+
+    // Deleting a user cascades into every grant; record each removal so the
+    // audit trail does not depend on the HTTP route that triggered it.
+    for (const grant of grants) {
+      await this.recordGrantEvent(AuditEvent.GRANT_REVOKED, {
+        targetUserId: userId,
+        applicationId: grant.applicationId.toString(),
+        ...(actorId === undefined ? {} : { actorId }),
+      });
+    }
+  }
+
+  private async recordGrantEvent(
+    event: AuditEvent,
+    input: {
+      targetUserId: string;
+      applicationId: string;
+      role?: string;
+      actorId?: string;
+    },
+  ): Promise<void> {
+    if (!this.auditService) {
+      return;
+    }
+
+    await this.auditService.record({
+      event,
+      result: AuditResult.SUCCESS,
+      ...input,
     });
   }
 

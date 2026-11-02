@@ -247,7 +247,10 @@ export class UsersService implements UsersPort {
     });
   }
 
-  async deleteOneById(id: string): Promise<UserInterface | null> {
+  async deleteOneById(
+    id: string,
+    actorId?: string,
+  ): Promise<UserInterface | null> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
     }
@@ -273,7 +276,7 @@ export class UsersService implements UsersPort {
     // Best effort: MongoDB standalone deployments cannot wrap both writes in a
     // transaction, so grants are cleaned after the user is gone. If the cleanup
     // fails the error surfaces, but the deletion is not rolled back.
-    await this.grantsCleaner.deleteByUser(id);
+    await this.grantsCleaner.deleteByUser(id, actorId);
 
     return user;
   }

@@ -15,6 +15,7 @@ export class GrantsController {
       userId,
       applicationId,
       role,
+      ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
     });
 
     res.status(200).json(grant);
@@ -48,7 +49,7 @@ export class GrantsController {
   async revoke(req: Request, res: Response): Promise<void> {
     const applicationId = req.params.applicationId as string;
     const userId = req.params.userId as string;
-    await this.grantsService.revokeRole(userId, applicationId);
+    await this.grantsService.revokeRole(userId, applicationId, req.user?.id);
 
     res.status(204).json();
   }
