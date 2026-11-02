@@ -1,32 +1,49 @@
 import { randomUUID } from 'node:crypto';
 
-import jwt from 'jsonwebtoken';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import { Types } from 'mongoose';
 
 import { assertDependencies } from '../../common/depencencies-validator';
-import { Roles } from '../../common/enums/roles.enum';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
+import { JwtKeyring } from './jwt-keyring';
 import { InvalidTokenError } from './jwt.errors';
-import { Payload, TokenClaims, TokenPair } from './jwt.interfaces';
+import {
+  JwtServiceOptions,
+  Payload,
+  TokenClaims,
+  TokenPair,
+  TokenRole,
+  VerifyTokenOptions,
+} from './jwt.interfaces';
 import { TokenTypes } from './token-types.enum';
 
+const DEFAULT_ISSUER = 'auth-service';
+const RSA_ALGORITHM = 'RS256';
+const LEGACY_ALGORITHM = 'HS256';
+
 export class JwtService {
+  private readonly issuer: string;
+  private readonly legacySecret: string | undefined;
+
   constructor(
-    private readonly secret: string,
+    private readonly keyring: JwtKeyring,
     private readonly expiresIn: number,
     private readonly refreshTokenExpiresIn: number,
+    options: JwtServiceOptions = {},
   ) {
     assertDependencies(
       {
-        secret: this.secret,
+        keyring: this.keyring,
         expiresIn: this.expiresIn,
         refreshTokenExpiresIn: this.refreshTokenExpiresIn,
       },
       this.constructor.name,
     );
+    this.issuer = options.issuer ?? DEFAULT_ISSUER;
+    this.legacySecret = options.legacySecret;
   }
 
-  signTokenPair(userId: string, role: Roles): TokenPair {
+  signTokenPair(userId: string, role: TokenRole): TokenPair {
     const refreshTokenId = randomUUID();
     const accessToken = this.signUserToken(
       { userId, role, type: TokenTypes.ACCESS },
@@ -47,24 +64,86 @@ export class JwtService {
     };
   }
 
-  verifyToken(token: string): TokenClaims {
-    try {
-      const payload = jwt.verify(token, this.secret);
+  signAccessToken(userId: string, role: TokenRole, audience: string): string {
+    if (!audience) {
+      throw new InvalidArgumentError(
+        'InvalidArgumentError: Audience is required for application tokens',
+      );
+    }
 
-      if (
-        typeof payload === 'string' ||
-        typeof payload.type !== 'string' ||
-        typeof payload.exp !== 'number'
-      ) {
-        throw new Error('Invalid token claims');
+    return this.signUserToken(
+      { userId, role, type: TokenTypes.ACCESS, aud: audience },
+      this.expiresIn,
+    );
+  }
+
+  verifyToken(token: string, options: VerifyTokenOptions = {}): TokenClaims {
+    try {
+      const decoded = jwt.decode(token, { complete: true });
+
+      if (!decoded || typeof decoded === 'string') {
+        throw new Error('Malformed token');
       }
 
-      return payload as unknown as TokenClaims;
+      const payload = decoded.header.kid
+        ? this.verifyAsymmetric(token, decoded.header.kid, options)
+        : this.verifyLegacy(token, options);
+
+      return this.toTokenClaims(payload);
     } catch {
       throw new InvalidTokenError(
         'InvalidTokenError: Token is invalid or has expired',
       );
     }
+  }
+
+  private verifyAsymmetric(
+    token: string,
+    kid: string,
+    options: VerifyTokenOptions,
+  ): JwtPayload {
+    const publicKey = this.keyring.getPublicKey(kid);
+
+    if (!publicKey) {
+      throw new Error(`Unknown JWT key id: ${kid}`);
+    }
+
+    return jwt.verify(token, publicKey, {
+      algorithms: [RSA_ALGORITHM],
+      issuer: this.issuer,
+      ...(options.audience === undefined ? {} : { audience: options.audience }),
+    }) as JwtPayload;
+  }
+
+  private verifyLegacy(token: string, options: VerifyTokenOptions): JwtPayload {
+    if (!this.legacySecret || options.audience !== undefined) {
+      throw new Error('Legacy JWT verification is not available');
+    }
+
+    const payload = jwt.verify(token, this.legacySecret, {
+      algorithms: [LEGACY_ALGORITHM],
+    });
+
+    if (typeof payload === 'string' || payload.aud !== undefined) {
+      throw new Error('Legacy tokens must not carry an audience');
+    }
+
+    return payload;
+  }
+
+  private toTokenClaims(payload: JwtPayload): TokenClaims {
+    if (
+      typeof payload.type !== 'string' ||
+      typeof payload.exp !== 'number' ||
+      (typeof payload.sub !== 'undefined' && typeof payload.sub !== 'string') ||
+      (typeof payload.userId !== 'undefined' &&
+        typeof payload.userId !== 'string') ||
+      (typeof payload.aud !== 'undefined' && typeof payload.aud !== 'string')
+    ) {
+      throw new Error('Invalid token claims');
+    }
+
+    return payload as unknown as TokenClaims;
   }
 
   private signUserToken(payload: Payload, expiresIn: number): string {
@@ -74,8 +153,18 @@ export class JwtService {
       );
     }
 
-    payload.jti ??= randomUUID();
+    const { kid, privateKey } = this.keyring.getSigningKey();
+    const body: Payload = {
+      ...payload,
+      sub: payload.sub ?? payload.userId,
+      iss: payload.iss ?? this.issuer,
+      jti: payload.jti ?? randomUUID(),
+    };
 
-    return jwt.sign(payload, this.secret, { expiresIn });
+    return jwt.sign(body, privateKey, {
+      algorithm: RSA_ALGORITHM,
+      keyid: kid,
+      expiresIn,
+    });
   }
 }

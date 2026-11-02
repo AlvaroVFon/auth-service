@@ -9,7 +9,7 @@ export class AuthorizationMiddleware {
       try {
         const userRole = req.user?.role;
 
-        if (!userRole || !roles.includes(userRole)) {
+        if (!userRole || !roles.includes(userRole as Roles)) {
           throw new ForbiddenError('Access denied');
         }
 

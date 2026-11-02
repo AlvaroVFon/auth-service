@@ -3,10 +3,12 @@ import { Request, Response } from 'express';
 import { Roles } from '../../../../src/common/enums/roles.enum';
 import { InvalidCredentialsError } from '../../../../src/common/exceptions/auth.exceptions';
 import { AuthenticationMiddleware } from '../../../../src/common/middlewares/authentication.middleware';
+import { GrantRoles } from '../../../../src/grants/grants.interface';
+import { InvalidTokenError } from '../../../../src/libs/jwt/jwt.errors';
 import { TokenTypes } from '../../../../src/libs/jwt/token-types.enum';
 
 describe('AuthenticationMiddleware', () => {
-  let verifyTokenFn: (token: string) => unknown;
+  let verifyTokenFn: (token: string, options?: unknown) => unknown;
   let isBlacklistedFn: (jti: string) => Promise<boolean>;
   let middleware: AuthenticationMiddleware;
   let req: Partial<Request>;
@@ -17,7 +19,8 @@ describe('AuthenticationMiddleware', () => {
     isBlacklistedFn = async () => false;
 
     const jwtService = {
-      verifyToken: (token: string) => verifyTokenFn(token),
+      verifyToken: (token: string, options?: unknown) =>
+        verifyTokenFn(token, options),
     };
 
     const blacklistService = {
@@ -110,5 +113,81 @@ describe('AuthenticationMiddleware', () => {
     if (payload.exp) {
       assert.strictEqual(req.user?.expiresAt?.getTime(), payload.exp * 1000);
     }
+  });
+
+  test('should reject an application token on the legacy authenticate', async () => {
+    verifyTokenFn = () => buildPayload({ aud: 'app-a' });
+    req.headers = { authorization: 'Bearer some-token' };
+
+    await middleware.authenticate(req as Request, {} as Response, next);
+
+    assert.strictEqual(next.mock.calls.length, 1);
+    const error = next.mock.calls[0]?.arguments[0] as Error;
+    assert.ok(error instanceof InvalidCredentialsError);
+  });
+
+  describe('authenticateForAudience', () => {
+    test('should verify with the expected audience and populate req.user', async () => {
+      const payload = buildPayload({
+        aud: 'app-a',
+        role: GrantRoles.ADMIN,
+      });
+      const receivedOptions: unknown[] = [];
+      verifyTokenFn = (_token, options) => {
+        receivedOptions.push(options);
+        return payload;
+      };
+      isBlacklistedFn = async () => false;
+      req.headers = { authorization: 'Bearer some-token' };
+
+      await middleware.authenticateForAudience('app-a')(
+        req as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.deepStrictEqual(receivedOptions, [{ audience: 'app-a' }]);
+      assert.strictEqual(next.mock.calls.length, 1);
+      assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+      assert.strictEqual(req.user?.audience, 'app-a');
+      assert.strictEqual(req.user?.role, GrantRoles.ADMIN);
+    });
+
+    test('should reject a token that cannot be verified for the audience', async () => {
+      verifyTokenFn = (_token, options) => {
+        if ((options as { audience?: string })?.audience === 'app-a') {
+          return buildPayload({ aud: 'app-a', role: GrantRoles.VIEWER });
+        }
+        throw new InvalidTokenError('invalid');
+      };
+      req.headers = { authorization: 'Bearer some-token' };
+
+      await middleware.authenticateForAudience('app-b')(
+        req as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.strictEqual(next.mock.calls.length, 1);
+      const error = next.mock.calls[0]?.arguments[0] as Error;
+      assert.ok(error instanceof InvalidTokenError);
+    });
+
+    test('should reject a blacklisted application token', async () => {
+      verifyTokenFn = () =>
+        buildPayload({ aud: 'app-a', role: GrantRoles.VIEWER });
+      isBlacklistedFn = async () => true;
+      req.headers = { authorization: 'Bearer some-token' };
+
+      await middleware.authenticateForAudience('app-a')(
+        req as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.strictEqual(next.mock.calls.length, 1);
+      const error = next.mock.calls[0]?.arguments[0] as Error;
+      assert.ok(error instanceof InvalidCredentialsError);
+    });
   });
 });

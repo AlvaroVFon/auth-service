@@ -1,3 +1,12 @@
+export { JwtKeyring } from './jwt-keyring';
+export type { JwkPublicKey, JwtKeyMaterial, SigningKey } from './jwt-keyring';
 export { JwtService } from './jwt.service';
-export type { Payload, TokenClaims, TokenPair } from './jwt.interfaces';
+export type {
+  JwtServiceOptions,
+  Payload,
+  TokenClaims,
+  TokenPair,
+  TokenRole,
+  VerifyTokenOptions,
+} from './jwt.interfaces';
 export { TokenTypes } from './token-types.enum';

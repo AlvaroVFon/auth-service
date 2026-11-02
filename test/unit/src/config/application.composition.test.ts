@@ -50,6 +50,8 @@ describe('application composition wiring', () => {
 
     assert.ok(composition.applications);
     assert.ok(composition.grants);
+    assert.ok(composition.jwtKeyring.getJwks().length >= 1);
+    assert.ok(composition.applicationTokens);
     await assert.rejects(
       composition.grants.assignRole({
         userId: 'bad',

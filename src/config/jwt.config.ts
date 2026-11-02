@@ -1,0 +1,123 @@
+import { generateKeyPairSync } from 'node:crypto';
+
+import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import { JwtKeyring, JwtKeyMaterial } from '../libs/jwt';
+
+const DEFAULT_ISSUER = 'auth-service';
+
+export interface JwtConfig {
+  keyring: JwtKeyring;
+  issuer: string;
+  legacySecret: string | undefined;
+}
+
+export interface ResolveJwtConfigOptions {
+  env?: NodeJS.ProcessEnv;
+  production?: boolean;
+}
+
+interface RetiredKeyEntry {
+  kid?: string;
+  publicKey: string;
+}
+
+let ephemeralKeyPair: { privateKey: string; publicKey: string } | undefined;
+
+const normalizePem = (value: string): string => value.replace(/\\n/g, '\n');
+
+const readPem = (env: NodeJS.ProcessEnv, key: string): string | undefined => {
+  const value = env[key]?.trim();
+
+  return value ? normalizePem(value) : undefined;
+};
+
+const parseRetiredKeys = (rawValue: string | undefined): RetiredKeyEntry[] => {
+  if (!rawValue?.trim()) {
+    return [];
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(rawValue);
+  } catch {
+    throw new InvalidArgumentError(
+      'JWT_RETIRED_PUBLIC_KEYS must be a JSON array',
+    );
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new InvalidArgumentError(
+      'JWT_RETIRED_PUBLIC_KEYS must be a JSON array',
+    );
+  }
+
+  return parsed.map((entry: unknown) => {
+    if (typeof entry === 'string') {
+      return { publicKey: normalizePem(entry) };
+    }
+
+    if (
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as RetiredKeyEntry).publicKey === 'string'
+    ) {
+      const { kid, publicKey } = entry as RetiredKeyEntry;
+
+      return kid
+        ? { kid, publicKey: normalizePem(publicKey) }
+        : { publicKey: normalizePem(publicKey) };
+    }
+
+    throw new InvalidArgumentError(
+      'JWT_RETIRED_PUBLIC_KEYS entries must be PEM strings or { kid, publicKey } objects',
+    );
+  });
+};
+
+const generateEphemeralKeyPair = (): {
+  privateKey: string;
+  publicKey: string;
+} => {
+  ephemeralKeyPair ??= generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+  return ephemeralKeyPair;
+};
+
+export const resolveJwtConfig = (
+  options: ResolveJwtConfigOptions = {},
+): JwtConfig => {
+  const env = options.env ?? process.env;
+  const production = options.production ?? env.NODE_ENV === 'production';
+  const privateKey = readPem(env, 'JWT_PRIVATE_KEY');
+  const publicKey = readPem(env, 'JWT_PUBLIC_KEY');
+  const kid = env.JWT_KEY_ID?.trim();
+  const issuer = env.JWT_ISSUER?.trim() || DEFAULT_ISSUER;
+  const legacySecret = env.JWT_SECRET?.trim() || undefined;
+  const retiredKeys = parseRetiredKeys(env.JWT_RETIRED_PUBLIC_KEYS);
+
+  if (!privateKey && production) {
+    throw new InvalidArgumentError('JWT_PRIVATE_KEY is required in production');
+  }
+
+  const signingPair = privateKey
+    ? { privateKey, ...(publicKey ? { publicKey } : {}) }
+    : generateEphemeralKeyPair();
+
+  const activeKey: JwtKeyMaterial = {
+    ...signingPair,
+    ...(kid ? { kid } : {}),
+    active: true,
+  };
+  const materials: JwtKeyMaterial[] = [activeKey, ...retiredKeys];
+
+  return {
+    keyring: new JwtKeyring(materials),
+    issuer,
+    legacySecret,
+  };
+};
