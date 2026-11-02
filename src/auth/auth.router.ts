@@ -82,5 +82,17 @@ export class AuthRouter {
       this.authenticationMiddleware.authenticateAny,
       this.authController.logout.bind(this.authController),
     );
+
+    this.app.get(
+      '/auth/me',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.me.bind(this.authController),
+    );
+
+    this.app.post(
+      '/auth/introspect',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.introspect.bind(this.authController),
+    );
   }
 }
