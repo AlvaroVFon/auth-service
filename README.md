@@ -17,6 +17,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Session profile (`GET /auth/me`) and token introspection (`POST /auth/introspect`)
 - Refresh rotation with the refresh token alone, even after the access token expired
 - Independent device sessions with listing and selective revocation
+- Shareable, single-use invitation and password-reset links (no SMTP required)
 
 ## Getting Started
 
@@ -88,6 +89,31 @@ device (user-agent), application, IP, creation time and last activity, and
 `DELETE /auth/sessions/:sessionId` revokes one session without touching the rest
 (repeating it is a no-op), and `DELETE /auth/sessions` revokes them all. The oldest
 sessions beyond `MAX_SESSIONS_PER_USER` (default `50`) are revoked on each new login.
+
+### Shareable invitations and password resets
+
+The owner (or an app admin for its own application) can create a single-use invitation
+for an email, application and role:
+
+```
+POST /applications/:applicationId/invitations   { "email": "...", "role": "editor" }
+```
+
+The response contains a link like `https://<PUBLIC_APP_URL>/invitations/accept?token=...`
+that the owner shares through any channel. The guest sets a password at
+`POST /auth/invitations/accept` and gets the granted role. Existing users and holders
+cannot be invited: use grants to give them access to another application.
+
+Password resets can be generated and shared the same way:
+
+```
+POST /auth/password-reset-links            { "userId": "..." }   (owner only)
+POST /auth/password-reset-links/accept     { "token": "...", "newPassword": "...", "passwordConfirmation": "..." }
+```
+
+Links are hashed at rest, expire (`INVITATION_LINK_EXPIRATION_MS`, default 7 days;
+`PASSWORD_RESET_LINK_EXPIRATION_MS`, default 1 hour) and can be used only once.
+`/auth/forgot-password` stays available and never reveals whether an email exists.
 
 ### JWT signing keys
 

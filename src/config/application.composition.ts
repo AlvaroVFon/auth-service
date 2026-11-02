@@ -35,6 +35,14 @@ import { LoggerInterface } from '../libs/logger/logger.interface';
 import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
+import {
+  InvitationsService,
+  LinkModel,
+  LinksController,
+  LinksModule,
+  LinksService,
+  PasswordResetLinksService,
+} from '../links';
 import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
 import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
@@ -51,6 +59,7 @@ export interface ApplicationComposition {
   readonly grants: GrantsPort;
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
+  readonly linksModule: LinksModule;
   readonly ownerBootstrap: OwnerBootstrapService;
   readonly jwtKeyring: JwtKeyring;
   readonly applicationTokens: ApplicationTokenService;
@@ -162,10 +171,12 @@ export const createApplicationComposition = (
   const templateRenderer = new HandlebarsEngine();
   const mailer =
     options.mailer ?? new NodeMailerAdapter(templateRenderer, logger);
+  const publicAppUrl =
+    options.publicAppUrl ??
+    getStringEnvVariable('PUBLIC_APP_URL', 'https://ourservice.com');
   const authMailer = new AuthMailer(
     mailer,
-    options.publicAppUrl ??
-      getStringEnvVariable('PUBLIC_APP_URL', 'https://ourservice.com'),
+    publicAppUrl,
     getStringEnvVariable('APP_NAME', 'Auth Service'),
   );
   const codeService = new CodesService(
@@ -225,6 +236,39 @@ export const createApplicationComposition = (
     jwtService,
     blacklistService,
   );
+  const linksService = new LinksService(
+    LinkModel,
+    getNumberEnvVariable('INVITATION_LINK_EXPIRATION_MS', 604800000),
+    getNumberEnvVariable('PASSWORD_RESET_LINK_EXPIRATION_MS', 3600000),
+  );
+  const invitationsService = new InvitationsService(
+    linksService,
+    usersModule.service,
+    holdersService,
+    grantsModule.service,
+    applicationsModule.service,
+    cryptoService,
+    publicAppUrl,
+    logger,
+  );
+  const passwordResetLinksService = new PasswordResetLinksService(
+    linksService,
+    usersModule.service,
+    sessionService,
+    publicAppUrl,
+    logger,
+  );
+  const linksModule = new LinksModule({
+    linksController: new LinksController(
+      invitationsService,
+      passwordResetLinksService,
+    ),
+    authenticationMiddleware,
+    authorizationMiddleware,
+    grantsService: grantsModule.service,
+    applicationsService: applicationsModule.service,
+    logger,
+  });
   const authModule = new AuthModule({
     authController: new AuthController(authService, profileService),
     authenticationMiddleware,
@@ -239,6 +283,7 @@ export const createApplicationComposition = (
     grants: grantsModule.service,
     usersModule,
     authModule,
+    linksModule,
     ownerBootstrap,
     jwtKeyring: jwtConfig.keyring,
     applicationTokens: applicationTokenService,
@@ -272,6 +317,7 @@ export const createApplicationComposition = (
       grantsModule.initialize(app);
       usersModule.initialize(app);
       authModule.initialize(app);
+      linksModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },
   };

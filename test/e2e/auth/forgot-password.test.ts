@@ -35,5 +35,21 @@ describe('Password Reset E2E Tests', () => {
         })
         .expect(204);
     });
+
+    test('AC-5: returns the same response for existing and missing emails', async () => {
+      await fixture.create<User>('User');
+
+      const existing = await request(app)
+        .post('/auth/forgot-password')
+        .send({ email: DEFAULT_USER.email })
+        .expect(204);
+      const missing = await request(app)
+        .post('/auth/forgot-password')
+        .send({ email: 'not-existing@email.com' })
+        .expect(204);
+
+      assert.strictEqual(existing.status, missing.status);
+      assert.deepStrictEqual(existing.body, missing.body);
+    });
   });
 });

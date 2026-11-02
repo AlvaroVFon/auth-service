@@ -9,6 +9,8 @@ import { Grant } from '../../src/grants/grants.interface';
 import { GrantModel } from '../../src/grants/grants.schema';
 import { Holder } from '../../src/holders/holders.interface';
 import { HoldersModel } from '../../src/holders/holders.schema';
+import { OneTimeLink } from '../../src/links/link.interface';
+import { LinkModel } from '../../src/links/links.schema';
 import { User as UserInterface } from '../../src/users/users.interface';
 import { User } from '../../src/users/users.schema';
 
@@ -36,6 +38,11 @@ export const registerModels = async (): Promise<void> => {
   );
 
   await fixture.registerModel<Grant>(GrantModel.modelName, GrantModel.schema);
+
+  await fixture.registerModel<OneTimeLink>(
+    LinkModel.modelName,
+    LinkModel.schema,
+  );
 };
 
 export default fixture;

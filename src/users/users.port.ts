@@ -18,5 +18,6 @@ export interface UsersPort {
   findById(id: string): Promise<User | null>;
   findByRole(role: Roles): Promise<User | null>;
   setPassword(id: string, newPassword: string): Promise<void>;
+  deleteOneById(id: string): Promise<User | null>;
   setGrantsCleaner(cleaner: UserGrantsCleanerPort): void;
 }
