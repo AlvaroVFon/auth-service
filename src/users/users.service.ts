@@ -1,6 +1,7 @@
 import { Model } from 'mongoose';
 
 import { EMAIL_REGEX, OBJECTID_REGEX } from '../common/constants/regex';
+import { normalizeEmail } from '../common/email';
 import {
   AccountLockedError,
   InvalidCredentialsError,
@@ -27,7 +28,7 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Email is required to create a user');
     }
 
-    const email = data.email.trim().toLowerCase();
+    const email = normalizeEmail(data.email);
 
     if (!EMAIL_REGEX.test(email)) {
       throw new InvalidArgumentError('Invalid email format');
@@ -51,7 +52,7 @@ export class UsersService implements UsersPort {
     email: string;
     passwordHash: string;
   }): Promise<UserInterface> {
-    const email = input.email.trim().toLowerCase();
+    const email = normalizeEmail(input.email);
     const existingUser = await this.usersModel.findOne({ email });
     if (existingUser) {
       throw new EntityAlreadyExistsError('Email already exists');
@@ -99,7 +100,7 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Email is required');
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
 
     if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('Invalid email format');

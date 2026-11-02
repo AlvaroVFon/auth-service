@@ -137,4 +137,13 @@ describe('HoldersService email normalization', () => {
     assert.ok(found);
     assert.strictEqual(found!.email, 'ana@example.com');
   });
+
+  test('should normalize the email at the schema boundary', async () => {
+    const holder = await HoldersModel.create({
+      email: ' Ana@Example.COM ',
+      password: 'hashed_password',
+    });
+
+    assert.strictEqual(holder.email, 'ana@example.com');
+  });
 });

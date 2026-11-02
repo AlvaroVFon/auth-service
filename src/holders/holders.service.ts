@@ -5,6 +5,7 @@ import {
   OBJECTID_REGEX,
   PASSWORD_REGEX,
 } from '../common/constants/regex';
+import { normalizeEmail } from '../common/email';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { CryptoService } from '../libs/crypto';
 import { Holder } from './holders.interface';
@@ -21,7 +22,7 @@ export class HoldersService implements HoldersPort {
       throw new InvalidArgumentError('Email is required');
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
 
     if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('Email format is invalid');
@@ -55,7 +56,7 @@ export class HoldersService implements HoldersPort {
       throw new InvalidArgumentError('Email is required');
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
 
     if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('Email format is invalid');

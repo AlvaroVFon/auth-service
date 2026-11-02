@@ -3,12 +3,14 @@ import {
   OBJECTID_REGEX,
   PASSWORD_REGEX,
 } from '../../common/constants/regex';
+import { normalizeEmail } from '../../common/email';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
+import { LoggerInterface } from '../../libs/logger/logger.interface';
 import { UsersPort } from '../../users';
 import { Credentials, SignupCredentials } from '../auth.interface';
 import { CodeType } from '../codes/code.interface';
@@ -25,6 +27,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly blacklistService: TokenBlacklistPort,
     private readonly holdersService: HoldersPort,
+    private readonly logger: LoggerInterface,
   ) {}
 
   async login(
@@ -35,12 +38,14 @@ export class AuthService {
       throw new InvalidArgumentError('Email and password are required');
     }
 
-    if (!EMAIL_REGEX.test(credentials.email)) {
+    const email = normalizeEmail(credentials.email);
+
+    if (!EMAIL_REGEX.test(email)) {
       throw new InvalidArgumentError('Invalid email or password');
     }
 
     const user = await this.usersService.verifyCredentials(
-      credentials.email,
+      email,
       credentials.password,
     );
 
@@ -60,7 +65,8 @@ export class AuthService {
     if (!credentials.email) {
       throw new InvalidArgumentError('Email is required');
     }
-    if (EMAIL_REGEX.test(credentials.email) === false) {
+    const email = normalizeEmail(credentials.email);
+    if (EMAIL_REGEX.test(email) === false) {
       throw new InvalidArgumentError('Invalid email format');
     }
     if (!credentials.password) {
@@ -80,18 +86,16 @@ export class AuthService {
       );
     }
 
-    const existingHolder = await this.holdersService.findByEmail(
-      credentials.email,
-    );
+    const existingHolder = await this.holdersService.findByEmail(email);
 
-    const existingUser = await this.usersService.findByEmail(credentials.email);
+    const existingUser = await this.usersService.findByEmail(email);
 
     if (existingHolder || existingUser) {
       throw new InvalidArgumentError('Invalid email or password');
     }
 
     const newHolder = await this.holdersService.create(
-      credentials.email,
+      email,
       credentials.password,
     );
 
@@ -121,25 +125,31 @@ export class AuthService {
     if (!email) {
       throw new InvalidArgumentError('email is required');
     }
-    if (!EMAIL_REGEX.test(email)) {
+
+    const normalizedEmail = normalizeEmail(email);
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
       throw new InvalidArgumentError('email has invalid format');
     }
 
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmail(normalizedEmail);
     if (!user) {
       return;
     }
 
-    const code = await this.codeService.create(
-      user._id.toString(),
-      CodeType.RESET_PASSWORD,
-    );
+    try {
+      const code = await this.codeService.create(
+        user._id.toString(),
+        CodeType.RESET_PASSWORD,
+      );
 
-    await this.authMailer.sendResetPasswordEmail(
-      email,
-      user._id.toString(),
-      code.code,
-    );
+      void this.authMailer
+        .sendResetPasswordEmail(user.email, user._id.toString(), code.code)
+        .catch((error: unknown) => {
+          this.logger.warn('Failed to send password reset email', error);
+        });
+    } catch (error) {
+      this.logger.warn('Failed to create password reset code', error);
+    }
   }
 
   async resetPassword(
