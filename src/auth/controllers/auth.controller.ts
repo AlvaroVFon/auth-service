@@ -166,7 +166,13 @@ export class AuthController {
     const userId = req.user?.id as string;
     const jti = req.user?.jti;
     const expiresAt = req.user?.expiresAt;
-    await this.authService.logout(userId, jti, expiresAt, req.user?.audience);
+    await this.authService.logout(
+      userId,
+      jti,
+      expiresAt,
+      req.user?.audience,
+      this.buildRequestContext(req),
+    );
 
     res.status(204).send();
   }

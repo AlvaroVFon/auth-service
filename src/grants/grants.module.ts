@@ -2,6 +2,7 @@ import type { Application } from 'express';
 import type { Model } from 'mongoose';
 
 import type { ApplicationsPort } from '../applications';
+import type { AuditPort } from '../audit';
 import { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { LoggerInterface } from '../libs/logger';
@@ -20,6 +21,7 @@ export class GrantsModule {
     private readonly applicationsService: ApplicationsPort,
     usersService: UsersPort,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
+    auditService: AuditPort,
     private readonly logger: LoggerInterface,
   ) {
     this.service = new GrantsService(
@@ -27,7 +29,7 @@ export class GrantsModule {
       applicationsService,
       usersService,
     );
-    this.controller = new GrantsController(this.service);
+    this.controller = new GrantsController(this.service, auditService);
   }
 
   initialize(app: Application): void {

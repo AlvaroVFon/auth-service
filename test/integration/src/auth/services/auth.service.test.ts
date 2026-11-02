@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { Application } from '../../../../../src/applications/applications.interface';
 import { ApplicationModel } from '../../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../../src/applications/applications.service';
+import type { AuditPort } from '../../../../../src/audit';
 import { Code, CodeType } from '../../../../../src/auth/codes/code.interface';
 import { CodesModel } from '../../../../../src/auth/codes/codes.schema';
 import { CodesService } from '../../../../../src/auth/codes/codes.service';
@@ -65,6 +66,11 @@ describe('Auth Service', () => {
     sendSignupVerificationEmail: mock.fn(() => Promise.resolve()),
     sendResetPasswordEmail: mock.fn(() => Promise.resolve()),
   } as unknown as AuthMailer;
+
+  const mockAuditService = {
+    record: mock.fn(() => Promise.resolve()),
+    list: mock.fn(() => Promise.resolve([])),
+  } as unknown as AuditPort;
 
   const mockLogger: LoggerInterface = {
     info: mock.fn(),
@@ -130,6 +136,7 @@ describe('Auth Service', () => {
       holdersService,
       applicationTokens,
       jwtService,
+      mockAuditService,
       mockLogger,
     );
   });
@@ -447,6 +454,7 @@ describe('Auth Service', () => {
         holdersService,
         applicationTokens,
         jwtService,
+        mockAuditService,
         mockLogger,
       );
     });

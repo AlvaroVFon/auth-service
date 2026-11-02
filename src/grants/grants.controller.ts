@@ -1,11 +1,15 @@
 import { Request, Response } from 'express';
 
+import { AuditEvent, AuditPort, AuditResult } from '../audit';
 import { Catch } from '../common/decorators/catch.decorator';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
 import { GrantsService } from './grants.service';
 
 export class GrantsController {
-  constructor(private readonly grantsService: GrantsService) {}
+  constructor(
+    private readonly grantsService: GrantsService,
+    private readonly auditService: AuditPort,
+  ) {}
 
   @Catch()
   async upsert(req: Request, res: Response): Promise<void> {
@@ -15,6 +19,15 @@ export class GrantsController {
       userId,
       applicationId,
       role,
+    });
+
+    await this.auditService.record({
+      event: AuditEvent.GRANT_ASSIGNED,
+      result: AuditResult.SUCCESS,
+      applicationId,
+      targetUserId: userId,
+      role,
+      ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
     });
 
     res.status(200).json(grant);
@@ -49,6 +62,14 @@ export class GrantsController {
     const applicationId = req.params.applicationId as string;
     const userId = req.params.userId as string;
     await this.grantsService.revokeRole(userId, applicationId);
+
+    await this.auditService.record({
+      event: AuditEvent.GRANT_REVOKED,
+      result: AuditResult.SUCCESS,
+      applicationId,
+      targetUserId: userId,
+      ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
+    });
 
     res.status(204).json();
   }

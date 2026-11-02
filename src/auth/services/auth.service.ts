@@ -1,3 +1,4 @@
+import { AuditEvent, AuditPort, AuditResult } from '../../audit';
 import {
   EMAIL_REGEX,
   OBJECTID_REGEX,
@@ -6,6 +7,7 @@ import {
 import { normalizeEmail } from '../../common/email';
 import { Roles } from '../../common/enums/roles.enum';
 import {
+  AccountLockedError,
   ForbiddenError,
   UnauthorizedError,
 } from '../../common/exceptions/auth.exceptions';
@@ -38,6 +40,7 @@ export class AuthService {
     private readonly holdersService: HoldersPort,
     private readonly applicationTokens: ApplicationTokenService,
     private readonly jwtService: JwtService,
+    private readonly auditService: AuditPort,
     private readonly logger: LoggerInterface,
   ) {}
 
@@ -106,18 +109,34 @@ export class AuthService {
       throw new InvalidArgumentError('Invalid email or password');
     }
 
-    const user = await this.usersService.verifyCredentials(
-      email,
-      credentials.password,
-    );
-
-    this.assertVerified(user);
-
-    const userId = user._id.toString();
     const application =
       typeof credentials.application === 'string'
         ? credentials.application.trim()
         : '';
+
+    let user: User;
+    try {
+      user = await this.usersService.verifyCredentials(
+        email,
+        credentials.password,
+      );
+    } catch (error) {
+      await this.auditService.record({
+        event:
+          error instanceof AccountLockedError
+            ? AuditEvent.ACCOUNT_LOCKED
+            : AuditEvent.LOGIN_FAILED,
+        result: AuditResult.FAILURE,
+        email,
+        ...(application ? { audience: application } : {}),
+        ...this.auditContext(ctx),
+      });
+      throw error;
+    }
+
+    this.assertVerified(user);
+
+    const userId = user._id.toString();
 
     if (application) {
       const access = await this.applicationTokens.resolveAccess(
@@ -131,6 +150,16 @@ export class AuthService {
         ctx,
         access.application.audience,
       );
+      await this.auditService.record({
+        event: AuditEvent.LOGIN_SUCCEEDED,
+        result: AuditResult.SUCCESS,
+        userId,
+        email,
+        applicationId: access.application._id.toString(),
+        audience: access.application.audience,
+        role: access.role,
+        ...this.auditContext(ctx),
+      });
 
       return {
         accessToken: session.accessToken,
@@ -145,10 +174,28 @@ export class AuthService {
     }
 
     const session = await this.sessionService.create(userId, user.role, ctx);
+    await this.auditService.record({
+      event: AuditEvent.LOGIN_SUCCEEDED,
+      result: AuditResult.SUCCESS,
+      userId,
+      email,
+      role: user.role,
+      ...this.auditContext(ctx),
+    });
 
     return {
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+    };
+  }
+
+  private auditContext(ctx?: RequestContext): {
+    ipAddress?: string;
+    userAgent?: string;
+  } {
+    return {
+      ...(ctx?.ipAddress === undefined ? {} : { ipAddress: ctx.ipAddress }),
+      ...(ctx?.userAgent === undefined ? {} : { userAgent: ctx.userAgent }),
     };
   }
 
@@ -355,6 +402,14 @@ export class AuthService {
     }
 
     const session = await this.sessionService.rotate(claims, role, ctx);
+    await this.auditService.record({
+      event: AuditEvent.TOKEN_REFRESHED,
+      result: AuditResult.SUCCESS,
+      userId,
+      ...(audience === undefined ? {} : { audience }),
+      role,
+      ...this.auditContext(ctx),
+    });
 
     return {
       accessToken: session.accessToken,
@@ -368,10 +423,20 @@ export class AuthService {
 
   async revokeSession(userId: string, sessionId: string): Promise<void> {
     await this.sessionService.revoke(userId, sessionId);
+    await this.auditService.record({
+      event: AuditEvent.SESSION_REVOKED,
+      result: AuditResult.SUCCESS,
+      userId,
+    });
   }
 
   async revokeAllSessions(userId: string): Promise<void> {
     await this.sessionService.revokeAll(userId);
+    await this.auditService.record({
+      event: AuditEvent.SESSIONS_REVOKED,
+      result: AuditResult.SUCCESS,
+      userId,
+    });
   }
 
   async logout(
@@ -379,6 +444,7 @@ export class AuthService {
     accessJti?: string,
     accessExpiresAt?: Date,
     audience?: string,
+    ctx?: RequestContext,
   ): Promise<void> {
     if (!userId) {
       throw new InvalidArgumentError('userId is required');
@@ -394,5 +460,11 @@ export class AuthService {
     // An application-scoped token may only revoke sessions of its own
     // audience; otherwise any app could terminate sessions of every other app.
     await this.sessionService.revokeAll(userId, audience);
+    await this.auditService.record({
+      event: AuditEvent.LOGGED_OUT,
+      result: AuditResult.SUCCESS,
+      userId,
+      ...this.auditContext(ctx),
+    });
   }
 }

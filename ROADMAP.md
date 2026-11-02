@@ -68,7 +68,7 @@ El hogar es único; lo que varía es el acceso de cada usuario a cada aplicació
 El backlog priorizado vive en GitHub (issues #38–#53). Orden inmediato:
 
 1. Preparar la imagen Docker de producción y entorno (#48).
-2. Notificaciones por Telegram (#51), MFA (#52) y auditoría (#53).
+2. Notificaciones por Telegram (#51) y MFA (#52).
 
 ---
 
