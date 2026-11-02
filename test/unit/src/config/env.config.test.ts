@@ -1,6 +1,7 @@
 import {
   getStringEnvVariable,
   getNumberEnvVariable,
+  requireEnvVariable,
 } from '../../../../src/config/env.config';
 
 describe('Environment Configuration Tests', () => {
@@ -14,6 +15,26 @@ describe('Environment Configuration Tests', () => {
       process.env['TEST_STRING_VAR'] = 'actualString';
       const result = getStringEnvVariable('TEST_STRING_VAR', 'defaultString');
       assert.strictEqual(result, 'actualString');
+    });
+  });
+
+  describe('requireEnvVariable()', () => {
+    test('should return the trimmed value when set', () => {
+      assert.strictEqual(
+        requireEnvVariable('REQUIRED_VAR', '  value  '),
+        'value',
+      );
+    });
+
+    test('should fail fast when the variable is missing or blank', () => {
+      assert.throws(
+        () => requireEnvVariable('REQUIRED_VAR', ''),
+        /REQUIRED_VAR is required/,
+      );
+      assert.throws(
+        () => requireEnvVariable('REQUIRED_VAR', '   '),
+        /REQUIRED_VAR is required/,
+      );
     });
   });
 

@@ -38,6 +38,25 @@ pnpm dev
 
 ## Deployment
 
+### Production image
+
+The `Dockerfile` builds a production artifact and runs it with Node, not `tsx watch`:
+
+```sh
+docker build -t auth-service .
+docker run --rm -p 3000:3000 --env-file .env auth-service
+```
+
+The build stage typechecks (`pnpm build`) and bundles `src/index.ts` with esbuild into
+`dist/index.js`; runtime dependencies only, the mail templates and `package.json` are
+copied into the final image. The container runs as the `node` user (not root) and has a
+`HEALTHCHECK` against `/health`.
+
+Copy `.env.example` to `.env` and fill it in before starting. `MONGO_URI` and
+`JWT_PRIVATE_KEY` are required: if either is missing the process exits with a clear
+`InvalidArgumentError` instead of starting partially. Ephemeral JWT keys are rejected
+when `NODE_ENV=production`.
+
 ### Trust Proxy
 
 When running behind a reverse proxy (e.g., Nginx, Cloudflare, AWS ALB), you **must** enable Express trust proxy so that `req.ip` reflects the real client IP from `X-Forwarded-For`. Set the `TRUST_PROXY` environment variable to the number of proxy hops (`1` for a single reverse proxy) or `true`:

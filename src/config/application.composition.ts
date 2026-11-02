@@ -47,7 +47,11 @@ import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
 import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
-import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
+import {
+  getNumberEnvVariable,
+  getStringEnvVariable,
+  requireEnvVariable,
+} from './env.config';
 import { JwtConfig, resolveJwtConfig } from './jwt.config';
 import { GlobalMiddlewares } from './middlewares.config';
 import { resolveTrustProxy } from './trust-proxy.config';
@@ -128,7 +132,7 @@ export const createApplicationComposition = (
 ): ApplicationComposition => {
   const logger = options.logger ?? new WinstonLogger();
   const database =
-    options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
+    options.database ?? new Database(requireEnvVariable('MONGO_URI'), logger);
   const healthModule = new HealthModule(logger, () => database.getReadyState());
   const cryptoService = new CryptoService();
   const jwtConfig =
