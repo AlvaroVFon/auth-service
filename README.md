@@ -12,7 +12,7 @@ Authentication and authorization service built with Express 5, Mongoose, and Typ
 - Account lockout after failed login attempts
 - Per-route rate limiting
 - Role-based authorization (user / admin)
-- Multi-tenancy foundation
+- Home applications with per-user roles (viewer, editor, admin)
 
 ## Getting Started
 
