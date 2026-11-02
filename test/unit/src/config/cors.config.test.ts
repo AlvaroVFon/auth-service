@@ -13,4 +13,52 @@ describe('resolveCorsOrigins', () => {
       ['http://a.test', 'https://b.test', 'http://c.test'],
     );
   });
+
+  test('should normalize trailing slashes, casing and default ports', () => {
+    assert.deepStrictEqual(
+      resolveCorsOrigins('HTTPS://APP.TEST/, http://other.test:80/'),
+      ['https://app.test', 'http://other.test'],
+    );
+  });
+
+  test('should remove duplicated origins after normalization', () => {
+    assert.deepStrictEqual(
+      resolveCorsOrigins('http://a.test, HTTP://A.TEST/'),
+      ['http://a.test'],
+    );
+  });
+
+  test('should reject the wildcard origin', () => {
+    assert.throws(() => resolveCorsOrigins('*'), /wildcard origins/);
+  });
+
+  test('should reject entries that are not bare origins', () => {
+    assert.throws(
+      () => resolveCorsOrigins('https://app.test/callback'),
+      /only scheme, host and port/,
+    );
+    assert.throws(
+      () => resolveCorsOrigins('https://app.test?tenant=1'),
+      /only scheme, host and port/,
+    );
+    assert.throws(
+      () => resolveCorsOrigins('https://user:secret@app.test'),
+      /only scheme, host and port/,
+    );
+    assert.throws(
+      () => resolveCorsOrigins('https://*.test'),
+      /only scheme, host and port/,
+    );
+    assert.throws(
+      () => resolveCorsOrigins('ftp://app.test'),
+      /only scheme, host and port/,
+    );
+  });
+
+  test('should reject entries without a scheme', () => {
+    assert.throws(
+      () => resolveCorsOrigins('app.test'),
+      /expected a full origin/,
+    );
+  });
 });

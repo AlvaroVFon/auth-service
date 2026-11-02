@@ -51,4 +51,6 @@ Set `CORS_ORIGINS` to a comma-separated list of allowed browser origins. When un
 CORS_ORIGINS=http://localhost:5173,https://auth.home.example
 ```
 
+Entries are normalized before comparison (trailing slashes, casing and default ports are ignored). Wildcards and entries with a path, query, fragment or credentials are rejected at startup so a misconfiguration fails fast.
+
 Every response also gets the standard `helmet` security headers and the `X-Powered-By` header is removed.

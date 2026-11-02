@@ -11,7 +11,6 @@ export class GlobalMiddlewares {
     excludedBodyPaths: string[] = [],
     corsOrigins: string[] = [],
   ) {
-    app.disable('x-powered-by');
     app.use(helmet());
     app.use(createCorsMiddleware(corsOrigins));
     app.use(express.json());

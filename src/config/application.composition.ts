@@ -97,6 +97,9 @@ export const createApplicationComposition = (
   options: ApplicationCompositionOptions = {},
 ): ApplicationComposition => {
   const logger = options.logger ?? new WinstonLogger();
+  const corsOrigins =
+    options.corsOrigins ??
+    resolveCorsOrigins(getStringEnvVariable('CORS_ORIGINS'));
   const database =
     options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
   const cryptoService = new CryptoService();
@@ -161,13 +164,16 @@ export const createApplicationComposition = (
     usersModule,
     authModule,
     initialize(app, requestLogger = logger): void {
+      if (corsOrigins.length === 0) {
+        requestLogger.warn(
+          'CORS_ORIGINS is not configured: every browser origin will be rejected',
+        );
+      } else {
+        requestLogger.info(`CORS allowed origins: ${corsOrigins.join(', ')}`);
+      }
+
       HttpLoggerInterceptor.initialize(app, requestLogger);
-      GlobalMiddlewares.initialize(
-        app,
-        ['/auth/logout'],
-        options.corsOrigins ??
-          resolveCorsOrigins(getStringEnvVariable('CORS_ORIGINS')),
-      );
+      GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
       usersModule.initialize(app);
       authModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);

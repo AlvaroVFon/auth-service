@@ -1,7 +1,33 @@
 import { Application } from 'express';
 import request from 'supertest';
 
-import { getTestAppInstance } from '../utils/app';
+import {
+  createAppTestInstanceFromEnvironment,
+  getTestAppInstance,
+} from '../utils/app';
+
+const withCorsOrigins = async (
+  value: string | undefined,
+  run: () => Promise<void>,
+) => {
+  const original = process.env.CORS_ORIGINS;
+
+  if (value === undefined) {
+    delete process.env.CORS_ORIGINS;
+  } else {
+    process.env.CORS_ORIGINS = value;
+  }
+
+  try {
+    await run();
+  } finally {
+    if (original === undefined) {
+      delete process.env.CORS_ORIGINS;
+    } else {
+      process.env.CORS_ORIGINS = original;
+    }
+  }
+};
 
 describe('E2E Security middleware', () => {
   let app: Application;
@@ -33,6 +59,7 @@ describe('E2E Security middleware', () => {
       response.headers['access-control-allow-origin'],
       'http://allowed.test',
     );
+    assert.strictEqual(response.headers['access-control-max-age'], '600');
   });
 
   test('should not allow an unknown origin', async () => {
@@ -45,6 +72,38 @@ describe('E2E Security middleware', () => {
       response.headers['access-control-allow-origin'],
       undefined,
     );
+  });
+
+  test('should read and normalize the allowlist from the environment', async () => {
+    await withCorsOrigins('HTTP://ENV-ALLOWED.TEST/', async () => {
+      const environmentApp = createAppTestInstanceFromEnvironment();
+
+      const response = await request(environmentApp)
+        .get('/not-a-route')
+        .set('Origin', 'http://env-allowed.test')
+        .expect(404);
+
+      assert.strictEqual(
+        response.headers['access-control-allow-origin'],
+        'http://env-allowed.test',
+      );
+    });
+  });
+
+  test('should reject every origin when CORS_ORIGINS is not configured', async () => {
+    await withCorsOrigins(undefined, async () => {
+      const environmentApp = createAppTestInstanceFromEnvironment();
+
+      const response = await request(environmentApp)
+        .get('/not-a-route')
+        .set('Origin', 'http://allowed.test')
+        .expect(404);
+
+      assert.strictEqual(
+        response.headers['access-control-allow-origin'],
+        undefined,
+      );
+    });
   });
 
   test('should hide the server header and send security headers', async () => {

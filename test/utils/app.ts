@@ -1,6 +1,9 @@
 import express, { Application } from 'express';
 
-import { createApplicationComposition } from '../../src/config/application.composition';
+import {
+  ApplicationCompositionOptions,
+  createApplicationComposition,
+} from '../../src/config/application.composition';
 import {
   getNumberEnvVariable,
   getStringEnvVariable,
@@ -15,10 +18,9 @@ const mailer = {
   sendMailWithTemplate: mock.fn(() => Promise.resolve()),
 } as MailerInterface;
 
-const composition = createApplicationComposition({
+const createBaseTestOptions = (): ApplicationCompositionOptions => ({
   logger: silentLogger,
   mailer,
-  corsOrigins: ['http://allowed.test'],
   jwtSecret: getStringEnvVariable('JWT_SECRET'),
   jwtExpiresIn: parseInt(getStringEnvVariable('JWT_EXPIRATION', '3600'), 10),
   refreshTokenExpiresIn: parseInt(
@@ -46,12 +48,27 @@ const composition = createApplicationComposition({
   },
 });
 
+const composition = createApplicationComposition({
+  ...createBaseTestOptions(),
+  corsOrigins: ['http://allowed.test'],
+});
+
 export const createAppTestInstance = async () => {
   app = express();
   app.set('trust proxy', 1);
   composition.initialize(app);
 
   return app;
+};
+
+export const createAppTestInstanceFromEnvironment = (): Application => {
+  const environmentApp = express();
+  environmentApp.set('trust proxy', 1);
+  createApplicationComposition(createBaseTestOptions()).initialize(
+    environmentApp,
+  );
+
+  return environmentApp;
 };
 
 export const getTestAppInstance = async () => {
