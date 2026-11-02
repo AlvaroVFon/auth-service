@@ -84,6 +84,7 @@ export class LinksService implements LinksPort {
         tokenHash: hashLinkToken(token),
         type,
         usedAt: null,
+        invalidatedAt: null,
         expiresAt: { $gt: new Date() },
       },
       { $set: { usedAt: new Date() } },
@@ -98,9 +99,21 @@ export class LinksService implements LinksPort {
   }
 
   async invalidateActive(filter: InvalidateLinksFilter): Promise<void> {
+    if (
+      filter.email === undefined &&
+      filter.applicationId === undefined &&
+      filter.userId === undefined
+    ) {
+      throw new InvalidArgumentError(
+        'At least one link discriminator is required',
+      );
+    }
+
+    // Do not filter on usedAt: a link that is mid-accept must also be marked
+    // invalidated so a later release() cannot revive it after a reissue.
     const query: Record<string, unknown> = {
       type: filter.type,
-      usedAt: null,
+      invalidatedAt: null,
     };
 
     if (filter.email !== undefined) {
@@ -115,7 +128,9 @@ export class LinksService implements LinksPort {
       query.userId = new Types.ObjectId(filter.userId);
     }
 
-    await this.linkModel.updateMany(query, { $set: { usedAt: new Date() } });
+    await this.linkModel.updateMany(query, {
+      $set: { invalidatedAt: new Date() },
+    });
   }
 
   async release(id: string): Promise<void> {
@@ -125,6 +140,7 @@ export class LinksService implements LinksPort {
       {
         _id: new Types.ObjectId(id),
         usedAt: { $ne: null, $gt: new Date(Date.now() - RELEASE_WINDOW_MS) },
+        invalidatedAt: null,
         expiresAt: { $gt: new Date() },
       },
       { $set: { usedAt: null } },
@@ -141,6 +157,7 @@ export class LinksService implements LinksPort {
       tokenHash: hashLinkToken(token),
       expiresAt: new Date(Date.now() + expirationMs),
       usedAt: null,
+      invalidatedAt: null,
     });
 
     return { link, token };

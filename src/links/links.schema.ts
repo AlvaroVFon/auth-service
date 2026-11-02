@@ -13,6 +13,7 @@ const linkSchema = new Schema<OneTimeLink>(
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     expiresAt: { type: Date, required: true },
     usedAt: { type: Date, default: null },
+    invalidatedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -27,8 +28,8 @@ const linkSchema = new Schema<OneTimeLink>(
   },
 );
 
-linkSchema.index({ type: 1, email: 1, applicationId: 1, usedAt: 1 });
-linkSchema.index({ type: 1, userId: 1, usedAt: 1 });
+linkSchema.index({ type: 1, email: 1, applicationId: 1, invalidatedAt: 1 });
+linkSchema.index({ type: 1, userId: 1, invalidatedAt: 1 });
 linkSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const LinkModel = model<OneTimeLink>('Link', linkSchema);

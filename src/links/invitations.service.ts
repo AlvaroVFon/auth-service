@@ -1,13 +1,11 @@
 import type { ApplicationsPort } from '../applications';
-import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
+import { PASSWORD_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
 import {
-  EntityAlreadyExistsError,
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { InvalidLinkError } from '../common/exceptions/links.exceptions';
-import { assertObjectId } from '../common/validators/object-id';
 import type { GrantsPort } from '../grants';
 import { GrantRoles } from '../grants';
 import type { HoldersPort } from '../holders';
@@ -53,14 +51,6 @@ export class InvitationsService {
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
     const email = normalizeEmail(input.email ?? '');
 
-    if (!EMAIL_REGEX.test(email)) {
-      throw new InvalidArgumentError('Invalid email format');
-    }
-    assertObjectId(input.applicationId, 'applicationId');
-    if (!Object.values(GrantRoles).includes(input.role)) {
-      throw new InvalidArgumentError('Invalid role');
-    }
-
     const application = await this.applicationsService.findAssignableById(
       input.applicationId,
     );
@@ -71,7 +61,9 @@ export class InvitationsService {
     const existingUser = await this.usersService.findByEmail(email);
     const existingHolder = await this.holdersService.findByEmail(email);
     if (existingUser || existingHolder) {
-      throw new EntityAlreadyExistsError('Email already has an account');
+      // Keep the response generic: a per-app admin must not be able to probe
+      // whether an email has an account anywhere in the service.
+      throw new InvalidArgumentError('Invitation could not be created');
     }
 
     const created = await this.linksService.createInvitation({
@@ -116,6 +108,20 @@ export class InvitationsService {
     } catch (error) {
       await this.release(link._id.toString());
       throw error;
+    }
+
+    // The invitee may have signed up (holder) after the link was created. The
+    // verified account replaces that staging holder so it cannot be orphaned.
+    const holder = await this.holdersService.findByEmail(link.email);
+    if (holder) {
+      try {
+        await this.holdersService.deleteById(holder._id.toString());
+      } catch (error) {
+        this.logger.warn(
+          `Failed to remove holder ${holder._id.toString()}`,
+          error,
+        );
+      }
     }
 
     const userId = user._id.toString();

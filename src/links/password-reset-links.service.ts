@@ -86,7 +86,16 @@ export class PasswordResetLinksService {
       throw error;
     }
 
-    await this.sessionService.revokeAll(userId);
+    // The password is already changed and the link consumed, so a revocation
+    // failure must not turn the reset into an error the user would retry.
+    try {
+      await this.sessionService.revokeAll(userId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to revoke sessions after password reset for user ${userId}`,
+        error,
+      );
+    }
   }
 
   private validatePassword(

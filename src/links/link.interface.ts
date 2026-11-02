@@ -17,5 +17,6 @@ export interface OneTimeLink {
   userId?: Types.ObjectId;
   expiresAt: Date;
   usedAt: Date | null;
+  invalidatedAt: Date | null;
   createdAt?: Date;
 }

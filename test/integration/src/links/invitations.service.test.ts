@@ -1,7 +1,6 @@
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
 import {
-  EntityAlreadyExistsError,
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
@@ -93,7 +92,7 @@ describe('InvitationsService', () => {
         applicationId: application._id.toString(),
         role: GrantRoles.VIEWER,
       }),
-      EntityAlreadyExistsError,
+      new InvalidArgumentError('Invitation could not be created'),
     );
 
     const holder = await holders.create('pending@example.com', PASSWORD);
@@ -104,8 +103,31 @@ describe('InvitationsService', () => {
         applicationId: application._id.toString(),
         role: GrantRoles.VIEWER,
       }),
-      EntityAlreadyExistsError,
+      new InvalidArgumentError('Invitation could not be created'),
     );
+  });
+
+  test('should remove a holder created after the invitation', async () => {
+    const application = await createApplication();
+    const created = await invitations.create({
+      email: 'pending@example.com',
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+    });
+    const token = new URL(created.link).searchParams.get('token') as string;
+
+    await holders.create('pending@example.com', PASSWORD);
+
+    await invitations.accept({
+      token,
+      password: PASSWORD,
+      passwordConfirmation: PASSWORD,
+    });
+
+    assert.strictEqual(await holders.findByEmail('pending@example.com'), null);
+    const user = await users.findByEmail('pending@example.com');
+    assert.ok(user);
+    assert.strictEqual(user!.verified, true);
   });
 
   test('should reject an unknown application or invalid role', async () => {

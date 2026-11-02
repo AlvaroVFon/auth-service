@@ -162,6 +162,35 @@ describe('PasswordResetLinksService', () => {
     );
   });
 
+  test('should keep the password change when session revocation fails', async () => {
+    const user = await createUser();
+    const failing = new PasswordResetLinksService(
+      links,
+      users,
+      {
+        revokeAll: async () => {
+          throw new Error('session store unavailable');
+        },
+      } as unknown as SessionService,
+      'https://app.test',
+      silentLogger,
+    );
+    const created = await failing.create(user._id.toString());
+    const token = new URL(created.link).searchParams.get('token') as string;
+
+    await failing.accept({
+      token,
+      newPassword: NEW_PASSWORD,
+      passwordConfirmation: NEW_PASSWORD,
+    });
+
+    const authenticated = await users.verifyCredentials(
+      user.email,
+      NEW_PASSWORD,
+    );
+    assert.strictEqual(authenticated._id.toString(), user._id.toString());
+  });
+
   test('should validate the new password', async () => {
     const user = await createUser();
     const created = await service.create(user._id.toString());

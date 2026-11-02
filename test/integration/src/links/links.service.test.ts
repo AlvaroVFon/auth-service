@@ -197,7 +197,40 @@ describe('LinksService', () => {
     });
   });
 
+  describe('invalidateActive', () => {
+    test('should require at least one discriminator', async () => {
+      await assert.rejects(
+        service.invalidateActive({ type: LinkType.INVITATION }),
+        new InvalidArgumentError('At least one link discriminator is required'),
+      );
+    });
+  });
+
   describe('release', () => {
+    test('should not revive a link invalidated by a reissue', async () => {
+      const first = await service.createInvitation({
+        email: 'guest@example.com',
+        applicationId: APPLICATION_ID,
+        role: GrantRoles.VIEWER,
+      });
+      const consumed = await service.consume(first.token, LinkType.INVITATION);
+
+      // Reissuing marks every matching link invalidated, including the one
+      // currently mid-accept.
+      await service.createInvitation({
+        email: 'guest@example.com',
+        applicationId: APPLICATION_ID,
+        role: GrantRoles.EDITOR,
+      });
+
+      await service.release(consumed._id.toString());
+
+      await assert.rejects(
+        service.consume(first.token, LinkType.INVITATION),
+        InvalidLinkError,
+      );
+    });
+
     test('should restore a just-claimed unexpired link', async () => {
       const created = await service.createInvitation({
         email: 'guest@example.com',
