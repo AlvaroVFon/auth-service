@@ -4,9 +4,16 @@ import { LoggerInterface } from '../../libs/logger';
 import { HeadersBlackList } from '../enums/black-lists.enum';
 
 export class HttpLoggerInterceptor {
-  constructor(private readonly logger: LoggerInterface) {}
+  constructor(
+    private readonly logger: LoggerInterface,
+    private readonly shouldSkip: (request: Request) => boolean = () => false,
+  ) {}
 
   intercept(request: Request, response: Response, next: NextFunction) {
+    if (this.shouldSkip(request)) {
+      return next();
+    }
+
     const start = process.hrtime.bigint();
     const { method, originalUrl, headers } = request;
 
@@ -40,8 +47,12 @@ export class HttpLoggerInterceptor {
     next();
   }
 
-  static initialize(app: Application, logger: LoggerInterface) {
-    const interceptor = new HttpLoggerInterceptor(logger);
+  static initialize(
+    app: Application,
+    logger: LoggerInterface,
+    shouldSkip?: (request: Request) => boolean,
+  ) {
+    const interceptor = new HttpLoggerInterceptor(logger, shouldSkip);
     app.use((req: Request, res: Response, next: NextFunction) => {
       interceptor.intercept(req, res, next);
     });
