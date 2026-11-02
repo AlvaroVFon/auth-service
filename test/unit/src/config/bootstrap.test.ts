@@ -118,6 +118,40 @@ describe('bootstrap', () => {
     );
   });
 
+  test('should log and exit when CORS_ORIGINS is invalid', async () => {
+    const exit = mock.method(process, 'exit', (() => {
+      throw new Error('process.exit');
+    }) as any);
+    const originalCorsOrigins = process.env.CORS_ORIGINS;
+    process.env.CORS_ORIGINS = 'https://*.test';
+
+    try {
+      await assert.rejects(
+        bootstrap({
+          logger,
+          app,
+          database: createDatabase(async () => {}),
+          startServer: (() => ({ close: () => {} })) as any,
+        }),
+        /process\.exit/,
+      );
+    } finally {
+      if (originalCorsOrigins === undefined) {
+        delete process.env.CORS_ORIGINS;
+      } else {
+        process.env.CORS_ORIGINS = originalCorsOrigins;
+      }
+    }
+
+    assert.strictEqual(exit.mock.callCount(), 1);
+    assert.strictEqual(
+      (
+        logger.error as unknown as { mock: { callCount(): number } }
+      ).mock.callCount(),
+      1,
+    );
+  });
+
   test('should not start the server when wiring throws', async () => {
     mock.method(process, 'exit', (() => {
       throw new Error('process.exit');

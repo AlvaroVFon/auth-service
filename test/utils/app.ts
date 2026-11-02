@@ -53,7 +53,7 @@ const createBaseTestOptions = (): ApplicationCompositionOptions => ({
 
 const composition = createApplicationComposition({
   ...createBaseTestOptions(),
-  corsOrigins: ['http://allowed.test'],
+  corsOrigins: ['HTTP://ALLOWED.TEST/'],
 });
 
 export const createAppTestInstance = async () => {

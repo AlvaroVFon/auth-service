@@ -1,4 +1,7 @@
-import { resolveCorsOrigins } from '../../../../src/config/cors.config';
+import {
+  normalizeCorsOrigins,
+  resolveCorsOrigins,
+} from '../../../../src/config/cors.config';
 
 describe('resolveCorsOrigins', () => {
   test('should return an empty list when the value is missing', () => {
@@ -59,6 +62,26 @@ describe('resolveCorsOrigins', () => {
     assert.throws(
       () => resolveCorsOrigins('app.test'),
       /expected a full origin/,
+    );
+  });
+});
+
+describe('normalizeCorsOrigins', () => {
+  test('should normalize and deduplicate programmatic origins', () => {
+    assert.deepStrictEqual(
+      normalizeCorsOrigins([
+        'HTTP://APP.TEST/',
+        'http://app.test:80',
+        ' https://other.test ',
+      ]),
+      ['http://app.test', 'https://other.test'],
+    );
+  });
+
+  test('should reject invalid programmatic origins', () => {
+    assert.throws(
+      () => normalizeCorsOrigins(['https://app.test/path']),
+      /only scheme, host and port/,
     );
   });
 });

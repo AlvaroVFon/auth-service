@@ -32,15 +32,17 @@ const normalizeOrigin = (origin: string): string => {
   return url.origin;
 };
 
-export const resolveCorsOrigins = (value: string | undefined): string[] => {
-  const origins = (value ?? '')
-    .split(',')
+export const normalizeCorsOrigins = (origins: string[]): string[] => {
+  const normalizedOrigins = origins
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0)
     .map(normalizeOrigin);
 
-  return [...new Set(origins)];
+  return [...new Set(normalizedOrigins)];
 };
+
+export const resolveCorsOrigins = (value: string | undefined): string[] =>
+  normalizeCorsOrigins((value ?? '').split(','));
 
 export const createCorsMiddleware = (origins: string[]) => {
   const allowedOrigins = new Set(origins);

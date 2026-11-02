@@ -33,7 +33,7 @@ import { NodeMailerAdapter } from '../libs/mailer/adapters/nodemailer.adapter';
 import { MailerInterface } from '../libs/mailer/mailer.interface';
 import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.adapter';
 import { UsersModule } from '../users/users.module';
-import { resolveCorsOrigins } from './cors.config';
+import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import { getNumberEnvVariable, getStringEnvVariable } from './env.config';
 import { GlobalMiddlewares } from './middlewares.config';
@@ -104,9 +104,6 @@ export const createApplicationComposition = (
   options: ApplicationCompositionOptions = {},
 ): ApplicationComposition => {
   const logger = options.logger ?? new WinstonLogger();
-  const corsOrigins =
-    options.corsOrigins ??
-    resolveCorsOrigins(getStringEnvVariable('CORS_ORIGINS'));
   const database =
     options.database ?? new Database(getStringEnvVariable('MONGO_URI'), logger);
   const healthModule = new HealthModule(logger, () => database.getReadyState());
@@ -182,6 +179,11 @@ export const createApplicationComposition = (
         options.trustProxy ??
           resolveTrustProxy(getStringEnvVariable('TRUST_PROXY')),
       );
+
+      const corsOrigins =
+        options.corsOrigins === undefined
+          ? resolveCorsOrigins(getStringEnvVariable('CORS_ORIGINS'))
+          : normalizeCorsOrigins(options.corsOrigins);
 
       if (corsOrigins.length === 0) {
         requestLogger.warn(
