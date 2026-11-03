@@ -274,6 +274,33 @@ describe('UsersService', () => {
       });
     });
 
+    describe('createVerifiedUser()', () => {
+      test('should map a concurrent duplicate email to a domain error', async () => {
+        const email = generateRandomEmail('verified-race+');
+        const passwordHash = await new CryptoService().hashString(
+          'ValidPass123!',
+        );
+
+        const results = await Promise.allSettled([
+          usersService.createVerifiedUser({ email, passwordHash }),
+          usersService.createVerifiedUser({ email, passwordHash }),
+        ]);
+
+        const fulfilled = results.filter(
+          (result) => result.status === 'fulfilled',
+        );
+        const rejected = results.find(
+          (result): result is PromiseRejectedResult =>
+            result.status === 'rejected',
+        );
+
+        assert.strictEqual(fulfilled.length, 1);
+        assert.ok(rejected);
+        assert.ok(rejected!.reason instanceof EntityAlreadyExistsError);
+        assert.strictEqual(rejected!.reason.message, 'Email already exists');
+      });
+    });
+
     describe('FindByEmail()', () => {
       beforeEach(async () => {
         await fixture.create<UserInterface>('User', DEFAULT_USER);

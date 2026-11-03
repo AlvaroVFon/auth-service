@@ -84,6 +84,29 @@ describe('HoldersService', () => {
       );
     });
 
+    test('should map a concurrent duplicate email to a domain error', async () => {
+      const email = `race+${Date.now()}@example.com`;
+      const password = 'ValidPass123!';
+
+      const results = await Promise.allSettled([
+        holdersService.create(email, password),
+        holdersService.create(email, password),
+      ]);
+
+      const fulfilled = results.filter(
+        (result) => result.status === 'fulfilled',
+      );
+      const rejected = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
+      );
+
+      assert.strictEqual(fulfilled.length, 1);
+      assert.ok(rejected);
+      assert.ok(rejected!.reason instanceof InvalidArgumentError);
+      assert.strictEqual(rejected!.reason.message, 'Invalid email or password');
+    });
+
     test('should create a new holder with valid email and password', async () => {
       const holderData = HolderFactory.generate();
 
