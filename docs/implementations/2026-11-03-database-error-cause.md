@@ -34,15 +34,17 @@ Issue: #82.
 
 ## Test Plan
 
-| Case                      | Type | Input / state                                  | Expected result                          | Test file                                      |
-| ------------------------- | ---- | ---------------------------------------------- | ---------------------------------------- | ---------------------------------------------- |
-| Causa preservada          | unit | conexión a `mongodb://127.0.0.1:1` con timeout | `InfraError` con `cause` de tipo `Error` | `test/unit/src/config/database.config.test.ts` |
-| Redacción de credenciales | unit | mensaje con `mongodb://user:secret@host`       | `mongodb://***@host`                     | `test/unit/src/config/database.config.test.ts` |
+| Case                      | Type | Input / state                                               | Expected result                                       | Test file                                      |
+| ------------------------- | ---- | ----------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
+| Causa preservada          | unit | conexión a `mongodb://127.0.0.1:1` con timeout              | `InfraError` con `cause` de tipo `Error`              | `test/unit/src/config/database.config.test.ts` |
+| Log saneado               | unit | `mongoose.connect` rechaza con la URI en el mensaje         | log con `Database connection failed:` y URI redactada | `test/unit/src/config/database.config.test.ts` |
+| Redacción de credenciales | unit | URIs bien formadas y malformadas (`/` y `@` en el password) | `mongodb://***@host`                                  | `test/unit/src/config/database.config.test.ts` |
+| Rejection no-Error        | unit | `mongoose.connect` rechaza un objeto plano                  | log con el contenido, sin `[object Object]`           | `test/unit/src/config/database.config.test.ts` |
 
 ## Verificación
 
 - `pnpm lint`, `pnpm format:check`, `pnpm build`.
-- `pnpm test`: 232 unit, 312 integration, 178 e2e.
+- `pnpm test`: 234 unit, 312 integration, 178 e2e.
 
 ## Fuera de alcance
 

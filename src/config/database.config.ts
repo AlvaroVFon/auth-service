@@ -1,15 +1,26 @@
+import { inspect } from 'node:util';
+
 import mongoose from 'mongoose';
 
 import { InfraError } from '../common/exceptions/infra.exceptions';
 import { LoggerInterface } from '../libs/logger';
 
 const toError = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error));
+  error instanceof Error ? error : new Error(inspect(error));
 
-const CREDENTIALS_IN_URI = /(mongodb(?:\+srv)?:\/\/)[^@\s/]+@/gi;
+const CONNECTION_STRING = /mongodb(?:\+srv)?:\/\/\S+/gi;
 
 export const redactCredentials = (message: string): string =>
-  message.replace(CREDENTIALS_IN_URI, '$1***@');
+  message.replace(CONNECTION_STRING, (uri) => {
+    const schemeEnd = uri.indexOf('://') + 3;
+    const atIndex = uri.lastIndexOf('@');
+
+    if (atIndex < schemeEnd) {
+      return uri;
+    }
+
+    return `${uri.slice(0, schemeEnd)}***@${uri.slice(atIndex + 1)}`;
+  });
 
 const describeError = (error: unknown): string => {
   const normalized = toError(error);
