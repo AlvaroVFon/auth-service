@@ -28,6 +28,19 @@ describe('Codes Service', () => {
     );
   });
 
+  test('should enforce one valid code per subject and type', () => {
+    const entry = CodesModel.schema
+      .indexes()
+      .find(
+        ([fields]) =>
+          JSON.stringify(fields) === JSON.stringify({ subjectId: 1, type: 1 }),
+      );
+
+    assert.ok(entry, 'expected an index on subjectId and type');
+    assert.strictEqual(entry?.[1].unique, true);
+    assert.deepStrictEqual(entry?.[1].partialFilterExpression, { used: false });
+  });
+
   beforeEach(async () => {
     codesService = new CodesService(CodesModel);
   });
@@ -136,6 +149,70 @@ describe('Codes Service', () => {
           'A valid code has already been generated for this user and type',
         ),
       );
+    });
+
+    test('should create only one code under concurrent requests', async () => {
+      const subjectId = new Types.ObjectId().toString();
+
+      const results = await Promise.allSettled([
+        codesService.create(subjectId, CodeType.SIGNUP),
+        codesService.create(subjectId, CodeType.SIGNUP),
+      ]);
+
+      const fulfilled = results.filter(
+        (result) => result.status === 'fulfilled',
+      );
+      const rejected = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
+      );
+
+      assert.strictEqual(fulfilled.length, 1);
+      assert.ok(rejected);
+      assert.ok(rejected!.reason instanceof AlreadyGeneratedCodeError);
+
+      const validCodes = await fixture.find<Code>('Code', {
+        subjectId: new Types.ObjectId(subjectId),
+        type: CodeType.SIGNUP,
+        used: false,
+      });
+
+      assert.strictEqual(validCodes.length, 1);
+    });
+
+    test('should create a new code after the previous one is consumed', async () => {
+      const subjectId = new Types.ObjectId().toString();
+      const first = await codesService.create(subjectId, CodeType.SIGNUP);
+
+      await codesService.validateCode(subjectId, first.code, CodeType.SIGNUP);
+
+      const second = await codesService.create(subjectId, CodeType.SIGNUP);
+
+      assert.notStrictEqual(second._id.toString(), first._id.toString());
+    });
+
+    test('should reuse the slot of an expired code the TTL has not removed yet', async () => {
+      const subjectId = new Types.ObjectId().toString();
+
+      await fixture.create<Code>('Code', {
+        subjectId: new Types.ObjectId(subjectId),
+        type: CodeType.SIGNUP,
+        used: false,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      const created = await codesService.create(subjectId, CodeType.SIGNUP);
+
+      assert.strictEqual(created.used, false);
+
+      const validCodes = await fixture.find<Code>('Code', {
+        subjectId: new Types.ObjectId(subjectId),
+        type: CodeType.SIGNUP,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      });
+
+      assert.strictEqual(validCodes.length, 1);
     });
   });
 

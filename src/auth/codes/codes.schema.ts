@@ -18,6 +18,10 @@ export const CodesSchema = new Schema<Code>(
 );
 
 CodesSchema.index({ subjectId: 1, type: 1, used: 1 });
+CodesSchema.index(
+  { subjectId: 1, type: 1 },
+  { unique: true, partialFilterExpression: { used: false } },
+);
 CodesSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const CodesModel = model<Code>('Code', CodesSchema);
