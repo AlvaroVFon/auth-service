@@ -190,6 +190,30 @@ describe('Codes Service', () => {
 
       assert.notStrictEqual(second._id.toString(), first._id.toString());
     });
+
+    test('should reuse the slot of an expired code the TTL has not removed yet', async () => {
+      const subjectId = new Types.ObjectId().toString();
+
+      await fixture.create<Code>('Code', {
+        subjectId: new Types.ObjectId(subjectId),
+        type: CodeType.SIGNUP,
+        used: false,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      const created = await codesService.create(subjectId, CodeType.SIGNUP);
+
+      assert.strictEqual(created.used, false);
+
+      const validCodes = await fixture.find<Code>('Code', {
+        subjectId: new Types.ObjectId(subjectId),
+        type: CodeType.SIGNUP,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      });
+
+      assert.strictEqual(validCodes.length, 1);
+    });
   });
 
   describe('validateCode()', () => {

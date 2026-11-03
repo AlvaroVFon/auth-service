@@ -41,11 +41,22 @@ export class CodesService {
       );
     }
 
+    const subject = new Types.ObjectId(subjectId);
+
+    // The partial unique index also covers expired documents until the TTL
+    // monitor removes them, so free those stale slots before inserting.
+    await this.codeModel.deleteMany({
+      subjectId: subject,
+      type,
+      used: false,
+      expiresAt: { $lte: new Date() },
+    });
+
     try {
       return await this.codeModel.create({
         code: this.generateCode(),
         expiresAt: new Date(Date.now() + this.codeExpirationMs),
-        subjectId: new Types.ObjectId(subjectId),
+        subjectId: subject,
         type,
       });
     } catch (error) {

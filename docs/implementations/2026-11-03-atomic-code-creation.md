@@ -26,6 +26,10 @@ Issue: #79.
   traduce el `E11000` del índice a `AlreadyGeneratedCodeError`, de modo que el
   perdedor de la carrera recibe el mismo error de dominio que en el camino
   secuencial.
+- Antes del insert, `create` borra las ranuras expiradas (`used: false`,
+  `expiresAt <= now`) que el monitor TTL todavía no ha eliminado: el índice
+  parcial también las cubre y, sin esta limpieza, un alta legítima chocaría con
+  ellas y respondería `AlreadyGeneratedCodeError`.
 - `validateCode` no cambia: su `findOneAndUpdate` atómico ya consumía una sola
   vez y ahora además libera la ranura del índice.
 
@@ -38,16 +42,17 @@ Issue: #79.
 
 ## Test Plan
 
-| Case                   | Type        | Input / state                                  | Expected result                                                          | Test file                                               |
-| ---------------------- | ----------- | ---------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------- |
-| Índice único parcial   | integration | `CodesModel.schema.indexes()`                  | índice `{subjectId,type}` unique y `used:false`                          | `test/integration/src/auth/codes/codes.service.test.ts` |
-| Creación concurrente   | integration | dos `create` simultáneos, mismo subject y tipo | una resuelve; la otra lanza `AlreadyGeneratedCodeError`; 1 código válido | `test/integration/src/auth/codes/codes.service.test.ts` |
-| Reemisión tras consumo | integration | crear, validar y volver a crear                | segundo código distinto y válido                                         | `test/integration/src/auth/codes/codes.service.test.ts` |
+| Case                    | Type        | Input / state                                  | Expected result                                                          | Test file                                               |
+| ----------------------- | ----------- | ---------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Índice único parcial    | integration | `CodesModel.schema.indexes()`                  | índice `{subjectId,type}` unique y `used:false`                          | `test/integration/src/auth/codes/codes.service.test.ts` |
+| Creación concurrente    | integration | dos `create` simultáneos, mismo subject y tipo | una resuelve; la otra lanza `AlreadyGeneratedCodeError`; 1 código válido | `test/integration/src/auth/codes/codes.service.test.ts` |
+| Reemisión tras consumo  | integration | crear, validar y volver a crear                | segundo código distinto y válido                                         | `test/integration/src/auth/codes/codes.service.test.ts` |
+| Ranura expirada sin TTL | integration | código `used: false` expirado + `create`       | nuevo código válido; la ranura se libera                                 | `test/integration/src/auth/codes/codes.service.test.ts` |
 
 ## Verificación
 
 - `pnpm lint`, `pnpm format:check`, `pnpm build`.
-- `pnpm test`: 226 unit, 309 integration, 178 e2e.
+- `pnpm test`: 226 unit, 310 integration, 178 e2e.
 
 ## Despliegue
 
