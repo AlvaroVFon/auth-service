@@ -113,6 +113,12 @@ export class UsersService implements UsersPort {
       );
     }
 
+    // An expired lockout must start a fresh attempt window, otherwise the first
+    // wrong password would push the counter over the limit and re-lock.
+    if (user.lockoutUntil) {
+      await this.resetLoginAttempts(user._id.toString());
+    }
+
     const isPasswordValid = await this.cryptoService.compareString(
       password,
       user.password,

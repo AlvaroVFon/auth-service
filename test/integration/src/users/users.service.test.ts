@@ -53,6 +53,57 @@ describe('UsersService', () => {
       assert.strictEqual(updated?.loginAttempts, 2);
     });
 
+    test('should start a fresh attempt window when the lockout has expired', async () => {
+      const email = generateRandomEmail('lockout-expired+');
+      const user = await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: 5,
+        lockoutUntil: new Date(Date.now() - 1000),
+      });
+
+      await assert.rejects(
+        usersService.verifyCredentials(email, 'wrongpassword'),
+        { name: 'InvalidCredentialsError' },
+      );
+
+      const updated = await fixture.findById<UserInterface>(
+        'User',
+        user._id.toString(),
+      );
+
+      assert.strictEqual(updated?.loginAttempts, 1);
+      assert.strictEqual(updated?.lockoutUntil, null);
+    });
+
+    test('should lock the account when a failure reaches the attempt limit', async () => {
+      const email = generateRandomEmail('lockout-max+');
+      const user = await fixture.create<UserInterface>('User', {
+        email,
+        loginAttempts: 4,
+        lockoutUntil: null,
+      });
+
+      const before = Date.now();
+
+      await assert.rejects(
+        usersService.verifyCredentials(email, 'wrongpassword'),
+        { name: 'InvalidCredentialsError' },
+      );
+
+      const after = Date.now();
+      const updated = await fixture.findById<UserInterface>(
+        'User',
+        user._id.toString(),
+      );
+
+      assert.strictEqual(updated?.loginAttempts, 5);
+      assert.ok(updated?.lockoutUntil);
+
+      const lockoutUntil = updated!.lockoutUntil!.getTime();
+      assert.ok(lockoutUntil >= before + 900000 - 1000);
+      assert.ok(lockoutUntil <= after + 900000 + 1000);
+    });
+
     describe('Create()', () => {
       test('should create a new user with a hashed password', async () => {
         const plainPassword = 'securepassword123';
