@@ -17,7 +17,7 @@ describe('E2E client error mapping', () => {
       .send('{"email": "broken"');
 
     assert.strictEqual(response.status, 400);
-    assert.notStrictEqual(response.body.message, 'Internal Server Error');
+    assert.deepStrictEqual(response.body, { message: 'Bad Request' });
   });
 
   test('should return 413 for an oversized JSON body', async () => {
@@ -27,5 +27,6 @@ describe('E2E client error mapping', () => {
       .send(JSON.stringify({ email: `${'a'.repeat(110 * 1024)}@example.com` }));
 
     assert.strictEqual(response.status, 413);
+    assert.deepStrictEqual(response.body, { message: 'Payload Too Large' });
   });
 });

@@ -45,7 +45,7 @@ Issue: #81.
 ## Verificación
 
 - `pnpm lint`, `pnpm format:check`, `pnpm build`.
-- `pnpm test`: 234 unit, 312 integration, 180 e2e.
+- `pnpm test`: 238 unit, 312 integration, 180 e2e.
 
 ## Fuera de alcance
 

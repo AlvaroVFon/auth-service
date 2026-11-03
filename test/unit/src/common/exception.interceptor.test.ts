@@ -87,6 +87,50 @@ describe('HttpInterceptor client error mapping', () => {
     assert.deepStrictEqual(res.body, { message: 'Internal Server Error' });
   });
 
+  test('should ignore a 5xx status carried by an unknown error', () => {
+    const { run, res } = createHarness();
+    const error = new Error('server exploded');
+    Object.assign(error, { status: 500 });
+
+    run(error);
+
+    assert.strictEqual(res.statusCode, 500);
+    assert.deepStrictEqual(res.body, { message: 'Internal Server Error' });
+  });
+
+  test('should ignore a status below the 4xx range', () => {
+    const { run, res } = createHarness();
+    const error = new Error('not modified');
+    Object.assign(error, { status: 304 });
+
+    run(error);
+
+    assert.strictEqual(res.statusCode, 500);
+    assert.deepStrictEqual(res.body, { message: 'Internal Server Error' });
+  });
+
+  test('should ignore a non-integer status', () => {
+    const { run, res } = createHarness();
+    const error = new Error('fractional status');
+    Object.assign(error, { status: 400.5 });
+
+    run(error);
+
+    assert.strictEqual(res.statusCode, 500);
+    assert.deepStrictEqual(res.body, { message: 'Internal Server Error' });
+  });
+
+  test('should fall back to statusCode when status is absent', () => {
+    const { run, res } = createHarness();
+    const error = new Error('client error');
+    Object.assign(error, { statusCode: 422 });
+
+    run(error);
+
+    assert.strictEqual(res.statusCode, 422);
+    assert.deepStrictEqual(res.body, { message: 'Unprocessable Entity' });
+  });
+
   test('should keep mapping BaseError to its status and code', () => {
     const { run, res } = createHarness();
 
