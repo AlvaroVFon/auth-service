@@ -7,9 +7,12 @@ import {
 } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { CryptoService } from '../libs/crypto';
 import { Holder } from './holders.interface';
 import type { HoldersPort } from './holders.port';
+
+const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
 export class HoldersService implements HoldersPort {
   constructor(
@@ -40,15 +43,24 @@ export class HoldersService implements HoldersPort {
       email: normalizedEmail,
     });
     if (existingHolder) {
-      throw new InvalidArgumentError('Invalid email or password');
+      throw new InvalidArgumentError(INVALID_CREDENTIALS_MESSAGE);
     }
 
     const hashedPassword = await this.cryptoService.hashString(password);
 
-    return this.holderModel.create({
-      email: normalizedEmail,
-      password: hashedPassword,
-    });
+    try {
+      return await this.holderModel.create({
+        email: normalizedEmail,
+        password: hashedPassword,
+      });
+    } catch (error) {
+      // Two concurrent signups can pass the pre-check: the unique index is the
+      // final guard, and the loser must see the same anti-enumeration error.
+      if (isDuplicateKeyError(error)) {
+        throw new InvalidArgumentError(INVALID_CREDENTIALS_MESSAGE);
+      }
+      throw error;
+    }
   }
 
   async findByEmail(email: string): Promise<Holder | null> {

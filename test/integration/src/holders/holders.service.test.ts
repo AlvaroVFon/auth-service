@@ -6,6 +6,7 @@ import { HoldersModel } from '../../../../src/holders/holders.schema';
 import { HoldersService } from '../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import fixture from '../../../fixtures';
+import { assertSingleRaceFailure } from '../../../helpers/assert-single-race-failure';
 import { HolderFactory } from '../../../helpers/factories/holder.factory';
 
 describe('HoldersService', () => {
@@ -82,6 +83,25 @@ describe('HoldersService', () => {
         holdersService.create(holderData.email, holderData.password),
         new InvalidArgumentError('Invalid email or password'),
       );
+    });
+
+    test('should map a concurrent duplicate email to a domain error', async () => {
+      const email = `race+${Date.now()}@example.com`;
+      const password = 'ValidPass123!';
+
+      const results = await Promise.allSettled([
+        holdersService.create(email, password),
+        holdersService.create(email, password),
+      ]);
+
+      assertSingleRaceFailure(
+        results,
+        InvalidArgumentError,
+        'Invalid email or password',
+      );
+
+      const holders = await fixture.find<Holder>('Holder', { email });
+      assert.strictEqual(holders.length, 1);
     });
 
     test('should create a new holder with valid email and password', async () => {

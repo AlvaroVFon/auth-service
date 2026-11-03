@@ -14,6 +14,7 @@ import { UsersService } from '../../../../src/users/users.service';
 import fixture from '../../../fixtures';
 import { DEFAULT_USER } from '../../../fixtures/defaults/index';
 import { generateRandomEmail } from '../../../fixtures/defaults/users.default';
+import { assertSingleRaceFailure } from '../../../helpers/assert-single-race-failure';
 import { UserFactory } from '../../../helpers/factories/user.factory';
 
 describe('UsersService', () => {
@@ -271,6 +272,29 @@ describe('UsersService', () => {
         assert.ok(foundUser);
         assert.strictEqual(foundUser!.email, userData.email);
         assert.strictEqual(foundUser!.username, userData.username);
+      });
+    });
+
+    describe('createVerifiedUser()', () => {
+      test('should map a concurrent duplicate email to a domain error', async () => {
+        const email = generateRandomEmail('verified-race+');
+        const passwordHash = await new CryptoService().hashString(
+          'ValidPass123!',
+        );
+
+        const results = await Promise.allSettled([
+          usersService.createVerifiedUser({ email, passwordHash }),
+          usersService.createVerifiedUser({ email, passwordHash }),
+        ]);
+
+        assertSingleRaceFailure(
+          results,
+          EntityAlreadyExistsError,
+          'Email already exists',
+        );
+
+        const users = await fixture.find<UserInterface>('User', { email });
+        assert.strictEqual(users.length, 1);
       });
     });
 

@@ -17,6 +17,7 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
+import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
@@ -91,11 +92,20 @@ export class UsersService implements UsersPort {
       throw new EntityAlreadyExistsError('Email already exists');
     }
 
-    return this.usersModel.create({
-      email,
-      password: input.passwordHash,
-      verified: true,
-    });
+    try {
+      return await this.usersModel.create({
+        email,
+        password: input.passwordHash,
+        verified: true,
+      });
+    } catch (error) {
+      // Two concurrent acceptances can pass the pre-check: the unique index is
+      // the final guard and must surface the same domain error.
+      if (isDuplicateKeyError(error)) {
+        throw new EntityAlreadyExistsError('Email already exists');
+      }
+      throw error;
+    }
   }
 
   async verifyCredentials(
