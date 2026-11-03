@@ -1,3 +1,5 @@
+import { STATUS_CODES } from 'node:http';
+
 import { Application, Request, Response, NextFunction } from 'express';
 
 import { LoggerInterface } from '../../libs/logger';
@@ -23,12 +25,39 @@ export class HttpInterceptor {
     }
 
     if (err instanceof Error) {
+      const status = this.clientErrorStatus(err);
+
+      if (status !== undefined) {
+        return res
+          .status(status)
+          .json({ message: STATUS_CODES[status] ?? 'Bad Request' });
+      }
+
       return res.status(500).json({
         message: 'Internal Server Error',
       });
     }
 
     next();
+  }
+
+  private clientErrorStatus(error: Error): number | undefined {
+    const candidate = error as Error & {
+      status?: unknown;
+      statusCode?: unknown;
+    };
+    const status = candidate.status ?? candidate.statusCode;
+
+    if (
+      typeof status !== 'number' ||
+      !Number.isInteger(status) ||
+      status < 400 ||
+      status > 499
+    ) {
+      return undefined;
+    }
+
+    return status;
   }
 
   static initialize(app: Application, logger: LoggerInterface): void {
