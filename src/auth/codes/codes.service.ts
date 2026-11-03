@@ -6,6 +6,7 @@ import {
   AlreadyGeneratedCodeError,
   InvalidCodeError,
 } from '../../common/exceptions/codes.exceptions';
+import { isDuplicateKeyError } from '../../common/mongo/duplicate-key';
 import { Code, CodeType } from './code.interface';
 
 export class CodesService {
@@ -40,12 +41,23 @@ export class CodesService {
       );
     }
 
-    return this.codeModel.create({
-      code: this.generateCode(),
-      expiresAt: new Date(Date.now() + this.codeExpirationMs),
-      subjectId: new Types.ObjectId(subjectId),
-      type,
-    });
+    try {
+      return await this.codeModel.create({
+        code: this.generateCode(),
+        expiresAt: new Date(Date.now() + this.codeExpirationMs),
+        subjectId: new Types.ObjectId(subjectId),
+        type,
+      });
+    } catch (error) {
+      // The partial unique index is the final guard when two requests pass the
+      // pre-check at the same time: the loser must see the same domain error.
+      if (isDuplicateKeyError(error)) {
+        throw new AlreadyGeneratedCodeError(
+          'A valid code has already been generated for this user and type',
+        );
+      }
+      throw error;
+    }
   }
 
   async findValidCode(subjectId: string, type: CodeType): Promise<Code | null> {
