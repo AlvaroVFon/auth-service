@@ -2,8 +2,8 @@ export class BaseError extends Error {
   code: string;
   statusCode: number;
 
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = this.constructor.name;
     this.code = 'BASE_ERROR';
     this.statusCode = 500;

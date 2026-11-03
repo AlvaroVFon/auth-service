@@ -3,6 +3,19 @@ import mongoose from 'mongoose';
 import { InfraError } from '../common/exceptions/infra.exceptions';
 import { LoggerInterface } from '../libs/logger';
 
+const toError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
+const CREDENTIALS_IN_URI = /(mongodb(?:\+srv)?:\/\/)[^@\s/]+@/gi;
+
+export const redactCredentials = (message: string): string =>
+  message.replace(CREDENTIALS_IN_URI, '$1***@');
+
+const describeError = (error: unknown): string => {
+  const normalized = toError(error);
+  return `${normalized.name}: ${redactCredentials(normalized.message)}`;
+};
+
 export class Database {
   private connection: mongoose.Connection | null = null;
 
@@ -16,8 +29,9 @@ export class Database {
       const connection = await mongoose.connect(this.connectionString);
       this.connection = connection.connection;
       this.logger.info('Database connected successfully');
-    } catch {
-      throw new InfraError('Database connection failed');
+    } catch (error) {
+      this.logger.error(`Database connection failed: ${describeError(error)}`);
+      throw new InfraError('Database connection failed', { cause: error });
     }
   }
 
@@ -61,8 +75,8 @@ export class Database {
       try {
         await this.connection.dropDatabase();
         this.logger.info('Database dropped successfully');
-      } catch {
-        this.logger.error('Failed to drop database');
+      } catch (error) {
+        this.logger.error(`Failed to drop database: ${describeError(error)}`);
       }
     }
   }
