@@ -12,6 +12,8 @@ import { CryptoService } from '../libs/crypto';
 import { Holder } from './holders.interface';
 import type { HoldersPort } from './holders.port';
 
+const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
+
 export class HoldersService implements HoldersPort {
   constructor(
     private readonly holderModel: Model<Holder>,
@@ -41,7 +43,7 @@ export class HoldersService implements HoldersPort {
       email: normalizedEmail,
     });
     if (existingHolder) {
-      throw new InvalidArgumentError('Invalid email or password');
+      throw new InvalidArgumentError(INVALID_CREDENTIALS_MESSAGE);
     }
 
     const hashedPassword = await this.cryptoService.hashString(password);
@@ -55,7 +57,7 @@ export class HoldersService implements HoldersPort {
       // Two concurrent signups can pass the pre-check: the unique index is the
       // final guard, and the loser must see the same anti-enumeration error.
       if (isDuplicateKeyError(error)) {
-        throw new InvalidArgumentError('Invalid email or password');
+        throw new InvalidArgumentError(INVALID_CREDENTIALS_MESSAGE);
       }
       throw error;
     }

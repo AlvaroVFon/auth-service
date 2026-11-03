@@ -6,6 +6,7 @@ import { HoldersModel } from '../../../../src/holders/holders.schema';
 import { HoldersService } from '../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import fixture from '../../../fixtures';
+import { assertSingleRaceFailure } from '../../../helpers/assert-single-race-failure';
 import { HolderFactory } from '../../../helpers/factories/holder.factory';
 
 describe('HoldersService', () => {
@@ -93,18 +94,14 @@ describe('HoldersService', () => {
         holdersService.create(email, password),
       ]);
 
-      const fulfilled = results.filter(
-        (result) => result.status === 'fulfilled',
-      );
-      const rejected = results.find(
-        (result): result is PromiseRejectedResult =>
-          result.status === 'rejected',
+      assertSingleRaceFailure(
+        results,
+        InvalidArgumentError,
+        'Invalid email or password',
       );
 
-      assert.strictEqual(fulfilled.length, 1);
-      assert.ok(rejected);
-      assert.ok(rejected!.reason instanceof InvalidArgumentError);
-      assert.strictEqual(rejected!.reason.message, 'Invalid email or password');
+      const holders = await fixture.find<Holder>('Holder', { email });
+      assert.strictEqual(holders.length, 1);
     });
 
     test('should create a new holder with valid email and password', async () => {
