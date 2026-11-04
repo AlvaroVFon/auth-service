@@ -3,8 +3,12 @@ import { Roles } from '../../common/enums/roles.enum';
 import { EntityNotFoundError } from '../../common/exceptions/base.exception';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import type { GrantsPort } from '../../grants';
+import { GrantRoles } from '../../grants';
 import { JwtService, TokenClaims, TokenRole, TokenTypes } from '../../libs/jwt';
 import { UsersPort } from '../../users';
+
+/** Role of an application in the panel context: the owner or a grant role. */
+export type ContextRole = Roles.OWNER | GrantRoles;
 
 export interface TokenIdentity {
   id: string;
@@ -26,12 +30,13 @@ export interface ApplicationContext {
   slug: string;
   audience: string;
   active: boolean;
-  role: TokenRole;
+  role: ContextRole;
 }
 
 export interface AuthContext {
   user: UserContext;
-  role: TokenRole;
+  /** Global role of the account: `owner`, `user` or the legacy `admin`. */
+  role: Roles;
   applications: ApplicationContext[];
 }
 
@@ -85,8 +90,10 @@ export class ProfileService {
       throw new EntityNotFoundError('User not found');
     }
 
+    // The owner branch follows the account role, not the presented token: an
+    // owner can log in with an application scope and then carry a grant role.
     const applications =
-      identity.role === Roles.OWNER
+      user.role === Roles.OWNER
         ? (await this.applicationsService.findAll()).map((application) =>
             this.toApplicationContext(application, Roles.OWNER),
           )
@@ -102,8 +109,8 @@ export class ProfileService {
         verified: user.verified,
         mfaEnabled: user.mfaEnabled ?? false,
       },
-      role: identity.role,
-      applications,
+      role: user.role,
+      applications: applications.sort(this.compareApplicationContexts),
     };
   }
 
@@ -154,7 +161,7 @@ export class ProfileService {
 
   private toApplicationContext(
     application: Application,
-    role: TokenRole,
+    role: ContextRole,
   ): ApplicationContext {
     return {
       id: application._id.toString(),
@@ -164,6 +171,27 @@ export class ProfileService {
       active: application.active,
       role,
     };
+  }
+
+  /**
+   * The panel renders this order directly, so keep it stable across requests
+   * instead of relying on MongoDB's natural order.
+   */
+  private compareApplicationContexts(
+    left: ApplicationContext,
+    right: ApplicationContext,
+  ): number {
+    if (left.name !== right.name) {
+      return left.name < right.name ? -1 : 1;
+    }
+    if (left.slug !== right.slug) {
+      return left.slug < right.slug ? -1 : 1;
+    }
+    if (left.id === right.id) {
+      return 0;
+    }
+
+    return left.id < right.id ? -1 : 1;
   }
 
   /**

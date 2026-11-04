@@ -90,7 +90,7 @@ export class ApplicationsService implements ApplicationsPort {
   }
 
   async findAll(): Promise<Application[]> {
-    return this.applicationModel.find();
+    return this.applicationModel.find().sort({ name: 1, slug: 1, _id: 1 });
   }
 
   async findActiveByIds(ids: string[]): Promise<Application[]> {

@@ -287,13 +287,15 @@ while invalid credentials always return the same generic `401`.
 to their own frontends after validating the JWT.
 
 `GET /auth/context` is the single bootstrap read for the panel: the caller's minimal
-identity (`id`, `email`, `verified`, `mfaEnabled`), the role of the presented token and
-every application the caller can act on. The owner receives the whole catalog with
-`role: "owner"`; any other user receives only the active applications where it holds a
-grant, with that grant's role. A user without grants gets an empty list, so the response
-never distinguishes "unknown application" from "no access". The endpoint reads only the
-bearer's data: no sessions, settings, other users, MFA secrets, password hashes or
-lockout counters, and it neither issues nor refreshes tokens.
+identity (`id`, `email`, `verified`, `mfaEnabled`), the account's global role and every
+application the caller can act on. The owner receives the whole catalog with
+`role: "owner"`, even when the presented token is application-scoped; any other user
+receives only the active applications where it holds a grant, with that grant's role.
+A user without grants gets an empty list, so the response never distinguishes "unknown
+application" from "no access". Applications are returned in a stable `name`/`slug`
+order. The endpoint reads only the bearer's data: no sessions, settings, other users,
+MFA secrets, password hashes or lockout counters, and it neither issues nor refreshes
+tokens.
 
 ```json
 {
@@ -303,7 +305,7 @@ lockout counters, and it neither issues nor refreshes tokens.
     "verified": true,
     "mfaEnabled": false
   },
-  "role": "admin",
+  "role": "user",
   "applications": [
     {
       "id": "665f2a2a2a2a2a2a2a2a2a2a",

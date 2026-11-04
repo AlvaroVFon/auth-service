@@ -104,6 +104,43 @@ describe('E2E /auth/context', () => {
     expectNoSensitiveFields(response.body);
   });
 
+  test('AC-1: an owner with an application-scoped token sees the whole catalog', async () => {
+    const owner = await createUser({ role: Roles.OWNER });
+    const { application: scopedApplication } = await createApplicationAccess(
+      owner._id.toString(),
+      GrantRoles.ADMIN,
+    );
+    const otherApplication = await createApplication();
+
+    // The session carries the grant role (admin), not the account role.
+    const session = await login(owner.email, scopedApplication.slug).expect(
+      200,
+    );
+
+    const response = await request(app)
+      .get('/auth/context')
+      .set('Authorization', bearer(session.body.accessToken))
+      .expect(200);
+
+    assert.strictEqual(response.body.role, Roles.OWNER);
+    assert.strictEqual(response.body.applications.length, 2);
+    for (const application of [scopedApplication, otherApplication]) {
+      assert.deepStrictEqual(
+        response.body.applications.find(
+          (entry: { id: string }) => entry.id === application._id.toString(),
+        ),
+        catalogEntry(application, Roles.OWNER),
+      );
+    }
+    assert.ok(
+      response.body.applications.every(
+        (entry: { role: string }) => entry.role === Roles.OWNER,
+      ),
+      'an owner must see every application with the owner role',
+    );
+    expectNoSensitiveFields(response.body);
+  });
+
   test('AC-2: an app admin only receives the application of its grant', async () => {
     const user = await createUser();
     const { application } = await createApplicationAccess(
@@ -120,7 +157,7 @@ describe('E2E /auth/context', () => {
       .expect(200);
 
     assert.strictEqual(response.body.user.id, user._id.toString());
-    assert.strictEqual(response.body.role, GrantRoles.ADMIN);
+    assert.strictEqual(response.body.role, Roles.USER);
     assert.deepStrictEqual(response.body.applications, [
       catalogEntry(application, GrantRoles.ADMIN),
     ]);

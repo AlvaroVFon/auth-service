@@ -407,6 +407,45 @@ describe('GrantsService', () => {
       );
     });
 
+    test('should order grants by application name', async () => {
+      const userId = await createUser();
+      const zebraTemplate = ApplicationFactory.generate({ name: 'Zebra' });
+      const alphaTemplate = ApplicationFactory.generate({ name: 'Alpha' });
+      const zebra = await applicationsService.create({
+        name: zebraTemplate.name,
+        slug: zebraTemplate.slug,
+        audience: zebraTemplate.audience,
+      });
+      const alpha = await applicationsService.create({
+        name: alphaTemplate.name,
+        slug: alphaTemplate.slug,
+        audience: alphaTemplate.audience,
+      });
+
+      await grantsService.assignRole({
+        userId,
+        applicationId: zebra._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+      await grantsService.assignRole({
+        userId,
+        applicationId: alpha._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+
+      const entries = await grantsService.listActiveByUser(userId);
+      assert.deepStrictEqual(
+        entries.map(({ application }) => application.name),
+        ['Alpha', 'Zebra'],
+      );
+
+      const grants = await grantsService.listByUser(userId);
+      assert.deepStrictEqual(
+        grants.map(({ applicationId }) => applicationId.toString()),
+        [alpha._id.toString(), zebra._id.toString()],
+      );
+    });
+
     test('should return an empty list when the user has no grants', async () => {
       const userId = await createUser();
 

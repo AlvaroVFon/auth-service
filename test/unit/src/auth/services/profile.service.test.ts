@@ -62,6 +62,7 @@ describe('ProfileService', () => {
     findById = mock.fn(async () => ({
       _id: USER_ID,
       email: 'user@example.com',
+      role: Roles.USER,
       verified: true,
       mfaEnabled: false,
     }));
@@ -120,6 +121,13 @@ describe('ProfileService', () => {
     test('should return the whole catalog with the owner role for the owner', async () => {
       const applicationA = buildApplication(APPLICATION_ID);
       const applicationB = buildApplication(OTHER_APPLICATION_ID);
+      findById.mock.mockImplementation(async () => ({
+        _id: USER_ID,
+        email: 'user@example.com',
+        role: Roles.OWNER,
+        verified: true,
+        mfaEnabled: false,
+      }));
       findAll.mock.mockImplementation(async () => [applicationA, applicationB]);
 
       const context = await service.getContext(ownerIdentity);
@@ -154,6 +162,34 @@ describe('ProfileService', () => {
       assert.strictEqual(listActiveByUser.mock.callCount(), 0);
     });
 
+    test('should use the account role for an owner with an application-scoped token', async () => {
+      const applicationA = buildApplication(APPLICATION_ID);
+      const applicationB = buildApplication(OTHER_APPLICATION_ID);
+      findById.mock.mockImplementation(async () => ({
+        _id: USER_ID,
+        email: 'user@example.com',
+        role: Roles.OWNER,
+        verified: true,
+        mfaEnabled: false,
+      }));
+      findAll.mock.mockImplementation(async () => [applicationA, applicationB]);
+
+      const context = await service.getContext({
+        id: USER_ID,
+        role: GrantRoles.ADMIN,
+        audience: applicationA.audience,
+        expiresAt: EXPIRES_AT,
+      });
+
+      assert.strictEqual(context.role, Roles.OWNER);
+      assert.deepStrictEqual(
+        context.applications.map(({ role }) => role),
+        [Roles.OWNER, Roles.OWNER],
+      );
+      assert.strictEqual(context.applications.length, 2);
+      assert.strictEqual(listActiveByUser.mock.callCount(), 0);
+    });
+
     test('should return only the granted applications for an app admin', async () => {
       const application = buildApplication(APPLICATION_ID);
       listActiveByUser.mock.mockImplementation(async () => [
@@ -167,7 +203,7 @@ describe('ProfileService', () => {
         expiresAt: EXPIRES_AT,
       });
 
-      assert.strictEqual(context.role, GrantRoles.ADMIN);
+      assert.strictEqual(context.role, Roles.USER);
       assert.deepStrictEqual(context.applications, [
         {
           id: APPLICATION_ID,
@@ -181,7 +217,28 @@ describe('ProfileService', () => {
       assert.strictEqual(findAll.mock.callCount(), 0);
     });
 
-    test('should return an empty list and the token role without grants', async () => {
+    test('should sort applications deterministically by name and slug', async () => {
+      const zebra = buildApplication(APPLICATION_ID, { name: 'Zebra' });
+      const alpha = buildApplication(OTHER_APPLICATION_ID, { name: 'Alpha' });
+      listActiveByUser.mock.mockImplementation(async () => [
+        { application: zebra, role: GrantRoles.VIEWER },
+        { application: alpha, role: GrantRoles.EDITOR },
+      ]);
+
+      const context = await service.getContext({
+        id: USER_ID,
+        role: GrantRoles.VIEWER,
+        audience: zebra.audience,
+        expiresAt: EXPIRES_AT,
+      });
+
+      assert.deepStrictEqual(
+        context.applications.map(({ name }) => name),
+        ['Alpha', 'Zebra'],
+      );
+    });
+
+    test('should return an empty list and the account role without grants', async () => {
       const context = await service.getContext({
         id: USER_ID,
         role: Roles.USER,
