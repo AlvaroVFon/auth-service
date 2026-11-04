@@ -19,8 +19,8 @@ describe('Application settings subdocument', () => {
 
   test('should declare exactly the fields of SETTINGS_FIELDS', () => {
     assert.deepStrictEqual(SETTINGS_FIELDS, [
-      'accessTokenTtl',
-      'refreshTokenTtl',
+      'accessTokenTtlSeconds',
+      'refreshTokenTtlSeconds',
       'mfaPolicy',
       'maxSessionsPerUser',
       'requireVerifiedEmail',

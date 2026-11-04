@@ -14,7 +14,7 @@ describe('Application settings', () => {
       slug: application.slug,
       audience: application.audience,
       settings: {
-        accessTokenTtl: 900,
+        accessTokenTtlSeconds: 900,
         mfaPolicy: MfaPolicy.REQUIRED,
         appName: 'Billing',
       },
@@ -23,7 +23,7 @@ describe('Application settings', () => {
     const stored = await ApplicationModel.findById(created._id).lean();
 
     assert.deepStrictEqual(stored?.settings, {
-      accessTokenTtl: 900,
+      accessTokenTtlSeconds: 900,
       mfaPolicy: MfaPolicy.REQUIRED,
       appName: 'Billing',
     });
@@ -32,8 +32,8 @@ describe('Application settings', () => {
   test('should persist every supported settings field', async () => {
     const application = ApplicationFactory.generate();
     const settings = {
-      accessTokenTtl: 600,
-      refreshTokenTtl: 172800,
+      accessTokenTtlSeconds: 600,
+      refreshTokenTtlSeconds: 172800,
       mfaPolicy: MfaPolicy.DISABLED,
       maxSessionsPerUser: 3,
       requireVerifiedEmail: false,
@@ -90,7 +90,7 @@ describe('Application settings', () => {
     assert.strictEqual(stored?.settings, undefined);
   });
 
-  test('should reject a negative accessTokenTtl and persist nothing', async () => {
+  test('should reject a negative accessTokenTtlSeconds and persist nothing', async () => {
     const application = ApplicationFactory.generate();
 
     await assert.rejects(
@@ -98,7 +98,7 @@ describe('Application settings', () => {
         name: application.name,
         slug: application.slug,
         audience: application.audience,
-        settings: { accessTokenTtl: -1 },
+        settings: { accessTokenTtlSeconds: -1 },
       }),
       isValidationError,
     );
@@ -109,7 +109,7 @@ describe('Application settings', () => {
     );
   });
 
-  test('should reject a negative refreshTokenTtl', async () => {
+  test('should reject a negative refreshTokenTtlSeconds', async () => {
     const application = ApplicationFactory.generate();
 
     await assert.rejects(
@@ -117,7 +117,7 @@ describe('Application settings', () => {
         name: application.name,
         slug: application.slug,
         audience: application.audience,
-        settings: { refreshTokenTtl: -1 },
+        settings: { refreshTokenTtlSeconds: -1 },
       }),
       isValidationError,
     );

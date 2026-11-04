@@ -10,7 +10,6 @@ export {
   SETTINGS_VALIDATION_MESSAGES,
   isBoolean,
   isMfaPolicy,
-  isNonNegativeInteger,
   isNonEmptyString,
   isPositiveInteger,
   validateApplicationSettings,

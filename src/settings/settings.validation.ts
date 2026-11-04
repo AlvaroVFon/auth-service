@@ -32,9 +32,6 @@ export const SETTINGS_VALIDATION_MESSAGES = {
   settings: 'settings must be an object',
 } as const;
 
-export const isNonNegativeInteger = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 0;
-
 export const isPositiveInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value > 0;
 
@@ -51,20 +48,20 @@ export const isNonEmptyString = (value: unknown): value is string =>
  * Single source of truth for the settings contract: the domain validation, the
  * allowed keys and the Mongoose schema are all derived from this map.
  *
- * Token TTLs are in seconds (`accessTokenTtl`, `refreshTokenTtl`) whereas
- * `invitationTtlMs` is in milliseconds; the units are kept explicit in each
- * message and in `ApplicationSettings`.
+ * Token TTLs are in seconds (`accessTokenTtlSeconds`,
+ * `refreshTokenTtlSeconds`) whereas `invitationTtlMs` is in milliseconds; the
+ * units are explicit in each field name and message.
  */
 export const SETTINGS_FIELD_DESCRIPTORS = {
-  accessTokenTtl: {
+  accessTokenTtlSeconds: {
     type: 'number',
-    validate: isNonNegativeInteger,
-    message: 'accessTokenTtl must be a non-negative integer (seconds)',
+    validate: isPositiveInteger,
+    message: 'accessTokenTtlSeconds must be a positive integer (seconds)',
   },
-  refreshTokenTtl: {
+  refreshTokenTtlSeconds: {
     type: 'number',
-    validate: isNonNegativeInteger,
-    message: 'refreshTokenTtl must be a non-negative integer (seconds)',
+    validate: isPositiveInteger,
+    message: 'refreshTokenTtlSeconds must be a positive integer (seconds)',
   },
   mfaPolicy: {
     type: 'string',
@@ -84,8 +81,8 @@ export const SETTINGS_FIELD_DESCRIPTORS = {
   },
   invitationTtlMs: {
     type: 'number',
-    validate: isNonNegativeInteger,
-    message: 'invitationTtlMs must be a non-negative integer (milliseconds)',
+    validate: isPositiveInteger,
+    message: 'invitationTtlMs must be a positive integer (milliseconds)',
   },
   appName: {
     type: 'string',

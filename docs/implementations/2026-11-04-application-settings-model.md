@@ -23,13 +23,13 @@ Issue: #129.
   (`optional`/`required`/`disabled`) y la validación compartida
   `validateApplicationSettings`, que lanza `InvalidArgumentError` con un mensaje
   por campo.
-- Rango validado: los TTL (`accessTokenTtl`, `refreshTokenTtl`,
+- Rango validado: los TTL (`accessTokenTtlSeconds`, `refreshTokenTtlSeconds`,
   `invitationTtlMs`) son enteros no negativos; `maxSessionsPerUser` es un entero
   positivo; `mfaPolicy` debe pertenecer al enum; `requireVerifiedEmail` debe ser
   booleano y `appName` no puede estar vacío.
-- **Unidades explícitas**: `accessTokenTtl` y `refreshTokenTtl` van en
+- **Unidades explícitas**: `accessTokenTtlSeconds` y `refreshTokenTtlSeconds` van en
   **segundos** (espejo de `resolveAccessTokenTtl`/`resolveRefreshTokenTtl` y de
-  `JWT_EXPIRATION`/`JWT_REFRESH_EXPIRATION`, p. ej. `refreshTokenTtl: 86400` es
+  `JWT_EXPIRATION`/`JWT_REFRESH_EXPIRATION`, p. ej. `refreshTokenTtlSeconds: 86400` es
   un día), mientras que `invitationTtlMs` va en **milisegundos** (p. ej.
   `604800000` es una semana). El nombre `…Ms` y el JSDoc de
   `ApplicationSettings` lo dejan inequívoco; los mensajes de validación también
@@ -57,7 +57,7 @@ Issue: #129.
 
 - [x] Una aplicación sin `settings` se guarda y se lee con `settings` undefined.
 - [x] Los settings parciales se persisten y se devuelven exactamente igual.
-- [x] `accessTokenTtl`/`refreshTokenTtl`/`invitationTtlMs` negativos,
+- [x] `accessTokenTtlSeconds`/`refreshTokenTtlSeconds`/`invitationTtlMs` negativos,
       `mfaPolicy` desconocido y `maxSessionsPerUser` cero se rechazan con error de
       validación y no dejan documento.
 - [x] `requireVerifiedEmail` no booleano (`1`, `'true'`) se rechaza y no se
@@ -68,22 +68,22 @@ Issue: #129.
 
 ## Test Plan
 
-| Case                                | Type        | Input / state                       | Expected result                  | Test file                                                        |
-| ----------------------------------- | ----------- | ----------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
-| Settings completos                  | unit        | objeto con los siete campos         | se devuelve tal cual             | `test/unit/src/settings/settings.validation.test.ts`             |
-| Herencia vacía                      | unit        | `{}` / `undefined` / `null`         | `{}` / `undefined`               | `test/unit/src/settings/settings.validation.test.ts`             |
-| Unidades ancladas                   | unit        | `refreshTokenTtl: 86400` (un día)   | valor en segundos sin cambios    | `test/unit/src/settings/settings.validation.test.ts`             |
-| Clave desconocida                   | unit        | `{ accessTokenTTL: 900 }`           | `InvalidArgumentError`           | `test/unit/src/settings/settings.validation.test.ts`             |
-| TTL negativo, decimal o no numérico | unit        | `-1`, `1.5`, `'soon'`               | `InvalidArgumentError` por campo | `test/unit/src/settings/settings.validation.test.ts`             |
-| `mfaPolicy` desconocido             | unit        | `'always'`                          | `InvalidArgumentError`           | `test/unit/src/settings/settings.validation.test.ts`             |
-| `maxSessionsPerUser` no positivo    | unit        | `0`, `-3`                           | `InvalidArgumentError`           | `test/unit/src/settings/settings.validation.test.ts`             |
-| Schema sin `required` ni `default`  | unit        | inspección de `ApplicationModel`    | todos opcionales, sin defaults   | `test/unit/src/applications/applications.schema.test.ts`         |
-| Rutas alineadas con el contrato     | unit        | `SETTINGS_FIELDS` vs paths          | coinciden exactamente            | `test/unit/src/applications/applications.schema.test.ts`         |
-| Persistencia parcial                | integration | TTL, `mfaPolicy` y `appName`        | se leen igual                    | `test/integration/src/applications/application-settings.test.ts` |
-| Persistencia completa               | integration | los siete campos                    | se leen igual                    | `test/integration/src/applications/application-settings.test.ts` |
-| Settings inválidos                  | integration | TTL negativo, policy desconocido, 0 | `ValidationError`, sin documento | `test/integration/src/applications/application-settings.test.ts` |
-| `requireVerifiedEmail` no booleano  | integration | `1`, `'true'`                       | `ValidationError`, sin coerción  | `test/integration/src/applications/application-settings.test.ts` |
-| Aplicación sin settings             | integration | documento sin `settings`            | válido y `settings` undefined    | `test/integration/src/applications/application-settings.test.ts` |
+| Case                                | Type        | Input / state                            | Expected result                  | Test file                                                        |
+| ----------------------------------- | ----------- | ---------------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
+| Settings completos                  | unit        | objeto con los siete campos              | se devuelve tal cual             | `test/unit/src/settings/settings.validation.test.ts`             |
+| Herencia vacía                      | unit        | `{}` / `undefined` / `null`              | `{}` / `undefined`               | `test/unit/src/settings/settings.validation.test.ts`             |
+| Unidades ancladas                   | unit        | `refreshTokenTtlSeconds: 86400` (un día) | valor en segundos sin cambios    | `test/unit/src/settings/settings.validation.test.ts`             |
+| Clave desconocida                   | unit        | `{ accessTokenTTL: 900 }`                | `InvalidArgumentError`           | `test/unit/src/settings/settings.validation.test.ts`             |
+| TTL negativo, decimal o no numérico | unit        | `-1`, `1.5`, `'soon'`                    | `InvalidArgumentError` por campo | `test/unit/src/settings/settings.validation.test.ts`             |
+| `mfaPolicy` desconocido             | unit        | `'always'`                               | `InvalidArgumentError`           | `test/unit/src/settings/settings.validation.test.ts`             |
+| `maxSessionsPerUser` no positivo    | unit        | `0`, `-3`                                | `InvalidArgumentError`           | `test/unit/src/settings/settings.validation.test.ts`             |
+| Schema sin `required` ni `default`  | unit        | inspección de `ApplicationModel`         | todos opcionales, sin defaults   | `test/unit/src/applications/applications.schema.test.ts`         |
+| Rutas alineadas con el contrato     | unit        | `SETTINGS_FIELDS` vs paths               | coinciden exactamente            | `test/unit/src/applications/applications.schema.test.ts`         |
+| Persistencia parcial                | integration | TTL, `mfaPolicy` y `appName`             | se leen igual                    | `test/integration/src/applications/application-settings.test.ts` |
+| Persistencia completa               | integration | los siete campos                         | se leen igual                    | `test/integration/src/applications/application-settings.test.ts` |
+| Settings inválidos                  | integration | TTL negativo, policy desconocido, 0      | `ValidationError`, sin documento | `test/integration/src/applications/application-settings.test.ts` |
+| `requireVerifiedEmail` no booleano  | integration | `1`, `'true'`                            | `ValidationError`, sin coerción  | `test/integration/src/applications/application-settings.test.ts` |
+| Aplicación sin settings             | integration | documento sin `settings`                 | válido y `settings` undefined    | `test/integration/src/applications/application-settings.test.ts` |
 
 ## Verificación
 

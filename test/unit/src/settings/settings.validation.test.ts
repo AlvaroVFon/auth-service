@@ -5,8 +5,8 @@ import { validateApplicationSettings } from '../../../../src/settings/settings.v
 describe('validateApplicationSettings', () => {
   test('should accept a complete valid settings object', () => {
     const settings = {
-      accessTokenTtl: 900,
-      refreshTokenTtl: 86400,
+      accessTokenTtlSeconds: 900,
+      refreshTokenTtlSeconds: 86400,
       mfaPolicy: MfaPolicy.REQUIRED,
       maxSessionsPerUser: 5,
       requireVerifiedEmail: true,
@@ -33,10 +33,17 @@ describe('validateApplicationSettings', () => {
     assert.strictEqual(validateApplicationSettings(null), undefined);
   });
 
-  test('should accept a zero TTL', () => {
-    assert.deepStrictEqual(validateApplicationSettings({ accessTokenTtl: 0 }), {
-      accessTokenTtl: 0,
-    });
+  test('should reject a zero TTL on the three lifetimes', () => {
+    for (const input of [
+      { accessTokenTtlSeconds: 0 },
+      { refreshTokenTtlSeconds: 0 },
+      { invitationTtlMs: 0 },
+    ]) {
+      assert.throws(
+        () => validateApplicationSettings(input),
+        InvalidArgumentError,
+      );
+    }
   });
 
   test('should express token TTLs in seconds and invitation TTL in ms', () => {
@@ -46,13 +53,13 @@ describe('validateApplicationSettings', () => {
 
     assert.deepStrictEqual(
       validateApplicationSettings({
-        accessTokenTtl: ONE_HOUR_IN_SECONDS,
-        refreshTokenTtl: ONE_DAY_IN_SECONDS,
+        accessTokenTtlSeconds: ONE_HOUR_IN_SECONDS,
+        refreshTokenTtlSeconds: ONE_DAY_IN_SECONDS,
         invitationTtlMs: ONE_WEEK_IN_MILLISECONDS,
       }),
       {
-        accessTokenTtl: 3600,
-        refreshTokenTtl: 86400,
+        accessTokenTtlSeconds: 3600,
+        refreshTokenTtlSeconds: 86400,
         invitationTtlMs: 604800000,
       },
     );
@@ -67,20 +74,20 @@ describe('validateApplicationSettings', () => {
     );
   });
 
-  test('should reject a negative accessTokenTtl', () => {
+  test('should reject a negative accessTokenTtlSeconds', () => {
     assert.throws(
-      () => validateApplicationSettings({ accessTokenTtl: -1 }),
+      () => validateApplicationSettings({ accessTokenTtlSeconds: -1 }),
       new InvalidArgumentError(
-        'accessTokenTtl must be a non-negative integer (seconds)',
+        'accessTokenTtlSeconds must be a positive integer (seconds)',
       ),
     );
   });
 
-  test('should reject a negative refreshTokenTtl', () => {
+  test('should reject a negative refreshTokenTtlSeconds', () => {
     assert.throws(
-      () => validateApplicationSettings({ refreshTokenTtl: -3600 }),
+      () => validateApplicationSettings({ refreshTokenTtlSeconds: -3600 }),
       new InvalidArgumentError(
-        'refreshTokenTtl must be a non-negative integer (seconds)',
+        'refreshTokenTtlSeconds must be a positive integer (seconds)',
       ),
     );
   });
@@ -89,7 +96,7 @@ describe('validateApplicationSettings', () => {
     assert.throws(
       () => validateApplicationSettings({ invitationTtlMs: -1 }),
       new InvalidArgumentError(
-        'invitationTtlMs must be a non-negative integer (milliseconds)',
+        'invitationTtlMs must be a positive integer (milliseconds)',
       ),
     );
   });
@@ -98,19 +105,19 @@ describe('validateApplicationSettings', () => {
     assert.throws(
       () =>
         validateApplicationSettings({
-          accessTokenTtl: 'soon' as unknown as number,
+          accessTokenTtlSeconds: 'soon' as unknown as number,
         }),
       new InvalidArgumentError(
-        'accessTokenTtl must be a non-negative integer (seconds)',
+        'accessTokenTtlSeconds must be a positive integer (seconds)',
       ),
     );
   });
 
   test('should reject a decimal TTL', () => {
     assert.throws(
-      () => validateApplicationSettings({ refreshTokenTtl: 1.5 }),
+      () => validateApplicationSettings({ refreshTokenTtlSeconds: 1.5 }),
       new InvalidArgumentError(
-        'refreshTokenTtl must be a non-negative integer (seconds)',
+        'refreshTokenTtlSeconds must be a positive integer (seconds)',
       ),
     );
   });
