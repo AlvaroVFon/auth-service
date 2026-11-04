@@ -247,8 +247,8 @@ token belongs to that application and carries its role:
 
 ## What's next
 
-The application and the grant are ready. Continue with the account flow
-(signup and email verification) and then with login, token usage and refresh,
-both described under `docs/getting-started/` once those pages land. The
-[API reference](../../README.md#api-reference) lists every route and its access
-level today.
+The application and the grant are ready. Continue with [Sign up and verify an
+email](signup-and-verification.md) if the account does not exist yet, then with
+[Log in, call the API and refresh the token](login-and-refresh.md) to obtain and
+use the application tokens. The [API reference](../../README.md#api-reference)
+lists every route and its access level.

@@ -144,7 +144,6 @@ tokens.
 
 ## What's next
 
-The account exists and is verified. The next flow exchanges its credentials for
-tokens: login with an application, use the access token and refresh it. Until
-that page lands, the [API reference](../../README.md#api-reference) lists the
-whole surface with its access levels.
+The account exists and is verified. Continue with [Log in, call the API and
+refresh the token](login-and-refresh.md) to exchange its credentials for access
+and refresh tokens, use the access token and rotate the refresh token.
