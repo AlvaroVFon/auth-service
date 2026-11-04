@@ -19,6 +19,7 @@ export interface ResolveJwtConfigOptions {
 interface RetiredKeyEntry {
   kid: string;
   publicKey: string;
+  publishedAt?: string;
 }
 
 let ephemeralKeyPair: { privateKey: string; publicKey: string } | undefined;
@@ -66,9 +67,22 @@ const parseRetiredKeys = (rawValue: string | undefined): RetiredKeyEntry[] => {
       );
     }
 
-    const { kid, publicKey } = entry as RetiredKeyEntry;
+    const { kid, publicKey, publishedAt } = entry as RetiredKeyEntry;
 
-    return { kid: kid.trim(), publicKey: normalizePem(publicKey) };
+    if (
+      publishedAt !== undefined &&
+      (typeof publishedAt !== 'string' || Number.isNaN(Date.parse(publishedAt)))
+    ) {
+      throw new InvalidArgumentError(
+        'JWT_RETIRED_PUBLIC_KEYS entries publishedAt must be a valid ISO date',
+      );
+    }
+
+    return {
+      kid: kid.trim(),
+      publicKey: normalizePem(publicKey),
+      ...(publishedAt === undefined ? {} : { publishedAt }),
+    };
   });
 };
 
@@ -92,11 +106,18 @@ export const resolveJwtConfig = (
   const privateKey = readPem(env, 'JWT_PRIVATE_KEY');
   const publicKey = readPem(env, 'JWT_PUBLIC_KEY');
   const kid = env.JWT_KEY_ID?.trim();
+  const keyPublishedAt = env.JWT_KEY_PUBLISHED_AT?.trim() || undefined;
   const issuer = env.JWT_ISSUER?.trim() || DEFAULT_ISSUER;
   const legacySecret = env.JWT_SECRET?.trim() || undefined;
   const retiredKeys = parseRetiredKeys(env.JWT_RETIRED_PUBLIC_KEYS);
   const allowEphemeralKeys =
     env.JWT_ALLOW_EPHEMERAL_KEYS?.trim().toLowerCase() === 'true';
+
+  if (keyPublishedAt && Number.isNaN(Date.parse(keyPublishedAt))) {
+    throw new InvalidArgumentError(
+      'JWT_KEY_PUBLISHED_AT must be a valid ISO date',
+    );
+  }
 
   if (!privateKey) {
     if (publicKey) {
@@ -124,6 +145,7 @@ export const resolveJwtConfig = (
   const activeKey: JwtKeyMaterial = {
     ...signingPair,
     ...(kid ? { kid } : {}),
+    ...(keyPublishedAt ? { publishedAt: keyPublishedAt } : {}),
     active: true,
   };
   const materials: JwtKeyMaterial[] = [activeKey, ...retiredKeys];

@@ -7,11 +7,15 @@ import request from 'supertest';
 import { JWT_REGEX } from '../../src/common/constants/regex';
 import fixture from '../fixtures';
 import {
+  DEFAULT_OWNER_TOKEN,
   DEFAULT_USER_PLAIN_PASSWORD,
+  DEFAULT_USER_TOKEN,
   generateRandomEmail,
 } from '../fixtures/defaults';
 import { createApplicationAccess } from '../helpers/application-access';
 import { getTestAppInstance } from '../utils/app';
+
+const bearer = (token: string) => `Bearer ${token}`;
 
 describe('E2E JWKS', () => {
   let app: Application;
@@ -105,5 +109,47 @@ describe('E2E JWKS', () => {
     assert.ok(claims.jti);
     assert.strictEqual(claims.type, 'access');
     assert.ok(claims.exp);
+  });
+
+  test('should restrict the key status to the owner', async () => {
+    await request(app).get('/jwks/status').expect(401);
+
+    await request(app)
+      .get('/jwks/status')
+      .set('Authorization', bearer(DEFAULT_USER_TOKEN))
+      .expect(403);
+  });
+
+  test('should report the active kid and published keys to the owner', async () => {
+    const response = await request(app)
+      .get('/jwks/status')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(200);
+
+    assert.strictEqual(response.headers['cache-control'], 'no-store');
+    assert.ok(response.body.activeKid);
+
+    const jwksResponse = await request(app)
+      .get('/.well-known/jwks.json')
+      .expect(200);
+    const publishedKids = jwksResponse.body.keys.map(
+      (jwk: { kid: string }) => jwk.kid,
+    );
+
+    assert.ok(publishedKids.includes(response.body.activeKid));
+    assert.deepStrictEqual(
+      response.body.keys.map((key: { kid: string }) => key.kid),
+      publishedKids,
+    );
+    for (const key of response.body.keys) {
+      assert.ok(key.kid);
+      assert.ok(key.status === 'active' || key.status === 'retired');
+      assert.strictEqual(
+        new Date(key.publishedAt).toISOString(),
+        key.publishedAt,
+      );
+      assert.strictEqual(key.n, undefined);
+      assert.strictEqual(key.d, undefined);
+    }
   });
 });

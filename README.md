@@ -78,18 +78,19 @@ for the purpose, default value and production requirement of each one, and
 
 #### JWT
 
-| Variable                   | Purpose                                                              | Default             | Required in production |
-| -------------------------- | -------------------------------------------------------------------- | ------------------- | ---------------------- |
-| `JWT_PRIVATE_KEY`          | RS256 private key in PEM; `\n` escapes are accepted.                 | None                | Yes                    |
-| `JWT_PUBLIC_KEY`           | RS256 public key in PEM; derived from the private key when omitted.  | Derived             | No                     |
-| `JWT_KEY_ID`               | `kid` published in the JWKS; used to rotate keys.                    | RFC 7638 thumbprint | No                     |
-| `JWT_ISSUER`               | `iss` claim of every token.                                          | `auth-service`      | No                     |
-| `JWT_ALLOW_EPHEMERAL_KEYS` | Generates in-memory keys when no PEM is configured; local/test only. | `false`             | No (must be false)     |
-| `JWT_RETIRED_PUBLIC_KEYS`  | JSON array of `{"kid","publicKey"}` entries accepted while rotating. | `[]`                | No                     |
-| `JWT_SECRET`               | Legacy HS256 secret to verify old tokens without audience.           | None                | No                     |
-| `JWT_EXPIRATION`           | Access token TTL in seconds.                                         | `3600`              | No                     |
-| `JWT_REFRESH_EXPIRATION`   | Refresh token TTL in seconds.                                        | `86400`             | No                     |
-| `JWT_REFRESH_EXPIRES_IN`   | Legacy alias of `JWT_REFRESH_EXPIRATION`; keep unset.                | `86400`             | No                     |
+| Variable                   | Purpose                                                                   | Default             | Required in production |
+| -------------------------- | ------------------------------------------------------------------------- | ------------------- | ---------------------- |
+| `JWT_PRIVATE_KEY`          | RS256 private key in PEM; `\n` escapes are accepted.                      | None                | Yes                    |
+| `JWT_PUBLIC_KEY`           | RS256 public key in PEM; derived from the private key when omitted.       | Derived             | No                     |
+| `JWT_KEY_ID`               | `kid` published in the JWKS; used to rotate keys.                         | RFC 7638 thumbprint | No                     |
+| `JWT_KEY_PUBLISHED_AT`     | ISO date the active key was published; reported by `/jwks/status`.        | Keyring load time   | No                     |
+| `JWT_ISSUER`               | `iss` claim of every token.                                               | `auth-service`      | No                     |
+| `JWT_ALLOW_EPHEMERAL_KEYS` | Generates in-memory keys when no PEM is configured; local/test only.      | `false`             | No (must be false)     |
+| `JWT_RETIRED_PUBLIC_KEYS`  | JSON `{"kid","publicKey","publishedAt"}` entries accepted while rotating. | `[]`                | No                     |
+| `JWT_SECRET`               | Legacy HS256 secret to verify old tokens without audience.                | None                | No                     |
+| `JWT_EXPIRATION`           | Access token TTL in seconds.                                              | `3600`              | No                     |
+| `JWT_REFRESH_EXPIRATION`   | Refresh token TTL in seconds.                                             | `86400`             | No                     |
+| `JWT_REFRESH_EXPIRES_IN`   | Legacy alias of `JWT_REFRESH_EXPIRATION`; keep unset.                     | `86400`             | No                     |
 
 #### SMTP and templates
 
@@ -161,11 +162,12 @@ Every route is declared in a module router and mounted by
 
 ### Probes and keys
 
-| Method | Route                    | Access | Notes                                         |
-| ------ | ------------------------ | ------ | --------------------------------------------- |
-| `GET`  | `/health`                | Public | Liveness; never touches MongoDB.              |
-| `GET`  | `/ready`                 | Public | `503` until the database connection is ready. |
-| `GET`  | `/.well-known/jwks.json` | Public | Public keys for RS256 verification.           |
+| Method | Route                    | Access | Notes                                             |
+| ------ | ------------------------ | ------ | ------------------------------------------------- |
+| `GET`  | `/health`                | Public | Liveness; never touches MongoDB.                  |
+| `GET`  | `/ready`                 | Public | `503` until the database connection is ready.     |
+| `GET`  | `/.well-known/jwks.json` | Public | Public keys for RS256 verification.               |
+| `GET`  | `/jwks/status`           | Owner  | Active and retired `kid`s with publication dates. |
 
 ### Authentication and sessions
 
@@ -391,13 +393,16 @@ JWT_ISSUER=auth-service
 
 `JWT_PUBLIC_KEY` is derived from the private key when omitted, and `JWT_KEY_ID` defaults to the RFC 7638 thumbprint of the public key. When no keys are configured the service refuses to start unless `JWT_ALLOW_EPHEMERAL_KEYS=true` is set explicitly, which is only appropriate for local development and tests: every process generates its own pair, so tokens and JWKS differ between replicas. `NODE_ENV=production` rejects ephemeral keys even with the flag set. `JWT_PUBLIC_KEY` without `JWT_PRIVATE_KEY` is always rejected.
 
-To rotate, add the previous public keys to `JWT_RETIRED_PUBLIC_KEYS` as JSON on every instance, deploy the new active key, wait for the maximum refresh-token TTL and then remove the retired entries. Every entry needs its original `kid`; the service does not derive it:
+To rotate, add the previous public keys to `JWT_RETIRED_PUBLIC_KEYS` as JSON on every instance, deploy the new active key, wait for the maximum token TTL (`JWT_REFRESH_EXPIRATION` by default) and then remove the retired entries. Every entry needs its original `kid`; the service does not derive it. The optional `publishedAt` records when the key was published and is reported by the status endpoint:
 
 ```sh
-JWT_RETIRED_PUBLIC_KEYS='[{"kid":"2026-10","publicKey":"-----BEGIN PUBLIC KEY-----\n..."}]'
+JWT_KEY_PUBLISHED_AT='2026-11-04T09:00:00.000Z'
+JWT_RETIRED_PUBLIC_KEYS='[{"kid":"2026-10","publicKey":"-----BEGIN PUBLIC KEY-----\n...","publishedAt":"2026-10-01T09:00:00.000Z"}]'
 ```
 
-`JWT_SECRET` is only a migration bridge: it verifies legacy HS256 tokens that carry no audience. Remove it once every HS256 access and refresh token has expired. See `docs/implementations/2026-11-02-rs256-jwks.md` for the full runbook.
+`GET /jwks/status` is owner-only and answers `{ "activeKid": "...", "keys": [{ "kid": "...", "status": "active|retired", "publishedAt": "..." }] }` with `Cache-Control: no-store`. It never includes private material and has no write counterpart. See `docs/runbooks/jwt-key-rotation.md` for the complete procedure, the grace period and the rollback.
+
+`JWT_SECRET` is only a migration bridge: it verifies legacy HS256 tokens that carry no audience. Remove it once every HS256 access and refresh token has expired. See `docs/implementations/2026-11-02-rs256-jwks.md` for the design of the keyring.
 
 ### Health checks
 
