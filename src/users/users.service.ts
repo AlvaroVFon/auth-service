@@ -203,7 +203,11 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    if (updateData.password) {
+    if (updateData.password !== undefined) {
+      if (updateData.password.trim().length === 0) {
+        throw new InvalidArgumentError('Password must not be empty');
+      }
+
       updateData.password = await this.cryptoService.hashString(
         updateData.password,
       );
@@ -224,9 +228,20 @@ export class UsersService implements UsersPort {
       }
     }
 
-    const user = await this.usersModel.findByIdAndUpdate(id, update, {
-      returnDocument: 'after',
-    });
+    let user: UserInterface | null;
+
+    try {
+      user = await this.usersModel.findByIdAndUpdate(id, update, {
+        returnDocument: 'after',
+      });
+    } catch (error) {
+      // Email keeps a unique index: a duplicate must surface as a domain error
+      // instead of leaking the raw E11000 as a 500.
+      if (isDuplicateKeyError(error)) {
+        throw new EntityAlreadyExistsError('Email already exists');
+      }
+      throw error;
+    }
 
     if (!user) {
       throw new EntityNotFoundError('User not found');

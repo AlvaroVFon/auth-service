@@ -25,7 +25,15 @@ Issue: #104.
 en el mensaje: `Fields are not editable: <campos>`. Un body mixto no aplica la
 parte permitida: la validación ocurre antes de tocar el documento. Los valores de
 los campos permitidos deben ser string (`telegramChatId` admite `null` para
-desregistrar el chat), y la normalización y el hash siguen en `UsersService`.
+desregistrar el chat).
+
+El parser también valida el formato antes de que el servicio escriba: `email` se
+normaliza con `normalizeEmail` (trim + minúsculas) y se comprueba con `EMAIL_REGEX`
+(400 `Invalid email format`), y `password` rechaza vacío o solo espacios y aplica
+`PASSWORD_REGEX` (400 `INVALID_ARGUMENT`), la misma política que signup y reset. El
+hash sigue en `UsersService.updateOneById`, que ahora hashea siempre que la clave
+esté presente y mapea el `E11000` del índice único de email a
+`EntityAlreadyExistsError` (`400 ENTITY_ALREADY_EXISTS`) en lugar de un 500.
 
 `UsersService.updateOneById` recibe `UserUpdatePayload`, de forma que el compilador
 también impide escribir estado de seguridad desde este flujo. Los cambios de
@@ -46,14 +54,16 @@ seguridad quedan pendientes de los endpoints de operaciones de soporte.
 
 ## Test Plan
 
-| Case                | Type | Input / state                                   | Expected result                                | Test file                                         |
-| ------------------- | ---- | ----------------------------------------------- | ---------------------------------------------- | ------------------------------------------------- |
-| Allowlist y tipos   | unit | bodies válidos, vacíos y con campos prohibidos  | payload filtrado o `InvalidArgumentError`      | `test/unit/src/users/user-update-payload.test.ts` |
-| Perfil editable     | e2e  | `username`, `email`                             | 200 y solo cambia el campo enviado             | `test/e2e/users/update-one-by-id.test.ts`         |
-| Password            | e2e  | usuario con hash conocido, `password` nuevo     | 200 sin hash, login nuevo 200, login viejo 401 | `test/e2e/users/update-one-by-id.test.ts`         |
-| Campos de seguridad | e2e  | `mfaEnabled`, `mfaSecret`, `loginAttempts`, ... | 400 con los campos y documento intacto         | `test/e2e/users/update-one-by-id.test.ts`         |
-| Payload mixto       | e2e  | `username` + `verified`                         | 400 sin aplicar `username`                     | `test/e2e/users/update-one-by-id.test.ts`         |
-| Telegram chat id    | e2e  | `" 4242 "`, `"abc"`, `null`                     | 200 normalizado, 400, 200 sin chat id          | `test/e2e/users/update-one-by-id.test.ts`         |
+| Case                | Type     | Input / state                                   | Expected result                                                         | Test file                                                                                    |
+| ------------------- | -------- | ----------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Allowlist y tipos   | unit     | bodies válidos, vacíos y con campos prohibidos  | payload filtrado o `InvalidArgumentError`                               | `test/unit/src/users/user-update-payload.test.ts`                                            |
+| Perfil editable     | e2e      | `username`, `email`                             | 200 y solo cambia el campo enviado                                      | `test/e2e/users/update-one-by-id.test.ts`                                                    |
+| Email inválido      | unit/e2e | `"not-an-email"`, email en uso                  | 400 `Invalid email format` / `ENTITY_ALREADY_EXISTS`, documento intacto | `test/unit/src/users/user-update-payload.test.ts`, `test/e2e/users/update-one-by-id.test.ts` |
+| Password inválida   | unit/e2e | `""`, `"   "`, `"weakpassword"`                 | 400 `INVALID_ARGUMENT`, hash intacto                                    | `test/unit/src/users/user-update-payload.test.ts`, `test/e2e/users/update-one-by-id.test.ts` |
+| Password            | e2e      | usuario con hash conocido, `password` nuevo     | 200 sin hash, login nuevo 200, login viejo 401                          | `test/e2e/users/update-one-by-id.test.ts`                                                    |
+| Campos de seguridad | e2e      | `mfaEnabled`, `mfaSecret`, `loginAttempts`, ... | 400 con los campos y documento intacto                                  | `test/e2e/users/update-one-by-id.test.ts`                                                    |
+| Payload mixto       | e2e      | `username` + `verified`                         | 400 sin aplicar `username`                                              | `test/e2e/users/update-one-by-id.test.ts`                                                    |
+| Telegram chat id    | e2e      | `" 4242 "`, `"abc"`, `null`                     | 200 normalizado, 400, 200 sin chat id                                   | `test/e2e/users/update-one-by-id.test.ts`                                                    |
 
 ## Verificación
 

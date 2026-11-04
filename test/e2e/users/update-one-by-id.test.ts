@@ -1,4 +1,5 @@
 import { Application } from 'express';
+import { Types } from 'mongoose';
 import request from 'supertest';
 
 import { User } from '../../../src/users/users.interface';
@@ -58,6 +59,86 @@ describe('E2E Test - Update User By ID', () => {
     assert.strictEqual(response.body.email, newEmail);
     const stored = await fixture.findById<User>('User', user._id.toString());
     assert.strictEqual(stored?.email, newEmail);
+  });
+
+  test('should normalise the email of a user', async () => {
+    const user = await fixture.create<User>('User', {
+      email: generateRandomEmail('updatenormalisedemail'),
+      password: 'password123',
+    });
+
+    const response = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: '  Updated@Example.COM ' })
+      .expect(200);
+
+    assert.strictEqual(response.body.email, 'updated@example.com');
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.email, 'updated@example.com');
+  });
+
+  test('should reject an invalid email', async () => {
+    const user = await fixture.create<User>('User', {
+      email: generateRandomEmail('updateinvalidemail'),
+      password: 'password123',
+    });
+
+    const response = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: 'not-an-email' })
+      .expect(400);
+
+    assert.strictEqual(response.body.code, 'INVALID_ARGUMENT');
+    assert.strictEqual(response.body.message, 'Invalid email format');
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.email, user.email);
+  });
+
+  test('should reject an email already used by another user', async () => {
+    const existing = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('updateemailtaken'),
+      password: 'password123',
+    });
+    const user = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('updateemailchanging'),
+      password: 'password123',
+    });
+
+    const response = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: existing.email })
+      .expect(400);
+
+    assert.strictEqual(response.body.code, 'ENTITY_ALREADY_EXISTS');
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.email, user.email);
+  });
+
+  test('should reject an empty or weak password', async () => {
+    const user = await fixture.create<User>('User', {
+      email: generateRandomEmail('updateweakpassword'),
+      password: 'password123',
+    });
+
+    for (const password of ['', '   ', 'weakpassword']) {
+      const response = await request(app)
+        .patch(`/users/${user._id}`)
+        .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+        .send({ password })
+        .expect(400);
+
+      assert.strictEqual(response.body.code, 'INVALID_ARGUMENT');
+    }
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.password, user.password);
   });
 
   test('should rehash the password, hide it and keep the login working', async () => {
@@ -166,7 +247,7 @@ describe('E2E Test - Update User By ID', () => {
     await request(app)
       .patch(`/users/${nonExistentUserId}`)
       .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
-      .send({ password: 'newpassword456' })
+      .send({ password: 'NewPassword456!' })
       .expect(404);
   });
 
@@ -225,7 +306,7 @@ describe('E2E Test - Update User By ID', () => {
     await request(app)
       .patch(`/users/${user._id}`)
       .set('Authorization', `Bearer ${DEFAULT_USER_TOKEN}`)
-      .send({ password: 'newpassword456' })
+      .send({ password: 'NewPassword456!' })
       .expect(403);
   });
 });

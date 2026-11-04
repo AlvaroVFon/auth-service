@@ -593,6 +593,53 @@ describe('UsersService', () => {
         );
         assert.ok(isPasswordMatch);
       });
+
+      test('should reject an empty password instead of storing it', async () => {
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('updateemptypassword+'),
+          password: 'securepassword123',
+        });
+        const newUser = await usersService.create(userData);
+
+        await assert.rejects(
+          usersService.updateOneById(newUser._id.toString(), { password: '' }),
+          (error: Error) =>
+            error instanceof InvalidArgumentError &&
+            error.message === 'Password must not be empty',
+        );
+
+        const stored = await fixture.findById<UserInterface>(
+          'User',
+          newUser._id.toString(),
+        );
+        assert.strictEqual(stored?.password, newUser.password);
+      });
+
+      test('should map a duplicate email to EntityAlreadyExistsError', async () => {
+        const firstUser = await usersService.create({
+          email: generateRandomEmail('updateemailowner+'),
+          password: 'securepassword123',
+        });
+        const secondUser = await usersService.create({
+          email: generateRandomEmail('updateemailtaken+'),
+          password: 'securepassword123',
+        });
+
+        await assert.rejects(
+          usersService.updateOneById(secondUser._id.toString(), {
+            email: firstUser.email,
+          }),
+          (error: Error) =>
+            error instanceof EntityAlreadyExistsError &&
+            error.message === 'Email already exists',
+        );
+
+        const stored = await fixture.findById<UserInterface>(
+          'User',
+          secondUser._id.toString(),
+        );
+        assert.strictEqual(stored?.email, secondUser.email);
+      });
     });
 
     describe('deleteOneById()', () => {

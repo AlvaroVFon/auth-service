@@ -224,9 +224,16 @@ This is a contract change: before, unknown fields were forwarded to the service 
 `role` was silently dropped, which allowed writing verification, lockout and MFA
 state without validation or an audit event. Security state now has dedicated support
 endpoints; until they exist, `verified`, `loginAttempts`, `lockoutUntil` or MFA
-fields cannot be changed through the API. Changing the email still does not trigger
-a verification flow: the new address is stored as-is and the account keeps its
-current `verified` flag.
+fields cannot be changed through the API.
+
+`email` and `password` are validated before they reach the service: the address is
+trimmed and lower-cased, then checked against `EMAIL_REGEX`, so an invalid value
+returns `400 Invalid email format` and an address already used by another user
+returns `400 ENTITY_ALREADY_EXISTS`. A `password` that is empty or fails the
+password policy (8+ characters with upper case, lower case, a digit and a symbol)
+returns `400 INVALID_ARGUMENT`, matching signup and password reset. Changing the
+email still does not trigger a verification flow: the account keeps its current
+`verified` flag.
 
 ### Audit
 

@@ -1,3 +1,5 @@
+import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
+import { normalizeEmail } from '../common/email';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 
 // Profile fields an owner may edit through `PATCH /users/:id`. Everything else
@@ -53,21 +55,41 @@ export const parseUserUpdatePayload = (
     update.username = assertStringField('username', payload['username']);
   }
   if ('email' in payload) {
-    update.email = assertStringField('email', payload['email']);
+    // Email is the login identifier: it must be stored exactly in the form
+    // `create`/`findByEmail` use, otherwise the account becomes unreachable.
+    const email = normalizeEmail(assertStringField('email', payload['email']));
+
+    if (!EMAIL_REGEX.test(email)) {
+      throw new InvalidArgumentError('Invalid email format');
+    }
+
+    update.email = email;
   }
   if ('password' in payload) {
-    update.password = assertStringField('password', payload['password']);
+    const password = assertStringField('password', payload['password']);
+
+    // The service hashes whatever reaches it, so an empty value would store a
+    // literal empty string and leave the account unable to authenticate.
+    if (password.trim().length === 0) {
+      throw new InvalidArgumentError('password must not be empty');
+    }
+    if (!PASSWORD_REGEX.test(password)) {
+      throw new InvalidArgumentError(
+        'password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number and a special character',
+      );
+    }
+
+    update.password = password;
   }
   if ('telegramChatId' in payload) {
     const telegramChatId = payload['telegramChatId'];
 
     // `null` is the documented way to unregister the chat; the service
     // normalises and validates the value otherwise.
-    if (telegramChatId !== null) {
-      assertStringField('telegramChatId', telegramChatId);
-    }
-
-    update.telegramChatId = telegramChatId as string | null;
+    update.telegramChatId =
+      telegramChatId === null
+        ? null
+        : assertStringField('telegramChatId', telegramChatId);
   }
 
   return update;
