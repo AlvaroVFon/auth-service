@@ -207,17 +207,19 @@ export class UsersService implements UsersPort {
       if (updateData.password.trim().length === 0) {
         throw new InvalidArgumentError('Password must not be empty');
       }
-
-      updateData.password = await this.cryptoService.hashString(
-        updateData.password,
-      );
     }
 
     const update: UpdateQuery<UserInterface> = { $set: { ...updateData } };
+    const set = update.$set as Record<string, unknown>;
+
+    // Hash into the copy: mutating the caller's payload would hash an
+    // already-hashed password if the same object is reused.
+    if (updateData.password !== undefined) {
+      set.password = await this.cryptoService.hashString(updateData.password);
+    }
 
     if ('telegramChatId' in updateData) {
       const telegramChatId = normalizeTelegramChatId(updateData.telegramChatId);
-      const set = update.$set as Record<string, unknown>;
       delete set.telegramChatId;
 
       if (telegramChatId === undefined) {

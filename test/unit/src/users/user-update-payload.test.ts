@@ -122,13 +122,9 @@ describe('parseUserUpdatePayload', () => {
     );
   });
 
-  test('should reject an empty body', () => {
-    assert.throws(
-      () => parseUserUpdatePayload({}),
-      (error: unknown) =>
-        error instanceof InvalidArgumentError &&
-        error.message === 'Request body is required',
-    );
+  test('should treat an empty body as a no-op payload', () => {
+    // RequiredBodyMiddleware owns the empty-body contract on the route.
+    assert.deepStrictEqual(parseUserUpdatePayload({}), {});
   });
 
   test('should reject editable fields with the wrong type', () => {

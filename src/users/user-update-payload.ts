@@ -35,10 +35,6 @@ export const parseUserUpdatePayload = (
   const payload = body ?? {};
   const keys = Object.keys(payload);
 
-  if (keys.length === 0) {
-    throw new InvalidArgumentError('Request body is required');
-  }
-
   const rejected = [
     ...new Set(keys.filter((key) => !EDITABLE_FIELDS.has(key))),
   ].sort();
