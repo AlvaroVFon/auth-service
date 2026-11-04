@@ -21,6 +21,7 @@ import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
+import type { UserUpdatePayload } from './user-update-payload';
 import type { UserGrantsCleanerPort, UsersPort } from './users.port';
 
 export class UsersService implements UsersPort {
@@ -193,7 +194,7 @@ export class UsersService implements UsersPort {
 
   async updateOneById(
     id: string,
-    updateData: Partial<UserInterface>,
+    updateData: UserUpdatePayload,
   ): Promise<UserInterface | null> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');

@@ -199,20 +199,34 @@ Every route is declared in a module router and mounted by
 
 ### Users, applications and grants
 
-| Method   | Route                                         | Access    | Notes                                                                   |
-| -------- | --------------------------------------------- | --------- | ----------------------------------------------------------------------- |
-| `POST`   | `/users`                                      | Owner     | Creates a verified user directly.                                       |
-| `GET`    | `/users`                                      | Owner     | Lists users.                                                            |
-| `GET`    | `/users/:id`                                  | Owner     | Reads one user.                                                         |
-| `PATCH`  | `/users/:id`                                  | Owner     | Updates profile fields (including `telegramChatId`); `role` is ignored. |
-| `DELETE` | `/users/:id`                                  | Owner     | Deletes the user and cascades its grants; not the owner.                |
-| `POST`   | `/applications`                               | Owner     | Creates an application (name, slug, audience).                          |
-| `GET`    | `/applications`                               | Owner     | Lists applications.                                                     |
-| `GET`    | `/applications/:id`                           | Owner     | Reads one application.                                                  |
-| `PUT`    | `/applications/:applicationId/grants`         | App admin | Upserts the role of a user in the application.                          |
-| `GET`    | `/applications/:applicationId/grants`         | App admin | Lists the application grants.                                           |
-| `GET`    | `/applications/:applicationId/grants/:userId` | App admin | Reads one grant.                                                        |
-| `DELETE` | `/applications/:applicationId/grants/:userId` | App admin | Revokes a grant.                                                        |
+| Method   | Route                                         | Access    | Notes                                                       |
+| -------- | --------------------------------------------- | --------- | ----------------------------------------------------------- |
+| `POST`   | `/users`                                      | Owner     | Creates a verified user directly.                           |
+| `GET`    | `/users`                                      | Owner     | Lists users.                                                |
+| `GET`    | `/users/:id`                                  | Owner     | Reads one user.                                             |
+| `PATCH`  | `/users/:id`                                  | Owner     | Updates profile fields only; any other field returns `400`. |
+| `DELETE` | `/users/:id`                                  | Owner     | Deletes the user and cascades its grants; not the owner.    |
+| `POST`   | `/applications`                               | Owner     | Creates an application (name, slug, audience).              |
+| `GET`    | `/applications`                               | Owner     | Lists applications.                                         |
+| `GET`    | `/applications/:id`                           | Owner     | Reads one application.                                      |
+| `PUT`    | `/applications/:applicationId/grants`         | App admin | Upserts the role of a user in the application.              |
+| `GET`    | `/applications/:applicationId/grants`         | App admin | Lists the application grants.                               |
+| `GET`    | `/applications/:applicationId/grants/:userId` | App admin | Reads one grant.                                            |
+| `DELETE` | `/applications/:applicationId/grants/:userId` | App admin | Revokes a grant.                                            |
+
+`PATCH /users/:id` only accepts the profile allowlist: `username`, `email`,
+`password` and `telegramChatId` (use `null` to unregister the chat). Any other
+field in the body returns `400 INVALID_ARGUMENT` with
+`Fields are not editable: <fields>` and the user document is left untouched, so a
+payload that mixes an allowed field with a rejected one writes nothing.
+
+This is a contract change: before, unknown fields were forwarded to the service and
+`role` was silently dropped, which allowed writing verification, lockout and MFA
+state without validation or an audit event. Security state now has dedicated support
+endpoints; until they exist, `verified`, `loginAttempts`, `lockoutUntil` or MFA
+fields cannot be changed through the API. Changing the email still does not trigger
+a verification flow: the new address is stored as-is and the account keeps its
+current `verified` flag.
 
 ### Audit
 
