@@ -22,6 +22,11 @@ export interface GrantApplicationScope {
   includeArchived?: boolean;
 }
 
+export interface GrantedApplication {
+  application: Application;
+  role: GrantRoles;
+}
+
 export interface GrantsPort {
   assignRole(
     input: AssignRoleInput,
@@ -33,6 +38,7 @@ export interface GrantsPort {
     scope?: GrantApplicationScope,
   ): Promise<Grant | null>;
   listByUser(userId: string): Promise<Grant[]>;
+  listActiveByUser(userId: string): Promise<GrantedApplication[]>;
   listByApplication(
     applicationId: string,
     scope?: GrantApplicationScope,

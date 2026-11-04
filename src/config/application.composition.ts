@@ -190,13 +190,19 @@ export const createApplicationComposition = (
       'JWT keys are ephemeral: tokens and JWKS will differ between instances and restarts',
     );
   }
-  const jwksModule = new JwksModule(logger, () => jwtConfig.keyring.getJwks());
   const blacklistService = new BlacklistService(BlacklistedTokenModel);
   const authenticationMiddleware = new AuthenticationMiddleware(
     jwtService,
     blacklistService,
   );
   const authorizationMiddleware = new AuthorizationMiddleware();
+  const jwksModule = new JwksModule({
+    logger,
+    getJwks: () => jwtConfig.keyring.getJwks(),
+    getKeyStatus: () => jwtConfig.keyring.getStatus(),
+    authenticationMiddleware,
+    authorizationMiddleware,
+  });
   const templateRenderer = new HandlebarsEngine();
   const mailer =
     options.mailer ?? new NodeMailerAdapter(templateRenderer, logger);
@@ -297,6 +303,8 @@ export const createApplicationComposition = (
     usersModule.service,
     jwtService,
     blacklistService,
+    grantsModule.service,
+    applicationsModule.service,
   );
   const linksService = new LinksService(
     LinkModel,

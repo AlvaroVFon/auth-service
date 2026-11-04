@@ -14,6 +14,8 @@ export interface JwtKeyMaterial {
   publicKey?: string | KeyObject;
   kid?: string;
   active?: boolean;
+  /** Publication date recorded for operators; defaults to the keyring load time. */
+  publishedAt?: string | Date;
 }
 
 export interface JwkPublicKey {
@@ -30,13 +32,28 @@ export interface SigningKey {
   privateKey: KeyObject;
 }
 
+export type JwtKeyStatusRole = 'active' | 'retired';
+
+export interface JwtKeyStatus {
+  kid: string;
+  status: JwtKeyStatusRole;
+  publishedAt: string;
+}
+
+export interface JwtKeyringStatus {
+  activeKid: string;
+  keys: JwtKeyStatus[];
+}
+
 interface RegisteredKey {
   kid: string;
   publicKey: KeyObject;
   privateKey?: KeyObject;
+  publishedAt: Date;
 }
 
 export class JwtKeyring {
+  private readonly loadedAt = new Date();
   private readonly keys: readonly RegisteredKey[];
   private readonly activeKey: RegisteredKey;
 
@@ -83,6 +100,21 @@ export class JwtKeyring {
     });
   }
 
+  /**
+   * Operator-facing view of the keyring: which key signs and which ones are
+   * only accepted. It never includes key material.
+   */
+  getStatus(): JwtKeyringStatus {
+    return {
+      activeKid: this.activeKey.kid,
+      keys: this.keys.map(({ kid, publishedAt }) => ({
+        kid,
+        status: kid === this.activeKey.kid ? 'active' : 'retired',
+        publishedAt: publishedAt.toISOString(),
+      })),
+    };
+  }
+
   private register(material: JwtKeyMaterial): RegisteredKey {
     const privateKey = material.privateKey
       ? this.toPrivateKey(material.privateKey)
@@ -108,8 +140,14 @@ export class JwtKeyring {
     }
 
     const kid = material.kid?.trim() || computeJwkThumbprint(publicKey);
+    const publishedAt =
+      material.publishedAt === undefined
+        ? this.loadedAt
+        : parsePublishedAt(material.publishedAt);
 
-    return privateKey ? { kid, publicKey, privateKey } : { kid, publicKey };
+    return privateKey
+      ? { kid, publicKey, privateKey, publishedAt }
+      : { kid, publicKey, publishedAt };
   }
 
   private toPrivateKey(key: string | KeyObject): KeyObject {
@@ -175,6 +213,17 @@ export class JwtKeyring {
     return active;
   }
 }
+
+const parsePublishedAt = (value: string | Date): Date => {
+  const parsed =
+    value instanceof Date ? new Date(value.getTime()) : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    throw new InvalidArgumentError('JWT key publishedAt must be a valid date');
+  }
+
+  return parsed;
+};
 
 const computeJwkThumbprint = (publicKey: KeyObject): string => {
   const jwk = publicKey.export({ format: 'jwk' });

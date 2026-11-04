@@ -378,6 +378,120 @@ describe('GrantsService', () => {
       );
     });
   });
+  describe('listActiveByUser', () => {
+    test('should list the active applications granted to the user with its role', async () => {
+      const applicationA = await createApplication();
+      const applicationB = await createApplication();
+      const unrelatedApplication = await createApplication();
+      const userId = await createUser();
+      const otherUserId = await createUser();
+
+      await grantsService.assignRole({
+        userId,
+        applicationId: applicationA._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+      await grantsService.assignRole({
+        userId,
+        applicationId: applicationB._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+      await grantsService.assignRole({
+        userId: otherUserId,
+        applicationId: unrelatedApplication._id.toString(),
+        role: GrantRoles.EDITOR,
+      });
+
+      const entries = await grantsService.listActiveByUser(userId);
+      const byApplicationId = new Map(
+        entries.map((entry) => [entry.application._id.toString(), entry.role]),
+      );
+
+      assert.strictEqual(entries.length, 2);
+      assert.strictEqual(
+        byApplicationId.get(applicationA._id.toString()),
+        GrantRoles.ADMIN,
+      );
+      assert.strictEqual(
+        byApplicationId.get(applicationB._id.toString()),
+        GrantRoles.VIEWER,
+      );
+      assert.ok(
+        !byApplicationId.has(unrelatedApplication._id.toString()),
+        'grants from another user must not leak',
+      );
+    });
+
+    test('should expose the same active grants through both projections', async () => {
+      const userId = await createUser();
+      const zebraTemplate = ApplicationFactory.generate({ name: 'Zebra' });
+      const alphaTemplate = ApplicationFactory.generate({ name: 'Alpha' });
+      const zebra = await applicationsService.create({
+        name: zebraTemplate.name,
+        slug: zebraTemplate.slug,
+        audience: zebraTemplate.audience,
+      });
+      const alpha = await applicationsService.create({
+        name: alphaTemplate.name,
+        slug: alphaTemplate.slug,
+        audience: alphaTemplate.audience,
+      });
+
+      await grantsService.assignRole({
+        userId,
+        applicationId: zebra._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+      await grantsService.assignRole({
+        userId,
+        applicationId: alpha._id.toString(),
+        role: GrantRoles.VIEWER,
+      });
+
+      const entries = await grantsService.listActiveByUser(userId);
+      assert.deepStrictEqual(
+        entries.map(({ application }) => application._id.toString()).sort(),
+        [alpha._id.toString(), zebra._id.toString()].sort(),
+      );
+
+      const grants = await grantsService.listByUser(userId);
+      assert.deepStrictEqual(
+        grants.map(({ applicationId }) => applicationId.toString()).sort(),
+        entries.map(({ application }) => application._id.toString()).sort(),
+      );
+    });
+
+    test('should return an empty list when the user has no grants', async () => {
+      const userId = await createUser();
+
+      assert.deepStrictEqual(await grantsService.listActiveByUser(userId), []);
+    });
+
+    test('should discard grants of inactive applications', async () => {
+      const application = await createApplication();
+      const userId = await createUser();
+
+      await grantsService.assignRole({
+        userId,
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+      });
+      await ApplicationModel.updateOne(
+        { _id: application._id },
+        { active: false },
+      );
+
+      assert.deepStrictEqual(await grantsService.listActiveByUser(userId), []);
+    });
+
+    test('should reject an invalid user id', async () => {
+      await assert.rejects(
+        grantsService.listActiveByUser('bad-id'),
+        new InvalidArgumentError('userId format is invalid'),
+      );
+    });
+  });
+
   describe('inactive applications', () => {
     test('should hide grants of inactive applications', async () => {
       const application = await createApplication();

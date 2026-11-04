@@ -17,7 +17,7 @@ concepts, local setup and the three integration flows.
 - Role-based authorization: a single `owner` administers the home while legacy `ADMIN` no longer authorizes
 - Home applications with per-user roles (viewer, editor, admin)
 - Login scoped to a concrete application (audience + grant role)
-- Session profile (`GET /auth/me`) and token introspection (`POST /auth/introspect`)
+- Session profile (`GET /auth/me`), panel bootstrap (`GET /auth/context`) and token introspection (`POST /auth/introspect`)
 - Refresh rotation with the refresh token alone, even after the access token expired
 - Independent device sessions with listing and selective revocation
 - Shareable, single-use invitation and password-reset links (no SMTP required)
@@ -78,18 +78,19 @@ for the purpose, default value and production requirement of each one, and
 
 #### JWT
 
-| Variable                   | Purpose                                                              | Default             | Required in production |
-| -------------------------- | -------------------------------------------------------------------- | ------------------- | ---------------------- |
-| `JWT_PRIVATE_KEY`          | RS256 private key in PEM; `\n` escapes are accepted.                 | None                | Yes                    |
-| `JWT_PUBLIC_KEY`           | RS256 public key in PEM; derived from the private key when omitted.  | Derived             | No                     |
-| `JWT_KEY_ID`               | `kid` published in the JWKS; used to rotate keys.                    | RFC 7638 thumbprint | No                     |
-| `JWT_ISSUER`               | `iss` claim of every token.                                          | `auth-service`      | No                     |
-| `JWT_ALLOW_EPHEMERAL_KEYS` | Generates in-memory keys when no PEM is configured; local/test only. | `false`             | No (must be false)     |
-| `JWT_RETIRED_PUBLIC_KEYS`  | JSON array of `{"kid","publicKey"}` entries accepted while rotating. | `[]`                | No                     |
-| `JWT_SECRET`               | Legacy HS256 secret to verify old tokens without audience.           | None                | No                     |
-| `JWT_EXPIRATION`           | Access token TTL in seconds.                                         | `3600`              | No                     |
-| `JWT_REFRESH_EXPIRATION`   | Refresh token TTL in seconds.                                        | `86400`             | No                     |
-| `JWT_REFRESH_EXPIRES_IN`   | Legacy alias of `JWT_REFRESH_EXPIRATION`; keep unset.                | `86400`             | No                     |
+| Variable                   | Purpose                                                                   | Default             | Required in production |
+| -------------------------- | ------------------------------------------------------------------------- | ------------------- | ---------------------- |
+| `JWT_PRIVATE_KEY`          | RS256 private key in PEM; `\n` escapes are accepted.                      | None                | Yes                    |
+| `JWT_PUBLIC_KEY`           | RS256 public key in PEM; derived from the private key when omitted.       | Derived             | No                     |
+| `JWT_KEY_ID`               | `kid` published in the JWKS; used to rotate keys.                         | RFC 7638 thumbprint | No                     |
+| `JWT_KEY_PUBLISHED_AT`     | ISO 8601 timestamp with explicit `Z`/offset; shown by `/jwks/status`.     | Keyring load time   | No                     |
+| `JWT_ISSUER`               | `iss` claim of every token.                                               | `auth-service`      | No                     |
+| `JWT_ALLOW_EPHEMERAL_KEYS` | Generates in-memory keys when no PEM is configured; local/test only.      | `false`             | No (must be false)     |
+| `JWT_RETIRED_PUBLIC_KEYS`  | JSON `{"kid","publicKey","publishedAt"}` entries accepted while rotating. | `[]`                | No                     |
+| `JWT_SECRET`               | Legacy HS256 secret to verify old tokens without audience.                | None                | No                     |
+| `JWT_EXPIRATION`           | Access token TTL in seconds.                                              | `3600`              | No                     |
+| `JWT_REFRESH_EXPIRATION`   | Refresh token TTL in seconds.                                             | `86400`             | No                     |
+| `JWT_REFRESH_EXPIRES_IN`   | Legacy alias of `JWT_REFRESH_EXPIRATION`; keep unset.                     | `86400`             | No                     |
 
 #### SMTP and templates
 
@@ -161,11 +162,12 @@ Every route is declared in a module router and mounted by
 
 ### Probes and keys
 
-| Method | Route                    | Access | Notes                                         |
-| ------ | ------------------------ | ------ | --------------------------------------------- |
-| `GET`  | `/health`                | Public | Liveness; never touches MongoDB.              |
-| `GET`  | `/ready`                 | Public | `503` until the database connection is ready. |
-| `GET`  | `/.well-known/jwks.json` | Public | Public keys for RS256 verification.           |
+| Method | Route                    | Access | Notes                                             |
+| ------ | ------------------------ | ------ | ------------------------------------------------- |
+| `GET`  | `/health`                | Public | Liveness; never touches MongoDB.                  |
+| `GET`  | `/ready`                 | Public | `503` until the database connection is ready.     |
+| `GET`  | `/.well-known/jwks.json` | Public | Public keys for RS256 verification.               |
+| `GET`  | `/jwks/status`           | Owner  | Active and retired `kid`s with publication dates. |
 
 ### Authentication and sessions
 
@@ -179,6 +181,7 @@ Every route is declared in a module router and mounted by
 | `POST`   | `/auth/forgot-password`     | Public        | Rate-limited; never reveals whether the email exists.                                    |
 | `POST`   | `/auth/reset-password`      | Public        | `userId` + emailed code.                                                                 |
 | `GET`    | `/auth/me`                  | Authenticated | Identity, audience/app and token role.                                                   |
+| `GET`    | `/auth/context`             | Authenticated | Identity, global role and applications with the caller's role.                           |
 | `POST`   | `/auth/introspect`          | Authenticated | Answers `active` only for the caller's own tokens.                                       |
 | `GET`    | `/auth/sessions`            | Authenticated | Active device sessions.                                                                  |
 | `DELETE` | `/auth/sessions/:sessionId` | Authenticated | Revokes one session; repeating it is a no-op.                                            |
@@ -316,6 +319,39 @@ application id.
 (audience or `null`) and the role and expiration of the presented token. Apps expose it
 to their own frontends after validating the JWT.
 
+`GET /auth/context` is the single bootstrap read for the panel: the caller's minimal
+identity (`id`, `email`, `verified`, `mfaEnabled`), the account's global role and every
+application the caller can act on. The owner receives the whole catalog with
+`role: "owner"`, even when the presented token is application-scoped; any other user
+receives only the active applications where it holds a grant, with that grant's role.
+A user without grants gets an empty list, so the response never distinguishes "unknown
+application" from "no access". Applications are returned in a stable `name`/`slug`
+order. The endpoint reads only the bearer's data: no sessions, settings, other users,
+MFA secrets, password hashes or lockout counters, and it neither issues nor refreshes
+tokens.
+
+```json
+{
+  "user": {
+    "id": "665f1f1f1f1f1f1f1f1f1f1f",
+    "email": "admin@example.com",
+    "verified": true,
+    "mfaEnabled": false
+  },
+  "role": "user",
+  "applications": [
+    {
+      "id": "665f2a2a2a2a2a2a2a2a2a2a",
+      "name": "Panel",
+      "slug": "panel",
+      "audience": "panel",
+      "active": true,
+      "role": "admin"
+    }
+  ]
+}
+```
+
 `POST /auth/introspect` takes `{ "token": "..." }` and requires a valid access token as
 the caller. It answers `{ "active": true, ... }` only for the caller's own tokens in the
 same application; revoked, expired or foreign tokens return `{ "active": false }`
@@ -422,13 +458,16 @@ JWT_ISSUER=auth-service
 
 `JWT_PUBLIC_KEY` is derived from the private key when omitted, and `JWT_KEY_ID` defaults to the RFC 7638 thumbprint of the public key. When no keys are configured the service refuses to start unless `JWT_ALLOW_EPHEMERAL_KEYS=true` is set explicitly, which is only appropriate for local development and tests: every process generates its own pair, so tokens and JWKS differ between replicas. `NODE_ENV=production` rejects ephemeral keys even with the flag set. `JWT_PUBLIC_KEY` without `JWT_PRIVATE_KEY` is always rejected.
 
-To rotate, add the previous public keys to `JWT_RETIRED_PUBLIC_KEYS` as JSON on every instance, deploy the new active key, wait for the maximum refresh-token TTL and then remove the retired entries. Every entry needs its original `kid`; the service does not derive it:
+To rotate, add the previous public keys to `JWT_RETIRED_PUBLIC_KEYS` as JSON on every instance, deploy the new active key, wait for the maximum token TTL (`JWT_REFRESH_EXPIRATION` by default) and then remove the retired entries. Every entry needs its original `kid`; the service does not derive it. The optional `publishedAt` records when the key was published and is reported by the status endpoint:
 
 ```sh
-JWT_RETIRED_PUBLIC_KEYS='[{"kid":"2026-10","publicKey":"-----BEGIN PUBLIC KEY-----\n..."}]'
+JWT_KEY_PUBLISHED_AT='2026-11-04T09:00:00.000Z'
+JWT_RETIRED_PUBLIC_KEYS='[{"kid":"2026-10","publicKey":"-----BEGIN PUBLIC KEY-----\n...","publishedAt":"2026-10-01T09:00:00.000Z"}]'
 ```
 
-`JWT_SECRET` is only a migration bridge: it verifies legacy HS256 tokens that carry no audience. Remove it once every HS256 access and refresh token has expired. See `docs/implementations/2026-11-02-rs256-jwks.md` for the full runbook.
+`GET /jwks/status` is owner-only and answers `{ "activeKid": "...", "keys": [{ "kid": "...", "status": "active|retired", "publishedAt": "..." }] }` with `Cache-Control: no-store`. It never includes private material and has no write counterpart. See `docs/runbooks/jwt-key-rotation.md` for the complete procedure, the grace period and the rollback.
+
+`JWT_SECRET` is only a migration bridge: it verifies legacy HS256 tokens that carry no audience. Remove it once every HS256 access and refresh token has expired. See `docs/implementations/2026-11-02-rs256-jwks.md` for the design of the keyring.
 
 ### Health checks
 
