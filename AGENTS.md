@@ -127,9 +127,10 @@
 - `ROADMAP.md`: phases, delivered scope and next steps.
 - `.memory-bank/decisions.md` and `.memory-bank/systemPatterns.md`: ADRs and architectural patterns.
 - `docs/implementations/`: one note per delivered issue; `docs/module-design/` and the scan reports live under `docs/`.
+- `docs/getting-started/`: flow-based guide for API integrators (concepts, local setup and the three integration flows).
 
 ## Project Status
 
 - Delivered: user CRUD (owner-only), signup + email verification (holder -> user), login scoped to an application, refresh rotation, logout, access-token blacklist, device sessions, password reset, account lockout, per-route rate limiting, RS256 + JWKS key rotation, owner bootstrap, applications and per-user grants, shareable invitation and reset links, owner audit log, Telegram link notifications and TOTP MFA with recovery codes.
 - Pending candidates: OAuth2 providers, application lifecycle (`PATCH`/`DELETE /applications`), distributed stores for rate limiting and the token blacklist, MFA recovery-code regeneration.
-- The implementation backlog is closed; the documentation sweep tracked in #60 is the last open task. See `ROADMAP.md` for phases and next steps.
+- The implementation backlog is closed; the flow-based getting-started guide (#88) is the last open documentation task. See `ROADMAP.md` for phases and next steps.
