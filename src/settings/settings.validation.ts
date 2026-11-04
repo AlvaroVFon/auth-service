@@ -52,45 +52,49 @@ export const isNonEmptyString = (value: unknown): value is string =>
  * `refreshTokenTtlSeconds`) whereas `invitationTtlMs` is in milliseconds; the
  * units are explicit in each field name and message.
  */
-export const SETTINGS_FIELD_DESCRIPTORS = {
-  accessTokenTtlSeconds: {
+/** Freezes a descriptor so consumers cannot replace its validators at runtime. */
+const frozen = <T extends SettingsFieldDescriptor>(value: T): Readonly<T> =>
+  Object.freeze(value);
+
+export const SETTINGS_FIELD_DESCRIPTORS = Object.freeze({
+  accessTokenTtlSeconds: frozen({
     type: 'number',
     validate: isPositiveInteger,
     message: 'accessTokenTtlSeconds must be a positive integer (seconds)',
-  },
-  refreshTokenTtlSeconds: {
+  }),
+  refreshTokenTtlSeconds: frozen({
     type: 'number',
     validate: isPositiveInteger,
     message: 'refreshTokenTtlSeconds must be a positive integer (seconds)',
-  },
-  mfaPolicy: {
+  }),
+  mfaPolicy: frozen({
     type: 'string',
     validate: isMfaPolicy,
     message: `mfaPolicy must be one of ${MFA_POLICIES.join(', ')}`,
     enumValues: MFA_POLICIES,
-  },
-  maxSessionsPerUser: {
+  }),
+  maxSessionsPerUser: frozen({
     type: 'number',
     validate: isPositiveInteger,
     message: 'maxSessionsPerUser must be a positive integer',
-  },
-  requireVerifiedEmail: {
+  }),
+  requireVerifiedEmail: frozen({
     type: 'boolean',
     validate: isBoolean,
     message: 'requireVerifiedEmail must be a boolean',
-  },
-  invitationTtlMs: {
+  }),
+  invitationTtlMs: frozen({
     type: 'number',
     validate: isPositiveInteger,
     message: 'invitationTtlMs must be a positive integer (milliseconds)',
-  },
-  appName: {
+  }),
+  appName: frozen({
     type: 'string',
     validate: isNonEmptyString,
     message: 'appName must be a non-empty string',
     trim: true,
-  },
-} as const satisfies Record<SettingsField, SettingsFieldDescriptor>;
+  }),
+} satisfies Record<SettingsField, SettingsFieldDescriptor>);
 
 export const SETTINGS_FIELDS = Object.freeze(
   Object.keys(SETTINGS_FIELD_DESCRIPTORS) as SettingsField[],
