@@ -23,6 +23,7 @@ describe('UsersService', () => {
   before(() => {
     usersService = new UsersService(User, new CryptoService());
     usersService.setGrantsCleaner({ deleteByUser: async () => {} });
+    usersService.setSessionRevoker({ revokeAll: async () => {} });
   });
 
   describe('UsersService Initialization', () => {
@@ -527,6 +528,46 @@ describe('UsersService', () => {
         assert.strictEqual(updatedUser!.email, newUser.email);
       });
 
+      test('should revoke the sessions of the user after a password change', async () => {
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('revokesessions+'),
+          password: 'hashedpassword123',
+        });
+        const newUser = await usersService.create(userData);
+        const revoked: string[] = [];
+        usersService.setSessionRevoker({
+          revokeAll: async (id) => {
+            revoked.push(id);
+          },
+        });
+
+        await usersService.updateOneById(newUser._id.toString(), {
+          password: 'NewStrongPassword456!',
+        });
+
+        assert.deepStrictEqual(revoked, [newUser._id.toString()]);
+      });
+
+      test('should not revoke sessions when only profile fields change', async () => {
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('keepsesions+'),
+          password: 'hashedpassword123',
+        });
+        const newUser = await usersService.create(userData);
+        const revoked: string[] = [];
+        usersService.setSessionRevoker({
+          revokeAll: async (id) => {
+            revoked.push(id);
+          },
+        });
+
+        await usersService.updateOneById(newUser._id.toString(), {
+          username: 'renameduser',
+        });
+
+        assert.deepStrictEqual(revoked, []);
+      });
+
       test('should return null when updating a non-existent user', async () => {
         const nonExistentId = '60d21b4667d0d8992e610c85'; // Example of a valid but non-existent ObjectId
         await assert.rejects(
@@ -593,6 +634,53 @@ describe('UsersService', () => {
         );
         assert.ok(isPasswordMatch);
       });
+
+      test('should reject an empty password instead of storing it', async () => {
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('updateemptypassword+'),
+          password: 'securepassword123',
+        });
+        const newUser = await usersService.create(userData);
+
+        await assert.rejects(
+          usersService.updateOneById(newUser._id.toString(), { password: '' }),
+          (error: Error) =>
+            error instanceof InvalidArgumentError &&
+            error.message === 'Password must not be empty',
+        );
+
+        const stored = await fixture.findById<UserInterface>(
+          'User',
+          newUser._id.toString(),
+        );
+        assert.strictEqual(stored?.password, newUser.password);
+      });
+
+      test('should map a duplicate email to EntityAlreadyExistsError', async () => {
+        const firstUser = await usersService.create({
+          email: generateRandomEmail('updateemailowner+'),
+          password: 'securepassword123',
+        });
+        const secondUser = await usersService.create({
+          email: generateRandomEmail('updateemailtaken+'),
+          password: 'securepassword123',
+        });
+
+        await assert.rejects(
+          usersService.updateOneById(secondUser._id.toString(), {
+            email: firstUser.email,
+          }),
+          (error: Error) =>
+            error instanceof EntityAlreadyExistsError &&
+            error.message === 'Email already exists',
+        );
+
+        const stored = await fixture.findById<UserInterface>(
+          'User',
+          secondUser._id.toString(),
+        );
+        assert.strictEqual(stored?.email, secondUser.email);
+      });
     });
 
     describe('deleteOneById()', () => {
@@ -653,6 +741,28 @@ describe('UsersService', () => {
         );
         assert.ok(stillThere);
         assert.strictEqual(stillThere?.role, Roles.OWNER);
+      });
+
+      test('should refuse to rotate a password when no session revoker is configured', async () => {
+        const unconfigured = new UsersService(User, new CryptoService());
+        const user = await fixture.create<UserInterface>(
+          'User',
+          UserFactory.generate(),
+        );
+
+        await assert.rejects(
+          unconfigured.updateOneById(user._id.toString(), {
+            password: 'NewStrongPassword456!',
+          }),
+          /Session revoker is not configured/,
+        );
+
+        const stillThere = await fixture.findById<UserInterface>(
+          'User',
+          user._id.toString(),
+        );
+        assert.ok(stillThere);
+        assert.strictEqual(stillThere?.password, user.password);
       });
 
       test('should refuse to delete when no grants cleaner is configured', async () => {

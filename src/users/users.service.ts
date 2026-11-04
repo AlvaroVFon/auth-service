@@ -21,10 +21,16 @@ import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
-import type { UserGrantsCleanerPort, UsersPort } from './users.port';
+import type { UserUpdatePayload } from './user-update-payload';
+import type {
+  UserGrantsCleanerPort,
+  UserSessionRevokerPort,
+  UsersPort,
+} from './users.port';
 
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
+  private sessionRevoker?: UserSessionRevokerPort;
 
   constructor(
     private readonly usersModel: Model<UserInterface>,
@@ -191,9 +197,13 @@ export class UsersService implements UsersPort {
     this.grantsCleaner = cleaner;
   }
 
+  setSessionRevoker(revoker: UserSessionRevokerPort): void {
+    this.sessionRevoker = revoker;
+  }
+
   async updateOneById(
     id: string,
-    updateData: Partial<UserInterface>,
+    updateData: UserUpdatePayload,
   ): Promise<UserInterface | null> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');
@@ -202,17 +212,31 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
-    if (updateData.password) {
-      updateData.password = await this.cryptoService.hashString(
-        updateData.password,
-      );
+    let passwordRevoker: UserSessionRevokerPort | undefined;
+
+    if (updateData.password !== undefined) {
+      if (updateData.password.trim().length === 0) {
+        throw new InvalidArgumentError('Password must not be empty');
+      }
+      // Fail closed before touching the document: rotating the password without
+      // a revoker would leave every session issued with the old one alive.
+      if (!this.sessionRevoker) {
+        throw new Error('Session revoker is not configured');
+      }
+      passwordRevoker = this.sessionRevoker;
     }
 
     const update: UpdateQuery<UserInterface> = { $set: { ...updateData } };
+    const set = update.$set as Record<string, unknown>;
+
+    // Hash into the copy: mutating the caller's payload would hash an
+    // already-hashed password if the same object is reused.
+    if (updateData.password !== undefined) {
+      set.password = await this.cryptoService.hashString(updateData.password);
+    }
 
     if ('telegramChatId' in updateData) {
       const telegramChatId = normalizeTelegramChatId(updateData.telegramChatId);
-      const set = update.$set as Record<string, unknown>;
       delete set.telegramChatId;
 
       if (telegramChatId === undefined) {
@@ -223,12 +247,29 @@ export class UsersService implements UsersPort {
       }
     }
 
-    const user = await this.usersModel.findByIdAndUpdate(id, update, {
-      returnDocument: 'after',
-    });
+    let user: UserInterface | null;
+
+    try {
+      user = await this.usersModel.findByIdAndUpdate(id, update, {
+        returnDocument: 'after',
+      });
+    } catch (error) {
+      // Email keeps a unique index: a duplicate must surface as a domain error
+      // instead of leaking the raw E11000 as a 500.
+      if (isDuplicateKeyError(error)) {
+        throw new EntityAlreadyExistsError('Email already exists');
+      }
+      throw error;
+    }
 
     if (!user) {
       throw new EntityNotFoundError('User not found');
+    }
+
+    // A rotated password must invalidate every session issued with the old one,
+    // exactly like the reset flow does.
+    if (passwordRevoker) {
+      await passwordRevoker.revokeAll(id);
     }
 
     return user;
