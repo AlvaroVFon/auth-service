@@ -1,0 +1,3242 @@
+{
+  "info": {
+    "name": "Auth Service · complete API",
+    "description": "# Auth Service · complete API\n\nRunnable Postman collection for every HTTP route exposed by this repository: probes, JWKS, signup, verification, sessions, applications, users, grants, invitations, password resets, MFA (TOTP), audit and access-control checks.\n\n## Before running\n\n1. Start MongoDB and MailHog: `docker-compose up -d`.\n2. Copy the environment: `cp .env.example .env` and set `MONGO_URI`.\n3. Provision the owner: set `OWNER_EMAIL`/`OWNER_PASSWORD` in `.env` (startup is idempotent) or run `OWNER_EMAIL=... OWNER_PASSWORD=... pnpm bootstrap:owner`.\n4. Start the service: `pnpm dev`.\n5. Import this collection and `auth-service.local.postman_environment.json`, select the environment and run it top to bottom.\n\n## Access levels\n\n- **Public** — no token.\n- **Authenticated** — any valid access token; `{{accessToken}}` is the owner token and `{{appAccessToken}}` the application-scoped one.\n- **Owner** — global owner only (`/users`, `/applications`, `/audit-events`, reset links).\n- **App admin** — the owner or a grant with role `admin` on the application in the path.\n\n## Tokens and variables\n\nThe test scripts save every identifier the next request needs: `accessToken`, `refreshToken`, `appAccessToken`, `applicationId`, `userId`, `holderId`, `invitationToken`, `resetToken`, `sessionId`, `mfaSecret`, `mfaToken`, `recoveryCode`, `jwt` kid, and so on. Refresh requests rotate the stored refresh token automatically.\n\n`03 · Applications → Create application` regenerates a unique slug, audience and demo emails on every execution, so the collection can be replayed without duplicate-key errors. Applications have no delete endpoint yet: each run leaves one behind.\n\n## Local notes\n\n- Verification and reset codes are read from MailHog (`http://localhost:8025`) by the two `MailHog · ...` requests. The extraction is best effort; copy the code into `{{verificationCode}}`/`{{resetCode}}` if it fails.\n- MFA codes are computed in the request pre-scripts with `crypto-js` from `{{mfaSecret}}`; no authenticator app is required.\n- The dev `.env.example` allows 15 logins, 15 signups, 10 password resets and 20 refreshes per 5 seconds, plus a global 100 requests / 15 minutes per IP. A full run stays below those limits; running the collection repeatedly may hit the global one.\n- `14 · Cleanup` is destructive (revokes sessions, logs out, deletes the demo users). Skip it to keep the fixtures.\n\n## Headers\n\nAuthenticated requests use `Authorization: Bearer <token>`. JSON bodies send `Content-Type: application/json`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 · Probes and keys",
+      "description": "Public endpoints: liveness, readiness and the JWKS. No token needed.",
+      "item": [
+        {
+          "name": "Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('reports ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "`GET /health` — **Public**. Liveness probe; it never touches MongoDB.\n\nExpected: `200 { \"status\": \"ok\" }`."
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 or 503', () => pm.expect([200, 503]).to.include(pm.response.code));",
+                  "pm.test('reports the database state', () => {",
+                  "  pm.expect(['ready', 'not ready']).to.include(pm.response.json().status);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": ["{{baseUrl}}"],
+              "path": ["ready"]
+            },
+            "description": "`GET /ready` — **Public**. Readiness probe.\n\nExpected: `200 { \"status\": \"ready\" }`, or `503 { \"status\": \"not ready\" }` when MongoDB is not connected."
+          },
+          "response": []
+        },
+        {
+          "name": "JWKS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns at least one public key', () => {",
+                  "  pm.expect(body.keys).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(body.keys[0].kty).to.eql('RSA');",
+                  "});",
+                  "if (body.keys && body.keys[0] && body.keys[0].kid) {",
+                  "  pm.collectionVariables.set('jwkKid', body.keys[0].kid);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/jwks.json",
+              "host": ["{{baseUrl}}"],
+              "path": [".well-known", "jwks.json"]
+            },
+            "description": "`GET /.well-known/jwks.json` — **Public**. RS256 public keys, cacheable for 5 minutes.\n\nExpected: `200 { \"keys\": [ { \"kid\": \"...\", \"kty\": \"RSA\", ... } ] }`. Only public material is published."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 · Signup and email verification",
+      "description": "Self-service account creation. The holder is temporary and the emailed code is single-use.",
+      "item": [
+        {
+          "name": "Sign up",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now().toString(36);",
+                  "pm.collectionVariables.set('signupEmail', 'postman.signup.' + suffix + '@example.com');",
+                  "pm.collectionVariables.set('verificationCode', '');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns the holder without secrets', () => {",
+                  "  pm.expect(body._id).to.be.a('string');",
+                  "  pm.expect(body.email).to.eql(pm.collectionVariables.get('signupEmail'));",
+                  "  pm.expect(body.password).to.be.undefined;",
+                  "  pm.expect(body.expiresAt).to.be.a('string');",
+                  "});",
+                  "if (body._id) pm.collectionVariables.set('holderId', body._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            },
+            "description": "`POST /auth/signup` — **Public**, rate-limited.\n\nCreates a holder (not a user yet) and mails a 6-character code. The response never includes the password.\n\nExpected: `201 { \"_id\", \"email\", \"expiresAt\", \"createdAt\", \"updatedAt\" }`. `_id` is the `holderId` needed to verify.\n\nEach execution generates a fresh `signupEmail` so the request can be replayed without a duplicate-email error.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\",\n  \"passwordConfirmation\": \"{{signupPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "MailHog · latest verification email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK from MailHog', () => pm.response.to.have.status(200));",
+                  "const mailhogPayload = pm.response.json();",
+                  "const mailhogItems = Array.isArray(mailhogPayload.items) ? mailhogPayload.items : [];",
+                  "const subjectOf = (item) => {",
+                  "  const headers = item && item.Content && item.Content.Headers;",
+                  "  const subject = headers && headers.Subject;",
+                  "  return Array.isArray(subject) ? subject.join(' ') : String(subject || '');",
+                  "};",
+                  "const bodyOf = (item) => {",
+                  "  const body = item && item.Content && item.Content.Body;",
+                  "  return typeof body === 'string' ? body : '';",
+                  "};",
+                  "const mailhogMessage = mailhogItems.find((item) =>",
+                  "  /verify/i.test(subjectOf(item)),",
+                  ");",
+                  "pm.test('found the email in MailHog', () => {",
+                  "  pm.expect(mailhogMessage, 'No matching email: is MailHog running? Did the service send it?')",
+                  "    .to.not.be.undefined;",
+                  "});",
+                  "const mailhogMatch = mailhogMessage ? (subjectOf(mailhogMessage) + '\\n' + bodyOf(mailhogMessage))",
+                  "  .match(/\\b[A-Z0-9]{6}\\b/) : null;",
+                  "if (mailhogMatch) pm.collectionVariables.set('verificationCode', mailhogMatch[0]);",
+                  "pm.test('extracted a 6-character code', () => {",
+                  "  pm.expect(mailhogMatch, 'Copy the 6-character code from MailHog into the collection variable manually').to.not.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{mailhogUrl}}/api/v2/messages?limit=10",
+              "host": ["{{mailhogUrl}}"],
+              "path": ["api", "v2", "messages"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Reads MailHog (not the auth service) and stores the verification code in `{{verificationCode}}`.\n\nMailHog web UI: <http://localhost:8025>. If the extraction fails, copy the code manually into the collection variable."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify?holderId={{holderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify"],
+              "query": [
+                {
+                  "key": "holderId",
+                  "value": "{{holderId}}"
+                }
+              ]
+            },
+            "description": "`POST /auth/verify?holderId=...` — **Public**.\n\nConsumes the emailed code, creates the verified user and deletes the holder.\n\nExpected: `204` with no body. Replaying it returns `400 INVALID_CODE`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{verificationCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 · Owner session",
+      "description": "The owner logs in without an application and receives a global token (no `aud`). This token authorises the catalogue, users, links and audit.",
+      "item": [
+        {
+          "name": "Login owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns tokens (no MFA challenge)', () => {",
+                  "  pm.expect(body.mfaRequired, 'The owner has MFA enabled: complete the MFA folder or disable it first').to.be.undefined;",
+                  "});",
+                  "const responseTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(responseTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(responseTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (responseTokens.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', responseTokens.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', responseTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited.\n\nWithout `application` only the global owner can log in. Provision it with `OWNER_EMAIL`/`OWNER_PASSWORD` or `pnpm bootstrap:owner`.\n\nExpected: `200 { \"accessToken\", \"refreshToken\" }`. If the owner has MFA enabled this request returns an MFA challenge instead: finish the MFA folder or disable MFA first.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get my profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('is the global owner', () => {",
+                  "  pm.expect(body.email).to.eql(pm.collectionVariables.get('ownerEmail'));",
+                  "  pm.expect(body.application).to.be.null;",
+                  "  pm.expect(body.role).to.eql('owner');",
+                  "});",
+                  "pm.collectionVariables.set('ownerId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "`GET /auth/me` — **Authenticated**. Returns the identity behind the presented token.\n\nExpected: `200 { \"id\", \"email\", \"application\": null, \"role\": \"owner\", \"expiresAt\" }`."
+          },
+          "response": []
+        },
+        {
+          "name": "Introspect my access token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('the token is active', () => {",
+                  "  pm.expect(body.active).to.be.true;",
+                  "  pm.expect(body.id).to.eql(pm.collectionVariables.get('ownerId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/introspect",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "introspect"]
+            },
+            "description": "`POST /auth/introspect` — **Authenticated**. The caller only sees its own tokens, in the same application.\n\nExpected: `200 { \"active\": true, \"id\", \"application\": null, \"role\": \"owner\", \"expiresAt\" }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{accessToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh tokens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const previous = pm.collectionVariables.get('refreshToken');",
+                  "const body = pm.response.json();",
+                  "pm.test('rotates the refresh token', () => {",
+                  "  pm.expect(body.refreshToken).to.not.eql(previous);",
+                  "});",
+                  "const responseTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(responseTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(responseTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (responseTokens.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', responseTokens.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', responseTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "`POST /auth/refresh` — **Public**, rate-limited. Rotates the refresh token: the previous one is revoked.\n\nExpected: `200 { \"accessToken\", \"refreshToken\" }` with a different refresh token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List my sessions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('lists the active sessions', () => {",
+                  "  pm.expect(body).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "if (Array.isArray(body) && body.length) {",
+                  "  pm.collectionVariables.set('sessionId', body[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions"]
+            },
+            "description": "`GET /auth/sessions` — **Authenticated**. Active device sessions, newest activity first.\n\nExpected: `200 [ { \"id\", \"device\", \"application\", \"ipAddress\", \"createdAt\", \"lastActivityAt\", \"expiresAt\" } ]`.\n\n`{{sessionId}}` is overwritten with the most recent session (the one from the last login)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 · Applications",
+      "description": "Owner-only catalogue. Each execution of **Create application** generates a fresh slug, audience and demo emails so the run is replayable.",
+      "item": [
+        {
+          "name": "Create application",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const runId = Date.now().toString(36);",
+                  "pm.collectionVariables.set('runId', runId);",
+                  "pm.collectionVariables.set('applicationSlug', 'postman-' + runId);",
+                  "pm.collectionVariables.set('applicationAudience', 'postman-' + runId);",
+                  "pm.collectionVariables.set('targetUserEmail', 'postman.user.' + runId + '@example.com');",
+                  "pm.collectionVariables.set('guestEmail', 'postman.guest.' + runId + '@example.com');",
+                  "pm.collectionVariables.set('targetUserPassword', 'TargetUser123!');",
+                  "pm.collectionVariables.set('guestPassword', 'GuestUser123!');",
+                  "pm.collectionVariables.set('applicationId', '');",
+                  "pm.collectionVariables.set('userId', '');",
+                  "pm.collectionVariables.set('guestUserId', '');",
+                  "pm.collectionVariables.set('invitationToken', '');",
+                  "pm.collectionVariables.set('resetToken', '');",
+                  "pm.collectionVariables.set('mfaSecret', '');",
+                  "pm.collectionVariables.set('recoveryCode', '');",
+                  "pm.collectionVariables.set('appAccessToken', '');",
+                  "pm.collectionVariables.set('appRefreshToken', '');",
+                  "pm.collectionVariables.set('guestAccessToken', '');",
+                  "pm.collectionVariables.set('guestRefreshToken', '');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('stores the application identifiers', () => {",
+                  "  pm.expect(body.slug).to.eql(pm.collectionVariables.get('applicationSlug'));",
+                  "  pm.expect(body.audience).to.eql(pm.collectionVariables.get('applicationAudience'));",
+                  "  pm.expect(body.active).to.be.true;",
+                  "});",
+                  "pm.collectionVariables.set('applicationId', body._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications"]
+            },
+            "description": "`POST /applications` — **Owner**.\n\nExpected: `201 { \"_id\", \"name\", \"slug\", \"audience\", \"active\": true, ... }`.\n\nThe pre-request script regenerates `runId`, the slug, the audience and the demo emails, and clears the identifiers of the previous run.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman demo {{runId}}\",\n  \"slug\": \"{{applicationSlug}}\",\n  \"audience\": \"{{applicationAudience}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List applications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns the catalogue', () => {",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  pm.expect(body.some((app) => app._id === pm.collectionVariables.get('applicationId'))).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications"]
+            },
+            "description": "`GET /applications` — **Owner**. Expected: `200 [ ... ]`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('matches the created application', () => {",
+                  "  pm.expect(pm.response.json()._id).to.eql(pm.collectionVariables.get('applicationId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}"]
+            },
+            "description": "`GET /applications/:id` — **Owner**. Expected: `200` with the application, or `404 NOT_FOUND`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 · Users",
+      "description": "Owner-only user administration. `POST /users` creates a verified user directly, without the email round-trip.",
+      "item": [
+        {
+          "name": "Create user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('creates a verified regular user', () => {",
+                  "  pm.expect(body.role).to.eql('user');",
+                  "  pm.expect(body.verified).to.be.true;",
+                  "  pm.expect(body.password).to.be.undefined;",
+                  "});",
+                  "pm.collectionVariables.set('userId', body._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "`POST /users` — **Owner**.\n\nExpected: `201 { \"_id\", \"email\", \"role\": \"user\", \"verified\": true, ... }`. The password is never serialised.\n\nThe created user is the account used later for grants, application login and MFA.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"postman-target-{{runId}}\",\n  \"email\": \"{{targetUserEmail}}\",\n  \"password\": \"{{targetUserPassword}}\",\n  \"verified\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('includes the created user', () => {",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  pm.expect(body.some((user) => user._id === pm.collectionVariables.get('userId'))).to.be.true;",
+                  "});",
+                  "const signupEmail = pm.collectionVariables.get('signupEmail');",
+                  "const signupUser = body.find((user) => user.email === signupEmail);",
+                  "if (signupUser) pm.collectionVariables.set('signupUserId', signupUser._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "`GET /users` — **Owner**. Expected: `200 [ ... ]`.\n\nThe script also locates the account created by the signup folder and stores `{{signupUserId}}` for cleanup."
+          },
+          "response": []
+        },
+        {
+          "name": "Get user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('matches the created user', () => {",
+                  "  pm.expect(pm.response.json().email).to.eql(pm.collectionVariables.get('targetUserEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            },
+            "description": "`GET /users/:id` — **Owner**. Expected: `200` with the user, or `404 NOT_FOUND`."
+          },
+          "response": []
+        },
+        {
+          "name": "Set the Telegram chat id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('trims and stores the chat id', () => {",
+                  "  pm.expect(pm.response.json().telegramChatId).to.eql('4242');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            },
+            "description": "`PATCH /users/:id` — **Owner**. Accepts profile fields; `role` is ignored on purpose.\n\nExpected: `200` with the updated user and the trimmed `telegramChatId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telegramChatId\": \" 4242 \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Clear the Telegram chat id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('removes the chat id', () => {",
+                  "  pm.expect(pm.response.json().telegramChatId).to.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            },
+            "description": "`PATCH /users/:id` — **Owner**. `null` clears the optional chat id.\n\nExpected: `200` and no `telegramChatId` in the response.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telegramChatId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 · Grants",
+      "description": "Per-application permissions: `viewer`, `editor` and `admin`. The owner can manage every application; an app admin only its own.",
+      "item": [
+        {
+          "name": "Upsert grant (editor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('assigns the editor role', () => {",
+                  "  pm.expect(pm.response.json().role).to.eql('editor');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/grants",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}", "grants"]
+            },
+            "description": "`PUT /applications/:applicationId/grants` — **App admin**. Idempotent upsert.\n\nExpected: `200 { \"_id\", \"userId\", \"applicationId\", \"role\": \"editor\", ... }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"role\": \"editor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Promote grant to admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('upgrades the role to admin', () => {",
+                  "  pm.expect(pm.response.json().role).to.eql('admin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/grants",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}", "grants"]
+            },
+            "description": "`PUT /applications/:applicationId/grants` — **App admin**. Repeating the call with another role updates it, so the user can also invite guests later.\n\nExpected: `200` with `\"role\": \"admin\"`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"role\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List grants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('contains the assigned grant', () => {",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  const grant = body.find((item) => item.userId === pm.collectionVariables.get('userId'));",
+                  "  pm.expect(grant).to.not.be.undefined;",
+                  "  pm.expect(grant.role).to.eql('admin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/grants",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}", "grants"]
+            },
+            "description": "`GET /applications/:applicationId/grants` — **App admin**. Expected: `200 [ ... ]`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get one grant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('returns the admin grant', () => {",
+                  "  pm.expect(pm.response.json().role).to.eql('admin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/grants/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "applications",
+                "{{applicationId}}",
+                "grants",
+                "{{userId}}"
+              ]
+            },
+            "description": "`GET /applications/:applicationId/grants/:userId` — **App admin**. Expected: `200` with the grant, or `404 NOT_FOUND`."
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke grant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/grants/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "applications",
+                "{{applicationId}}",
+                "grants",
+                "{{userId}}"
+              ]
+            },
+            "description": "`DELETE /applications/:applicationId/grants/:userId` — **App admin**. Revoking removes the permission; the user keeps the account.\n\nExpected: `204`. The next request restores the grant so the application login still works."
+          },
+          "response": []
+        },
+        {
+          "name": "Restore grant (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('restores the admin role', () => {",
+                  "  pm.expect(pm.response.json().role).to.eql('admin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/grants",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}", "grants"]
+            },
+            "description": "`PUT /applications/:applicationId/grants` — **App admin**. Re-assigns the role used by the rest of the run.\n\nExpected: `200` with `\"role\": \"admin\"`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"role\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06 · Application login",
+      "description": "The user exchanges credentials plus an application slug or audience for a scoped token. Only users with an active grant can log in.",
+      "item": [
+        {
+          "name": "Login as the application user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const appTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(appTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(appTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (appTokens.accessToken) {",
+                  "  pm.collectionVariables.set('appAccessToken', appTokens.accessToken);",
+                  "  pm.collectionVariables.set('appRefreshToken', appTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited.\n\nExpected: `200 { \"accessToken\", \"refreshToken\" }`. The token carries the application `aud` and the grant role.\n\nThe tokens are stored in `{{appAccessToken}}` and `{{appRefreshToken}}`, keeping the owner tokens intact.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{targetUserEmail}}\",\n  \"password\": \"{{targetUserPassword}}\",\n  \"application\": \"{{applicationSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get the application profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('is scoped to the application', () => {",
+                  "  pm.expect(body.application).to.eql(pm.collectionVariables.get('applicationAudience'));",
+                  "  pm.expect(body.role).to.eql('admin');",
+                  "});",
+                  "pm.collectionVariables.set('userId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{appAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "`GET /auth/me` — **Authenticated**. With an application token it reports the audience and the grant role.\n\nExpected: `200 { \"id\", \"email\", \"application\": \"<audience>\", \"role\": \"admin\", \"expiresAt\" }`."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh the application token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const previous = pm.collectionVariables.get('appRefreshToken');",
+                  "const body = pm.response.json();",
+                  "pm.test('rotates the refresh token', () => {",
+                  "  pm.expect(body.refreshToken).to.not.eql(previous);",
+                  "});",
+                  "const appTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(appTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(appTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (appTokens.accessToken) {",
+                  "  pm.collectionVariables.set('appAccessToken', appTokens.accessToken);",
+                  "  pm.collectionVariables.set('appRefreshToken', appTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "`POST /auth/refresh` — **Public**, rate-limited. The grant is re-checked on every rotation.\n\nExpected: `200` with a new pair, still scoped to the same application.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{appRefreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Introspect the application token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('the application token is active', () => {",
+                  "  pm.expect(body.active).to.be.true;",
+                  "  pm.expect(body.application).to.eql(pm.collectionVariables.get('applicationAudience'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{appAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/introspect",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "introspect"]
+            },
+            "description": "`POST /auth/introspect` — **Authenticated**. Expected: `200 { \"active\": true, \"application\": \"<audience>\", \"role\": \"admin\", ... }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{appAccessToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07 · Invitations",
+      "description": "Single-use links that let a guest set a password and receive a grant. The link is hashed at rest and can be delivered through Telegram.",
+      "item": [
+        {
+          "name": "Create invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a single-use link', () => {",
+                  "  pm.expect(body.link).to.include('/invitations/accept?token=');",
+                  "  pm.expect(body.email).to.eql(pm.collectionVariables.get('guestEmail'));",
+                  "  pm.expect(body.notification).to.be.an('object');",
+                  "});",
+                  "try {",
+                  "  const token = new URL(body.link).searchParams.get('token');",
+                  "  if (token) pm.collectionVariables.set('invitationToken', token);",
+                  "} catch (error) {",
+                  "  console.warn('Could not parse the invitation link: ' + error.message);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{appAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications/{{applicationId}}/invitations",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications", "{{applicationId}}", "invitations"]
+            },
+            "description": "`POST /applications/:applicationId/invitations` — **App admin**.\n\nExpected: `201 { \"link\", \"expiresAt\", \"email\", \"applicationId\", \"role\", \"notification\": { \"delivered\", \"recipient\" } }`.\n\nThe script stores the `token` query parameter in `{{invitationToken}}`. Delivery is best effort: `notification.delivered: false` still returns a copyable link.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{guestEmail}}\",\n  \"role\": \"editor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Accept invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/invitations/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "invitations", "accept"]
+            },
+            "description": "`POST /auth/invitations/accept` — **Public**.\n\nSets the password, creates a verified user and grants the invited role. The link is consumed atomically.\n\nExpected: `204`. Repeating it returns `400 INVALID_LINK`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{invitationToken}}\",\n  \"password\": \"{{guestPassword}}\",\n  \"passwordConfirmation\": \"{{guestPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login as the invited guest",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('issues scoped tokens', () => {",
+                  "  pm.expect(body.accessToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (body.accessToken) {",
+                  "  pm.collectionVariables.set('guestAccessToken', body.accessToken);",
+                  "  pm.collectionVariables.set('guestRefreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited.\n\nExpected: `200` with a token scoped to the application and the invited `editor` role.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{guestEmail}}\",\n  \"password\": \"{{guestPassword}}\",\n  \"application\": \"{{applicationSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get the invited guest profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('carries the invited role', () => {",
+                  "  pm.expect(body.role).to.eql('editor');",
+                  "  pm.expect(body.application).to.eql(pm.collectionVariables.get('applicationAudience'));",
+                  "});",
+                  "pm.collectionVariables.set('guestUserId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{guestAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "`GET /auth/me` — **Authenticated**. Expected: `200` with `\"role\": \"editor\"` and the application audience."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "08 · Password reset links",
+      "description": "Owner-generated single-use links, useful when email delivery is not configured. The alternative email-code flow is in the next folder.",
+      "item": [
+        {
+          "name": "Create password reset link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a single-use link', () => {",
+                  "  pm.expect(body.link).to.include('/reset-password?token=');",
+                  "  pm.expect(body.userId).to.eql(pm.collectionVariables.get('userId'));",
+                  "});",
+                  "try {",
+                  "  const token = new URL(body.link).searchParams.get('token');",
+                  "  if (token) pm.collectionVariables.set('resetToken', token);",
+                  "} catch (error) {",
+                  "  console.warn('Could not parse the reset link: ' + error.message);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/password-reset-links",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "password-reset-links"]
+            },
+            "description": "`POST /auth/password-reset-links` — **Owner**.\n\nExpected: `201 { \"link\", \"expiresAt\", \"userId\", \"notification\" }`. The script stores the token in `{{resetToken}}`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Accept password reset link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('targetUserPassword', 'TargetUser456!');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/password-reset-links/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "password-reset-links", "accept"]
+            },
+            "description": "`POST /auth/password-reset-links/accept` — **Public**.\n\nConsumes the link and rotates the password. Every session of the user is revoked.\n\nExpected: `204`. The script updates `{{targetUserPassword}}` to the new value.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"TargetUser456!\",\n  \"passwordConfirmation\": \"TargetUser456!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login with the new password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const appTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(appTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(appTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (appTokens.accessToken) {",
+                  "  pm.collectionVariables.set('appAccessToken', appTokens.accessToken);",
+                  "  pm.collectionVariables.set('appRefreshToken', appTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited. Confirms the reset and refreshes the application tokens used by the MFA folder.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{targetUserEmail}}\",\n  \"password\": \"{{targetUserPassword}}\",\n  \"application\": \"{{applicationSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "09 · Forgot password · email code",
+      "description": "The public, reveal-nothing alternative: the service mails a code only when the account exists.",
+      "item": [
+        {
+          "name": "Request a password reset code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('resetCode', '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "forgot-password"]
+            },
+            "description": "`POST /auth/forgot-password` — **Public**, rate-limited.\n\nExpected: `204` whether or not the email exists (no account enumeration).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{targetUserEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "MailHog · latest reset email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK from MailHog', () => pm.response.to.have.status(200));",
+                  "const mailhogPayload = pm.response.json();",
+                  "const mailhogItems = Array.isArray(mailhogPayload.items) ? mailhogPayload.items : [];",
+                  "const subjectOf = (item) => {",
+                  "  const headers = item && item.Content && item.Content.Headers;",
+                  "  const subject = headers && headers.Subject;",
+                  "  return Array.isArray(subject) ? subject.join(' ') : String(subject || '');",
+                  "};",
+                  "const bodyOf = (item) => {",
+                  "  const body = item && item.Content && item.Content.Body;",
+                  "  return typeof body === 'string' ? body : '';",
+                  "};",
+                  "const mailhogMessage = mailhogItems.find((item) =>",
+                  "  /reset|password/i.test(subjectOf(item)),",
+                  ");",
+                  "pm.test('found the email in MailHog', () => {",
+                  "  pm.expect(mailhogMessage, 'No matching email: is MailHog running? Did the service send it?')",
+                  "    .to.not.be.undefined;",
+                  "});",
+                  "const mailhogMatch = mailhogMessage ? (subjectOf(mailhogMessage) + '\\n' + bodyOf(mailhogMessage))",
+                  "  .match(/\\b[A-Z0-9]{6}\\b/) : null;",
+                  "if (mailhogMatch) pm.collectionVariables.set('resetCode', mailhogMatch[0]);",
+                  "pm.test('extracted a 6-character code', () => {",
+                  "  pm.expect(mailhogMatch, 'Copy the 6-character code from MailHog into the collection variable manually').to.not.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{mailhogUrl}}/api/v2/messages?limit=10",
+              "host": ["{{mailhogUrl}}"],
+              "path": ["api", "v2", "messages"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Reads MailHog and stores the reset code in `{{resetCode}}`. Best effort: copy it manually if the extraction fails."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset the password with the code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('targetUserPassword', 'TargetUser789!');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "reset-password"]
+            },
+            "description": "`POST /auth/reset-password` — **Public**. Needs `userId` + the emailed code.\n\nExpected: `204`. Every session of the user is revoked.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"code\": \"{{resetCode}}\",\n  \"newPassword\": \"TargetUser789!\",\n  \"passwordConfirmation\": \"TargetUser789!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login with the code-reset password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const appTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(appTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(appTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (appTokens.accessToken) {",
+                  "  pm.collectionVariables.set('appAccessToken', appTokens.accessToken);",
+                  "  pm.collectionVariables.set('appRefreshToken', appTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited. Confirms the code-based reset and refreshes the application tokens.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{targetUserEmail}}\",\n  \"password\": \"{{targetUserPassword}}\",\n  \"application\": \"{{applicationSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10 · Device sessions",
+      "description": "Every login creates an independent session. This folder revokes a second session without touching the token used by the rest of the collection.",
+      "item": [
+        {
+          "name": "Login owner (second session)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.accessToken, 'The owner has MFA enabled: disable it before running this folder').to.be.a('string').and.not.empty;",
+                  "if (body.accessToken) {",
+                  "  pm.collectionVariables.set('sessionProbeAccessToken', body.accessToken);",
+                  "  pm.collectionVariables.set('sessionProbeRefreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited. Creates a second owner session.\n\nThe tokens go to `{{sessionProbeAccessToken}}` so the main owner token stays valid.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List sessions after the second login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('has more than one active session', () => {",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  pm.expect(body.length).to.be.at.least(2);",
+                  "});",
+                  "if (Array.isArray(body) && body.length) {",
+                  "  pm.collectionVariables.set('sessionId', body[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions"]
+            },
+            "description": "`GET /auth/sessions` — **Authenticated**. Sessions are ordered by `lastActivityAt`, so the first one is the probe session just created.\n\nExpected: `200` with at least two sessions; `{{sessionId}}` points at the newest one."
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke that session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions/{{sessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions", "{{sessionId}}"]
+            },
+            "description": "`DELETE /auth/sessions/:sessionId` — **Authenticated**.\n\nExpected: `204`. Repeating it is a no-op. The session’s refresh token stops working; the access token keeps working until it expires."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11 · MFA · TOTP",
+      "description": "Enrollment, activation, challenge login and disable. The pre-request scripts compute the current TOTP from `{{mfaSecret}}` with crypto-js, so no manual code is needed.",
+      "item": [
+        {
+          "name": "Enroll MFA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a base32 secret and an otpauth URL', () => {",
+                  "  pm.expect(body.secret).to.match(/^[A-Z2-7]+$/);",
+                  "  pm.expect(body.otpauthUrl).to.include('otpauth://totp/');",
+                  "});",
+                  "if (body.secret) pm.collectionVariables.set('mfaSecret', body.secret);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{appAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/mfa/enroll",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "mfa", "enroll"]
+            },
+            "description": "`POST /auth/mfa/enroll` — **Authenticated**, rate-limited. Requires the current password.\n\nExpected: `200 { \"secret\", \"otpauthUrl\" }`. The secret is stored in `{{mfaSecret}}`; add the `otpauthUrl` to any authenticator if you want to follow along manually.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{targetUserPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Activate MFA",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('mfaSecret');",
+                  "if (secret) {",
+                  "  const CryptoJS = require('crypto-js');",
+                  "  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';",
+                  "  let bits = '';",
+                  "  for (const char of secret.replace(/=+$/g, '').toUpperCase()) {",
+                  "    const index = alphabet.indexOf(char);",
+                  "    if (index >= 0) bits += index.toString(2).padStart(5, '0');",
+                  "  }",
+                  "  let hexKey = '';",
+                  "  for (let i = 0; i + 8 <= bits.length; i += 8) {",
+                  "    hexKey += parseInt(bits.slice(i, i + 8), 2)",
+                  "      .toString(16)",
+                  "      .padStart(2, '0');",
+                  "  }",
+                  "  const counter = Math.floor(Date.now() / 1000 / 30);",
+                  "  const counterHex = counter.toString(16).padStart(16, '0');",
+                  "  const hmac = CryptoJS.HmacSHA1(",
+                  "    CryptoJS.enc.Hex.parse(counterHex),",
+                  "    CryptoJS.enc.Hex.parse(hexKey),",
+                  "  );",
+                  "  const hmacHex = hmac.toString(CryptoJS.enc.Hex);",
+                  "  const offset = parseInt(hmacHex.slice(-1), 16);",
+                  "  const binary = parseInt(hmacHex.substr(offset * 2, 8), 16) & 0x7fffffff;",
+                  "  const code = String(binary % 1000000).padStart(6, '0');",
+                  "  pm.collectionVariables.set('mfaCode', code);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns ten single-use recovery codes', () => {",
+                  "  pm.expect(body.recoveryCodes).to.be.an('array').with.lengthOf(10);",
+                  "});",
+                  "if (body.recoveryCodes && body.recoveryCodes.length) {",
+                  "  pm.collectionVariables.set('recoveryCode', body.recoveryCodes[0]);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{appAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/mfa/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "mfa", "activate"]
+            },
+            "description": "`POST /auth/mfa/activate` — **Authenticated**. Confirms the first TOTP code.\n\nExpected: `200 { \"recoveryCodes\": [ ... 10 codes ... ] }`. The first recovery code is stored in `{{recoveryCode}}`; codes are shown only once.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{mfaCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login · MFA challenge",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns an MFA challenge instead of tokens', () => {",
+                  "  pm.expect(body.mfaRequired).to.be.true;",
+                  "  pm.expect(body.challengeToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.accessToken).to.be.undefined;",
+                  "});",
+                  "if (body.challengeToken) pm.collectionVariables.set('mfaToken', body.challengeToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited. With MFA enabled the response has no tokens.\n\nExpected: `200 { \"mfaRequired\": true, \"challengeToken\", \"expiresIn\": 300 }`. The challenge is stored in `{{mfaToken}}`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{targetUserEmail}}\",\n  \"password\": \"{{targetUserPassword}}\",\n  \"application\": \"{{applicationSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify MFA challenge",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('mfaSecret');",
+                  "if (secret) {",
+                  "  const CryptoJS = require('crypto-js');",
+                  "  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';",
+                  "  let bits = '';",
+                  "  for (const char of secret.replace(/=+$/g, '').toUpperCase()) {",
+                  "    const index = alphabet.indexOf(char);",
+                  "    if (index >= 0) bits += index.toString(2).padStart(5, '0');",
+                  "  }",
+                  "  let hexKey = '';",
+                  "  for (let i = 0; i + 8 <= bits.length; i += 8) {",
+                  "    hexKey += parseInt(bits.slice(i, i + 8), 2)",
+                  "      .toString(16)",
+                  "      .padStart(2, '0');",
+                  "  }",
+                  "  const counter = Math.floor(Date.now() / 1000 / 30);",
+                  "  const counterHex = counter.toString(16).padStart(16, '0');",
+                  "  const hmac = CryptoJS.HmacSHA1(",
+                  "    CryptoJS.enc.Hex.parse(counterHex),",
+                  "    CryptoJS.enc.Hex.parse(hexKey),",
+                  "  );",
+                  "  const hmacHex = hmac.toString(CryptoJS.enc.Hex);",
+                  "  const offset = parseInt(hmacHex.slice(-1), 16);",
+                  "  const binary = parseInt(hmacHex.substr(offset * 2, 8), 16) & 0x7fffffff;",
+                  "  const code = String(binary % 1000000).padStart(6, '0');",
+                  "  pm.collectionVariables.set('mfaCode', code);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const appTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(appTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(appTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (appTokens.accessToken) {",
+                  "  pm.collectionVariables.set('appAccessToken', appTokens.accessToken);",
+                  "  pm.collectionVariables.set('appRefreshToken', appTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/mfa/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "mfa", "verify"]
+            },
+            "description": "`POST /auth/mfa/verify` — **Public**, rate-limited. Exchanges the challenge plus a TOTP or recovery code for tokens.\n\nExpected: `200 { \"accessToken\", \"refreshToken\" }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mfaToken\": \"{{mfaToken}}\",\n  \"code\": \"{{mfaCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Disable MFA",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('mfaSecret');",
+                  "if (secret) {",
+                  "  const CryptoJS = require('crypto-js');",
+                  "  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';",
+                  "  let bits = '';",
+                  "  for (const char of secret.replace(/=+$/g, '').toUpperCase()) {",
+                  "    const index = alphabet.indexOf(char);",
+                  "    if (index >= 0) bits += index.toString(2).padStart(5, '0');",
+                  "  }",
+                  "  let hexKey = '';",
+                  "  for (let i = 0; i + 8 <= bits.length; i += 8) {",
+                  "    hexKey += parseInt(bits.slice(i, i + 8), 2)",
+                  "      .toString(16)",
+                  "      .padStart(2, '0');",
+                  "  }",
+                  "  const counter = Math.floor(Date.now() / 1000 / 30);",
+                  "  const counterHex = counter.toString(16).padStart(16, '0');",
+                  "  const hmac = CryptoJS.HmacSHA1(",
+                  "    CryptoJS.enc.Hex.parse(counterHex),",
+                  "    CryptoJS.enc.Hex.parse(hexKey),",
+                  "  );",
+                  "  const hmacHex = hmac.toString(CryptoJS.enc.Hex);",
+                  "  const offset = parseInt(hmacHex.slice(-1), 16);",
+                  "  const binary = parseInt(hmacHex.substr(offset * 2, 8), 16) & 0x7fffffff;",
+                  "  const code = String(binary % 1000000).padStart(6, '0');",
+                  "  pm.collectionVariables.set('mfaCode', code);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{appAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/mfa/disable",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "mfa", "disable"]
+            },
+            "description": "`POST /auth/mfa/disable` — **Authenticated**, rate-limited. Needs the password and a TOTP or recovery code.\n\nExpected: `204`. You can replace `{{mfaCode}}` with `{{recoveryCode}}` to consume a recovery code instead.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{targetUserPassword}}\",\n  \"code\": \"{{mfaCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login without MFA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('no longer challenges for MFA', () => pm.expect(body.mfaRequired).to.be.undefined);",
+                  "const appTokens = pm.response.json();",
+                  "pm.test('issues an access and a refresh token', () => {",
+                  "  pm.expect(appTokens.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(appTokens.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (appTokens.accessToken) {",
+                  "  pm.collectionVariables.set('appAccessToken', appTokens.accessToken);",
+                  "  pm.collectionVariables.set('appRefreshToken', appTokens.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "`POST /auth/login` — **Public**, rate-limited. Confirms the account returns to password-only login.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{targetUserEmail}}\",\n  \"password\": \"{{targetUserPassword}}\",\n  \"application\": \"{{applicationSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12 · Audit log",
+      "description": "Owner-only, read-only view of the security events recorded by the service. Only identifiers and request metadata are stored.",
+      "item": [
+        {
+          "name": "List recent events",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns an array of events', () => {",
+                  "  pm.expect(body).to.be.an('array');",
+                  "});",
+                  "if (body.length) {",
+                  "  pm.collectionVariables.set('auditEvent', body[0].event);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit-events"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "`GET /audit-events` — **Owner**.\n\nExpected: `200 [ { \"_id\", \"event\", \"result\", \"userId\", \"email\", \"createdAt\", ... } ]`. `{{auditEvent}}` keeps the newest event name for the filtered request."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by event",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('only returns the requested event', () => {",
+                  "  const expected = pm.collectionVariables.get('auditEvent');",
+                  "  pm.expect(body.every((event) => event.event === expected)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?event={{auditEvent}}&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit-events"],
+              "query": [
+                {
+                  "key": "event",
+                  "value": "{{auditEvent}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "`GET /audit-events?event=...` — **Owner**. Accepted events: `login.succeeded`, `login.failed`, `login.locked`, `token.refreshed`, `session.logged_out`, `session.revoked`, `session.revoked_all`, `grant.assigned`, `grant.revoked`."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by user and date range",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const today = new Date();",
+                  "const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);",
+                  "pm.collectionVariables.set('auditFrom', yesterday.toISOString().slice(0, 10));",
+                  "pm.collectionVariables.set('auditTo', today.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('events belong to the user', () => {",
+                  "  const userId = pm.collectionVariables.get('userId');",
+                  "  pm.expect(body.every((event) => event.userId === userId)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/audit-events?userId={{userId}}&from={{auditFrom}}&to={{auditTo}}&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["audit-events"],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "from",
+                  "value": "{{auditFrom}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{auditTo}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "`GET /audit-events?userId=...&from=...&to=...` — **Owner**. A date-only `to` includes the whole day. The pre-request script uses yesterday and today."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13 · Access-control checks",
+      "description": "Intentional denials. Each one asserts the status the service must return, so a green run proves the guards are still in place.",
+      "item": [
+        {
+          "name": "Owner route without a token · 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('returns UNAUTHORIZED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["applications"]
+            },
+            "description": "`GET /applications` — **Owner**. Without `Authorization: Bearer` the request must be rejected.\n\nExpected: `401 { \"message\": \"Invalid or missing authorization header\", \"code\": \"UNAUTHORIZED\" }`."
+          },
+          "response": []
+        },
+        {
+          "name": "Application token on an owner route · 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('returns FORBIDDEN', () => pm.expect(pm.response.json().code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{appAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"]
+            },
+            "description": "`GET /users` — **Owner**. A scoped token carries a grant role (`admin`) that must never satisfy a global role guard.\n\nExpected: `403 { \"message\": \"Access denied\", \"code\": \"FORBIDDEN\" }`."
+          },
+          "response": []
+        },
+        {
+          "name": "Introspect a foreign token · active false",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('does not reveal another user\\'s token', () => {",
+                  "  pm.expect(body.active).to.be.false;",
+                  "  pm.expect(body.id).to.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/introspect",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "introspect"]
+            },
+            "description": "`POST /auth/introspect` — **Authenticated**. A caller can only introspect its own tokens.\n\nExpected: `200 { \"active\": false }` and no extra data about the guest token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{guestAccessToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14 · Cleanup · optional",
+      "description": "Destructive: revokes sessions, logs out and deletes the demo users. Run it last, or skip it if you want to keep the fixtures. Applications have no delete endpoint yet, so each run leaves one behind.",
+      "item": [
+        {
+          "name": "Revoke all owner sessions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions"]
+            },
+            "description": "`DELETE /auth/sessions` — **Authenticated**. Revokes every refresh token of the caller; the current access token stays valid until it expires.\n\nExpected: `204`."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout invited guest",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{guestAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "`POST /auth/logout` — **Authenticated**. Blacklists the current access token and revokes the sessions of the token’s application.\n\nExpected: `204`. No body is required (the route is excluded from the required-body middleware)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete invited guest",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{guestUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{guestUserId}}"]
+            },
+            "description": "`DELETE /users/:id` — **Owner**. Cascades the guest grant.\n\nExpected: `204`."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete application user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{userId}}"]
+            },
+            "description": "`DELETE /users/:id` — **Owner**. Cascades the application grant.\n\nExpected: `204`."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete signup user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{signupUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "{{signupUserId}}"]
+            },
+            "description": "`DELETE /users/:id` — **Owner**. Removes the account created by the signup folder.\n\nExpected: `204`. Needs the full run: `{{signupUserId}}` is filled by **List users**."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "`POST /auth/logout` — **Authenticated**. Unscoped owner tokens revoke every owner session.\n\nExpected: `204`. After this request, log in again to keep exploring."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "mailhogUrl",
+      "value": "http://localhost:8025"
+    },
+    {
+      "key": "ownerEmail",
+      "value": "owner@home.example"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "ChangeMe123!"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "ownerId",
+      "value": ""
+    },
+    {
+      "key": "runId",
+      "value": "demo"
+    },
+    {
+      "key": "applicationId",
+      "value": ""
+    },
+    {
+      "key": "applicationSlug",
+      "value": "postman-demo"
+    },
+    {
+      "key": "applicationAudience",
+      "value": "postman-demo"
+    },
+    {
+      "key": "targetUserEmail",
+      "value": "postman.user@example.com"
+    },
+    {
+      "key": "targetUserPassword",
+      "value": "TargetUser123!"
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "appAccessToken",
+      "value": ""
+    },
+    {
+      "key": "appRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "guestEmail",
+      "value": "postman.guest@example.com"
+    },
+    {
+      "key": "guestPassword",
+      "value": "GuestUser123!"
+    },
+    {
+      "key": "guestAccessToken",
+      "value": ""
+    },
+    {
+      "key": "guestRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "guestUserId",
+      "value": ""
+    },
+    {
+      "key": "invitationToken",
+      "value": ""
+    },
+    {
+      "key": "resetToken",
+      "value": ""
+    },
+    {
+      "key": "signupEmail",
+      "value": "postman.signup@example.com"
+    },
+    {
+      "key": "signupPassword",
+      "value": "Newcomer123!"
+    },
+    {
+      "key": "signupUserId",
+      "value": ""
+    },
+    {
+      "key": "holderId",
+      "value": ""
+    },
+    {
+      "key": "verificationCode",
+      "value": ""
+    },
+    {
+      "key": "resetCode",
+      "value": ""
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "sessionProbeAccessToken",
+      "value": ""
+    },
+    {
+      "key": "sessionProbeRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "mfaToken",
+      "value": ""
+    },
+    {
+      "key": "mfaSecret",
+      "value": ""
+    },
+    {
+      "key": "mfaCode",
+      "value": ""
+    },
+    {
+      "key": "recoveryCode",
+      "value": ""
+    },
+    {
+      "key": "auditEvent",
+      "value": "login.succeeded"
+    },
+    {
+      "key": "auditFrom",
+      "value": ""
+    },
+    {
+      "key": "auditTo",
+      "value": ""
+    },
+    {
+      "key": "jwkKid",
+      "value": ""
+    }
+  ]
+}
