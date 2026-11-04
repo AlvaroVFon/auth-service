@@ -130,10 +130,13 @@ export function parseListQuery<TField extends string = string>(
 }
 
 function resolveDefaultLimit(defaultLimit: number | undefined): number {
-  return Math.min(
-    Math.max(defaultLimit ?? DEFAULT_LIST_LIMIT, 1),
-    MAX_LIST_LIMIT,
-  );
+  const value = defaultLimit ?? DEFAULT_LIST_LIMIT;
+
+  if (!Number.isFinite(value)) {
+    throw new Error('defaultLimit must be a finite number');
+  }
+
+  return Math.min(Math.max(Math.trunc(value), 1), MAX_LIST_LIMIT);
 }
 
 function parsePositiveInteger(

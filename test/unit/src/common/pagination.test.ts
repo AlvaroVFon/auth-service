@@ -52,6 +52,25 @@ describe('parseListQuery', () => {
     }
   });
 
+  test('should truncate a fractional default limit to a safe integer', () => {
+    const query = parseListQuery(
+      {},
+      { sortableFields: SORTABLE_FIELDS, defaultLimit: 2.5 },
+    );
+
+    assert.strictEqual(query.limit, 2);
+  });
+
+  test('should reject a non finite default limit', () => {
+    for (const defaultLimit of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(
+        () =>
+          parseListQuery({}, { sortableFields: SORTABLE_FIELDS, defaultLimit }),
+        /defaultLimit must be a finite number/,
+      );
+    }
+  });
+
   test('should parse page, limit and search term', () => {
     const query = parse({ page: '3', limit: '25', q: '  ali  ' });
 
