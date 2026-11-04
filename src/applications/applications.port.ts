@@ -6,8 +6,23 @@ export interface CreateApplicationInput {
   audience: string;
 }
 
+/**
+ * Only `name` and `active` are mutable; the values stay `unknown` so the
+ * service can reject anything the schema does not allow at runtime.
+ */
+export interface UpdateApplicationInput {
+  name?: unknown;
+  active?: unknown;
+}
+
 export interface ApplicationsPort {
   create(input: CreateApplicationInput): Promise<Application>;
+  update(
+    id: string,
+    input: UpdateApplicationInput,
+    actorId?: string,
+  ): Promise<Application>;
+  archive(id: string, actorId?: string): Promise<Application>;
   findById(id: string): Promise<Application | null>;
   findBySlug(slug: string): Promise<Application | null>;
   findByAudience(audience: string): Promise<Application | null>;

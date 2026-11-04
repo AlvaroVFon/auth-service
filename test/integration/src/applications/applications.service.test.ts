@@ -1,19 +1,50 @@
+import { Types } from 'mongoose';
+
 import { Application } from '../../../../src/applications/applications.interface';
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
 import {
+  AuditEvent,
+  AuditEventRecord,
+  AuditResult,
+  AuditService,
+  createAuditEventModel,
+} from '../../../../src/audit';
+import {
   EntityAlreadyExistsError,
+  EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
 import fixture from '../../../fixtures';
 import { ApplicationFactory } from '../../../helpers/factories/application.factory';
+import { silentLogger } from '../../../mocks/logger.mock';
 
 describe('ApplicationsService', () => {
   let applicationsService: ApplicationsService;
+  let auditService: AuditService;
 
   before(() => {
-    applicationsService = new ApplicationsService(ApplicationModel);
+    auditService = new AuditService(createAuditEventModel(), silentLogger);
+    applicationsService = new ApplicationsService(
+      ApplicationModel,
+      auditService,
+    );
   });
+
+  const createApplication = () => {
+    const application = ApplicationFactory.generate();
+
+    return applicationsService.create({
+      name: application.name,
+      slug: application.slug,
+      audience: application.audience,
+    });
+  };
+
+  const auditEvents = (applicationId: string) =>
+    fixture.find<AuditEventRecord>('AuditEvent', {
+      applicationId: new Types.ObjectId(applicationId),
+    });
 
   describe('create', () => {
     test('should persist an active application', async () => {
@@ -369,6 +400,216 @@ describe('ApplicationsService', () => {
     test('should reject an invalid id', async () => {
       await assert.rejects(
         applicationsService.findActiveByIds(['bad-id']),
+        InvalidArgumentError,
+      );
+    });
+  });
+
+  describe('update', () => {
+    test('AC-1: renames the application and records application.updated', async () => {
+      const created = await createApplication();
+      const actorId = new Types.ObjectId().toString();
+
+      const updated = await applicationsService.update(
+        created._id.toString(),
+        { name: '  Renamed Application  ' },
+        actorId,
+      );
+
+      assert.strictEqual(updated.name, 'Renamed Application');
+
+      const persisted = await applicationsService.findById(
+        created._id.toString(),
+      );
+      assert.strictEqual(persisted?.name, 'Renamed Application');
+
+      const events = await auditEvents(created._id.toString());
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.event, AuditEvent.APPLICATION_UPDATED);
+      assert.strictEqual(events[0]?.result, AuditResult.SUCCESS);
+      assert.strictEqual(events[0]?.actorId?.toString(), actorId);
+      assert.strictEqual(
+        events[0]?.applicationId?.toString(),
+        created._id.toString(),
+      );
+    });
+
+    test('AC-2: records application.deactivated when active is false', async () => {
+      const created = await createApplication();
+
+      const updated = await applicationsService.update(created._id.toString(), {
+        active: false,
+      });
+
+      assert.strictEqual(updated.active, false);
+
+      const events = await auditEvents(created._id.toString());
+      assert.deepStrictEqual(
+        events.map((event) => event.event),
+        [AuditEvent.APPLICATION_DEACTIVATED],
+      );
+    });
+
+    test('AC-2: records application.activated when active is true', async () => {
+      const created = await createApplication();
+      await applicationsService.update(created._id.toString(), {
+        active: false,
+      });
+
+      const updated = await applicationsService.update(created._id.toString(), {
+        active: true,
+      });
+
+      assert.strictEqual(updated.active, true);
+
+      const events = await auditEvents(created._id.toString());
+      assert.deepStrictEqual(
+        events.map((event) => event.event).sort(),
+        [
+          AuditEvent.APPLICATION_DEACTIVATED,
+          AuditEvent.APPLICATION_ACTIVATED,
+        ].sort(),
+      );
+    });
+
+    test('AC-2: keeps the slug and the audience immutable', async () => {
+      const created = await createApplication();
+
+      const payloads: Record<string, unknown>[] = [
+        { slug: 'another-slug' },
+        { audience: 'another-audience' },
+        { slug: 'another-slug', audience: 'another-audience' },
+        { _id: new Types.ObjectId().toString() },
+        { __v: 5 },
+      ];
+
+      for (const payload of payloads) {
+        await assert.rejects(
+          applicationsService.update(created._id.toString(), payload),
+          InvalidArgumentError,
+        );
+      }
+
+      const persisted = await applicationsService.findById(
+        created._id.toString(),
+      );
+      assert.strictEqual(persisted?.slug, created.slug);
+      assert.strictEqual(persisted?.audience, created.audience);
+      assert.strictEqual((await auditEvents(created._id.toString())).length, 0);
+    });
+
+    test('AC-5: rejects an empty or non-string name without modifying the document', async () => {
+      const created = await createApplication();
+
+      for (const payload of [{ name: '' }, { name: '   ' }, { name: 42 }]) {
+        await assert.rejects(
+          applicationsService.update(created._id.toString(), payload),
+          InvalidArgumentError,
+        );
+      }
+
+      const persisted = await applicationsService.findById(
+        created._id.toString(),
+      );
+      assert.strictEqual(persisted?.name, created.name);
+      assert.strictEqual((await auditEvents(created._id.toString())).length, 0);
+    });
+
+    test('rejects a non-boolean active value', async () => {
+      const created = await createApplication();
+
+      await assert.rejects(
+        applicationsService.update(created._id.toString(), { active: 'true' }),
+        InvalidArgumentError,
+      );
+
+      const persisted = await applicationsService.findById(
+        created._id.toString(),
+      );
+      assert.strictEqual(persisted?.active, true);
+    });
+
+    test('rejects an unknown application', async () => {
+      await assert.rejects(
+        applicationsService.update(new Types.ObjectId().toString(), {
+          name: 'Renamed',
+        }),
+        new EntityNotFoundError('Application not found'),
+      );
+    });
+
+    test('rejects an invalid id', async () => {
+      await assert.rejects(
+        applicationsService.update('bad-id', { name: 'Renamed' }),
+        InvalidArgumentError,
+      );
+    });
+
+    test('works without the optional audit service', async () => {
+      const serviceWithoutAudit = new ApplicationsService(ApplicationModel);
+      const created = await createApplication();
+
+      const updated = await serviceWithoutAudit.update(created._id.toString(), {
+        name: 'No audit',
+      });
+
+      assert.strictEqual(updated.name, 'No audit');
+      assert.strictEqual((await auditEvents(created._id.toString())).length, 0);
+    });
+  });
+
+  describe('archive', () => {
+    test('AC-3: is idempotent, keeps the grants and records application.archived', async () => {
+      const created = await createApplication();
+      const userId = new Types.ObjectId();
+      await fixture.create('Grant', {
+        userId,
+        applicationId: created._id,
+        role: 'viewer',
+      });
+      const actorId = new Types.ObjectId().toString();
+
+      const first = await applicationsService.archive(
+        created._id.toString(),
+        actorId,
+      );
+      const second = await applicationsService.archive(
+        created._id.toString(),
+        actorId,
+      );
+
+      assert.strictEqual(first.active, false);
+      assert.strictEqual(second.active, false);
+
+      const persisted = await applicationsService.findById(
+        created._id.toString(),
+      );
+      assert.ok(persisted);
+      assert.strictEqual(persisted?.active, false);
+
+      const grants = await fixture.find('Grant', {
+        applicationId: created._id,
+      });
+      assert.strictEqual(grants.length, 1);
+
+      const events = await auditEvents(created._id.toString());
+      assert.deepStrictEqual(
+        events.map((event) => event.event),
+        [AuditEvent.APPLICATION_ARCHIVED, AuditEvent.APPLICATION_ARCHIVED],
+      );
+      assert.strictEqual(events[0]?.actorId?.toString(), actorId);
+    });
+
+    test('rejects an unknown application', async () => {
+      await assert.rejects(
+        applicationsService.archive(new Types.ObjectId().toString()),
+        new EntityNotFoundError('Application not found'),
+      );
+    });
+
+    test('rejects an invalid id', async () => {
+      await assert.rejects(
+        applicationsService.archive('bad-id'),
         InvalidArgumentError,
       );
     });

@@ -219,6 +219,7 @@ export const createApplicationComposition = (
     authenticationMiddleware,
     authorizationMiddleware,
     logger,
+    auditService,
   );
   const usersModule = new UsersModule(
     cryptoService,

@@ -10,6 +10,10 @@ export enum AuditEvent {
   SESSIONS_REVOKED = 'session.revoked_all',
   GRANT_ASSIGNED = 'grant.assigned',
   GRANT_REVOKED = 'grant.revoked',
+  APPLICATION_UPDATED = 'application.updated',
+  APPLICATION_ACTIVATED = 'application.activated',
+  APPLICATION_DEACTIVATED = 'application.deactivated',
+  APPLICATION_ARCHIVED = 'application.archived',
 }
 
 export enum AuditResult {

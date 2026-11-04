@@ -209,6 +209,8 @@ Every route is declared in a module router and mounted by
 | `POST`   | `/applications`                               | Owner     | Creates an application (name, slug, audience).                          |
 | `GET`    | `/applications`                               | Owner     | Lists applications.                                                     |
 | `GET`    | `/applications/:id`                           | Owner     | Reads one application.                                                  |
+| `PATCH`  | `/applications/:id`                           | Owner     | Renames or (de)activates; `slug` and `audience` are immutable.          |
+| `DELETE` | `/applications/:id`                           | Owner     | Archives the application (`active=false`); it is never deleted.         |
 | `PUT`    | `/applications/:applicationId/grants`         | App admin | Upserts the role of a user in the application.                          |
 | `GET`    | `/applications/:applicationId/grants`         | App admin | Lists the application grants.                                           |
 | `GET`    | `/applications/:applicationId/grants/:userId` | App admin | Reads one grant.                                                        |
@@ -279,6 +281,26 @@ the owner token has no `aud` and is the only one accepted by `/applications` and
 `/users`. A missing grant, unknown app or inactive app returns `403` without tokens,
 while invalid credentials always return the same generic `401`.
 
+### Application lifecycle
+
+The owner renames an application with `PATCH /applications/:id { "name": "..." }` and
+activates or deactivates it with `PATCH /applications/:id { "active": false }`. Only
+`name` and `active` are mutable: sending `slug`, `audience`, `id` or `__v` returns `400`
+and writes nothing, because the slug and the audience identify the application in every
+issued token. A blank name, a non-boolean `active` or an empty payload also returns
+`400`.
+
+`DELETE /applications/:id` archives the application instead of deleting it: it sets
+`active` to `false`, keeps the document and its grants, and is idempotent, so calling it
+again still returns `200`. There is no physical deletion.
+
+Deactivating or archiving does not revoke live sessions or already issued access tokens;
+the refresh endpoint stops minting new tokens, revokes the session that attempted it and
+reactivating the application restores the login (not that revoked session). Every
+transition is audited as `application.updated`, `application.activated`,
+`application.deactivated` or `application.archived` with the acting user and the
+application id.
+
 ### Session profile and introspection
 
 `GET /auth/me` returns the authenticated identity (`id`, `email`), the application
@@ -331,9 +353,9 @@ Links are hashed at rest, expire (`INVITATION_LINK_EXPIRATION_MS`, default 7 day
 ### Audit log
 
 The service records login successes/failures, lockouts, refreshes, logouts, session
-revocations and grant changes in the `AuditEvent` collection. Events carry identifiers
-and request metadata only (never passwords, tokens, codes or links) and are kept for
-`AUDIT_RETENTION_DAYS` (default 90) through a TTL index.
+revocations, grant changes and application lifecycle transitions in the `AuditEvent`
+collection. Events carry identifiers and request metadata only (never passwords, tokens,
+codes or links) and are kept for `AUDIT_RETENTION_DAYS` (default 90) through a TTL index.
 
 The owner can query them:
 
