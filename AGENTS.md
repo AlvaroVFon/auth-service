@@ -43,7 +43,7 @@
 - **MongoDB must be running** for integration/e2e only (use `docker-compose up -d mongo-auth`)
 - **Globals**: `describe`, `test`, `assert`, `mock`, `before`, `beforeEach`, `after`, `afterEach` are attached to `global` in setup — do not import them in test files
 - **Layout**: pure unit tests in `test/unit/` (no DB), DB-backed service tests in `test/integration/`, HTTP flows in `test/e2e/`
-- **Current size**: 812 tests (281 unit, 335 integration, 196 e2e), all green
+- **Current size**: 875 tests (320 unit, 353 integration, 202 e2e), all green
 
 ## Linting / Formatting
 

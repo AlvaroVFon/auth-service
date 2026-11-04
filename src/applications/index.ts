@@ -6,3 +6,9 @@ export type {
   UpdateApplicationInput,
 } from './applications.port';
 export { ApplicationsService } from './applications.service';
+export {
+  MfaPolicy,
+  type ApplicationSettings,
+  type ApplicationSettingsInput,
+} from '../settings/settings.interface';
+export { validateApplicationSettings } from '../settings/settings.validation';

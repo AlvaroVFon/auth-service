@@ -10,6 +10,11 @@ export interface UserGrantsCleanerPort {
   deleteByUser(userId: string, actorId?: string): Promise<void>;
 }
 
+/** Revokes every refresh token of a user, used after credential changes. */
+export interface UserSessionRevokerPort {
+  revokeAll(userId: string): Promise<void>;
+}
+
 export interface UsersPort {
   verifyCredentials(email: string, password: string): Promise<User>;
   createVerifiedUser(input: CreateVerifiedUserInput): Promise<User>;
@@ -31,4 +36,5 @@ export interface UsersPort {
   resetMfaFailures(id: string): Promise<void>;
   consumeMfaRecoveryCode(id: string, codeHash: string): Promise<boolean>;
   setGrantsCleaner(cleaner: UserGrantsCleanerPort): void;
+  setSessionRevoker(revoker: UserSessionRevokerPort): void;
 }

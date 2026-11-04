@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import { parseUserUpdatePayload } from './user-update-payload';
 import { User as UserInterface } from './users.interface';
 import { UsersService } from './users.service';
 
@@ -63,21 +64,11 @@ export class UsersController {
   @Catch()
   async updateOneById(req: Request, res: Response): Promise<void> {
     const id = req.params.id as string;
-    const updateData = {
-      ...req.body,
-    } as Record<string, unknown>;
-
-    // `role` is the only field the API must never write; the remaining user
-    // fields (including lockout bookkeeping) keep their previous behaviour.
-    delete updateData['role'];
-    delete updateData['_id'];
-    delete updateData['id'];
-    delete updateData['__v'];
-
-    const updatedUser = await this.userService.updateOneById(
-      id,
-      updateData as Partial<UserInterface>,
+    const updateData = parseUserUpdatePayload(
+      req.body as Record<string, unknown> | undefined,
     );
+
+    const updatedUser = await this.userService.updateOneById(id, updateData);
 
     res.status(200).json(updatedUser);
   }

@@ -280,6 +280,7 @@ export const createApplicationComposition = (
     refreshTokenService,
     getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
   );
+  usersModule.service.setSessionRevoker(sessionService);
   const mfaService = new MfaService(
     usersModule.service,
     cryptoService,

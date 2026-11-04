@@ -882,7 +882,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["users", "{{userId}}"]
             },
-            "description": "`PATCH /users/:id` — **Owner**. Accepts profile fields; `role` is ignored on purpose.\n\nExpected: `200` with the updated user and the trimmed `telegramChatId`.",
+            "description": "`PATCH /users/:id` — **Owner**. Accepts only `username`, `email`, `password` and `telegramChatId`; any other field returns `400`.\n\nExpected: `200` with the updated user and the trimmed `telegramChatId`.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"telegramChatId\": \" 4242 \"\n}",
