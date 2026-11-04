@@ -82,8 +82,12 @@ curl -s -X POST http://localhost:3000/auth/login \
   enumerate applications.
 - Without `application`, only the global owner can log in. Any other account
   gets `403 An application is required`.
-- Invalid credentials always return the same
-  `401 Invalid email or password`, whether the email exists or not.
+- Invalid credentials return the same `401 Invalid email or password` on every
+  attempt, whether the email exists or not. After `MAX_LOGIN_ATTEMPTS` (5 with
+  `.env.example`) wrong passwords the account is locked for
+  `LOCKOUT_DURATION_MS` (15 minutes) and login answers
+  `423 Account is temporarily locked. Please try again later.` until the lock
+  expires, even with the right password.
 
 Keep both tokens:
 
@@ -218,18 +222,20 @@ reference](../../README.md#device-sessions).
 
 ## Troubleshooting
 
-| Symptom                                                                                       | Cause                                                                                                                                                                |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `401 {"message":"Invalid email or password","code":"INVALID_CREDENTIALS"}`                    | Wrong password or unknown email: the response is intentionally identical for both                                                                                    |
-| `403 {"message":"An application is required","code":"FORBIDDEN"}`                             | A non-owner account logged in without `application`                                                                                                                  |
-| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`                 | No grant, unknown application or inactive application; all collapse into one response                                                                                |
-| `403 {"message":"Email is not verified","code":"FORBIDDEN"}`                                  | The account is still a holder: finish the signup verification or accept the invitation                                                                               |
-| `401 {"message":"Invalid or missing authorization header","code":"INVALID_CREDENTIALS"}`      | No `Authorization: Bearer` header on an authenticated route                                                                                                          |
-| `401 {"message":"InvalidTokenError: Token is invalid or has expired","code":"INVALID_TOKEN"}` | Malformed, tampered or expired token; refresh it or log in again                                                                                                     |
-| `401 {"message":"Invalid token payload","code":"INVALID_CREDENTIALS"}`                        | A refresh token sent as an access token, or an access token blacklisted by logout                                                                                    |
-| `401 {"message":"Refresh token has been revoked","code":"UNAUTHORIZED"}`                      | The refresh token was already rotated or the session was logged out                                                                                                  |
-| `400 {"message":"refreshToken is required","code":"INVALID_ARGUMENT"}`                        | The refresh request sent no body or no `refreshToken` field                                                                                                          |
-| `429 {"error":"Too many requests, please try again later."}`                                  | `RATE_LIMIT_LOGIN_MAX` / `RATE_LIMIT_REFRESH_MAX` exhausted (15 logins and 20 refreshes per 5 s with `.env.example`); restart the local stack or wait out the window |
+| Symptom                                                                                            | Cause                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401 {"message":"Invalid email or password","code":"INVALID_CREDENTIALS"}`                         | Wrong password or unknown email: the response is intentionally identical for both                                                                                    |
+| `423 {"message":"Account is temporarily locked. Please try again later.","code":"ACCOUNT_LOCKED"}` | `MAX_LOGIN_ATTEMPTS` wrong passwords reached (5 with `.env.example`); wait `LOCKOUT_DURATION_MS` (15 minutes) or unlock the account as the owner                     |
+| `403 {"message":"An application is required","code":"FORBIDDEN"}`                                  | A non-owner account logged in without `application`                                                                                                                  |
+| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`                      | No grant, unknown application or inactive application; all collapse into one response                                                                                |
+| `403 {"message":"Email is not verified","code":"FORBIDDEN"}`                                       | The account is still a holder: finish the signup verification or accept the invitation                                                                               |
+| `401 {"message":"Invalid or missing authorization header","code":"INVALID_CREDENTIALS"}`           | No `Authorization: Bearer` header on an authenticated route                                                                                                          |
+| `401 {"message":"InvalidTokenError: Token is invalid or has expired","code":"INVALID_TOKEN"}`      | Malformed, tampered or expired token; refresh it or log in again                                                                                                     |
+| `401 {"message":"Invalid token payload","code":"INVALID_CREDENTIALS"}`                             | A refresh token sent as an access token, or an access token blacklisted by logout                                                                                    |
+| `401 {"message":"Refresh token has been revoked","code":"UNAUTHORIZED"}`                           | The refresh token was already rotated or the session was logged out                                                                                                  |
+| `400 {"message":"Request body is required."}`                                                      | The refresh request sent no body; the required-body middleware answers before the handler and omits `code`                                                           |
+| `400 {"message":"refreshToken is required","code":"INVALID_ARGUMENT"}`                             | A non-empty JSON body without a `refreshToken` field                                                                                                                 |
+| `429 {"error":"Too many requests, please try again later."}`                                       | `RATE_LIMIT_LOGIN_MAX` / `RATE_LIMIT_REFRESH_MAX` exhausted (15 logins and 20 refreshes per 5 s with `.env.example`); restart the local stack or wait out the window |
 
 If the account has MFA enabled, `POST /auth/login` answers with
 `{ "mfaRequired": true, "challengeToken": "..." }` instead of tokens. Finish the
