@@ -2737,7 +2737,7 @@
     },
     {
       "name": "13 · Access-control checks",
-      "description": "Intentional denials. Each one asserts the status the service must return, so a green run proves the guards are still in place.",
+      "description": "Intentional denials. Each one asserts the status the service must return, so a green run proves the authentication middleware still rejects anonymous and application-scoped tokens.",
       "item": [
         {
           "name": "Owner route without a token · 401",
