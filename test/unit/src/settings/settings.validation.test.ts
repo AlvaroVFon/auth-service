@@ -1,8 +1,18 @@
 import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
 import { MfaPolicy } from '../../../../src/settings/settings.interface';
-import { validateApplicationSettings } from '../../../../src/settings/settings.validation';
+import {
+  SETTINGS_FIELD_DESCRIPTORS,
+  validateApplicationSettings,
+} from '../../../../src/settings/settings.validation';
 
 describe('validateApplicationSettings', () => {
+  test('should expose frozen descriptors that cannot be rewritten', () => {
+    assert.ok(Object.isFrozen(SETTINGS_FIELD_DESCRIPTORS));
+    for (const descriptor of Object.values(SETTINGS_FIELD_DESCRIPTORS)) {
+      assert.ok(Object.isFrozen(descriptor));
+    }
+  });
+
   test('should accept a complete valid settings object', () => {
     const settings = {
       accessTokenTtlSeconds: 900,
