@@ -85,8 +85,15 @@ export class ApplicationsService implements ApplicationsPort {
           field as (typeof MUTABLE_APPLICATION_FIELDS)[number],
         ),
     );
-    if (immutable) {
+    if (immutable !== undefined) {
       throw new InvalidArgumentError('Only name and active can be updated');
+    }
+
+    // Audit only real transitions: a PATCH that repeats the stored value must
+    // not report an activation or an update that never happened.
+    const current = await this.applicationModel.findById(id);
+    if (!current) {
+      throw new EntityNotFoundError('Application not found');
     }
 
     const update: Partial<Pick<Application, 'name' | 'active'>> = {};
@@ -102,7 +109,9 @@ export class ApplicationsService implements ApplicationsPort {
         throw new InvalidArgumentError('Name is required');
       }
       update.name = name;
-      events.push(AuditEvent.APPLICATION_UPDATED);
+      if (name !== current.name) {
+        events.push(AuditEvent.APPLICATION_UPDATED);
+      }
     }
 
     if (fields.includes('active')) {
@@ -110,11 +119,13 @@ export class ApplicationsService implements ApplicationsPort {
         throw new InvalidArgumentError('Active must be a boolean');
       }
       update.active = payload.active;
-      events.push(
-        payload.active
-          ? AuditEvent.APPLICATION_ACTIVATED
-          : AuditEvent.APPLICATION_DEACTIVATED,
-      );
+      if (payload.active !== current.active) {
+        events.push(
+          payload.active
+            ? AuditEvent.APPLICATION_ACTIVATED
+            : AuditEvent.APPLICATION_DEACTIVATED,
+        );
+      }
     }
 
     // The slug and the audience identify the application for every issued

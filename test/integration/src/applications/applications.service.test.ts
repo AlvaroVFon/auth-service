@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 
 import { Application } from '../../../../src/applications/applications.interface';
+import type { UpdateApplicationInput } from '../../../../src/applications/applications.port';
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
 import {
@@ -470,6 +471,30 @@ describe('ApplicationsService', () => {
           AuditEvent.APPLICATION_ACTIVATED,
         ].sort(),
       );
+    });
+
+    test('does not record a transition when the stored value does not change', async () => {
+      const created = await createApplication();
+
+      await applicationsService.update(created._id.toString(), {
+        name: created.name,
+        active: true,
+      });
+
+      assert.strictEqual((await auditEvents(created._id.toString())).length, 0);
+    });
+
+    test('rejects an empty field name', async () => {
+      const created = await createApplication();
+
+      await assert.rejects(
+        applicationsService.update(created._id.toString(), {
+          '': 'x',
+        } as unknown as UpdateApplicationInput),
+        new InvalidArgumentError('Only name and active can be updated'),
+      );
+
+      assert.strictEqual((await auditEvents(created._id.toString())).length, 0);
     });
 
     test('AC-2: keeps the slug and the audience immutable', async () => {
