@@ -7,7 +7,7 @@ access-control checks.
 
 | File                                          | Purpose                                       |
 | --------------------------------------------- | --------------------------------------------- |
-| `auth-service.postman_collection.json`        | 59 requests grouped in 15 folders.            |
+| `auth-service.postman_collection.json`        | 61 requests grouped in 15 folders.            |
 | `auth-service.local.postman_environment.json` | Local `baseUrl`, MailHog URL and owner creds. |
 
 ## Prerequisites
@@ -60,7 +60,7 @@ npx newman run postman/auth-service.postman_collection.json \
 | `10 · Device sessions`               | second login, list sessions, revoke one session                       |
 | `11 · MFA · TOTP`                    | enroll, activate, challenge login, verify, disable, login without MFA |
 | `12 · Audit log`                     | recent events, filter by event, filter by user and date range         |
-| `13 · Access-control checks`         | expected `401`/`403` and foreign-token introspection                  |
+| `13 · Access-control checks`         | expected `401` denials and foreign-token introspection                |
 | `14 · Cleanup · optional`            | revoke sessions, logout, delete the demo users                        |
 
 Test scripts save every value the next request needs, so no manual copy/paste is
