@@ -2,6 +2,9 @@
 
 Authentication and authorization service built with Express 5, Mongoose, and TypeScript.
 
+New to the service? Start with the [Getting Started guide](docs/getting-started/README.md):
+concepts, local setup and the three integration flows.
+
 ## Features
 
 - User registration and signup with email verification
