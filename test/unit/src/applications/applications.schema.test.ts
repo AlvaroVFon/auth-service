@@ -1,16 +1,7 @@
 import { Schema } from 'mongoose';
 
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
-
-const SETTINGS_FIELDS = [
-  'accessTokenTtl',
-  'appName',
-  'invitationTtlMs',
-  'maxSessionsPerUser',
-  'mfaPolicy',
-  'refreshTokenTtl',
-  'requireVerifiedEmail',
-] as const;
+import { SETTINGS_FIELDS } from '../../../../src/settings/settings.validation';
 
 interface SettingsPath {
   options: { required?: unknown; default?: unknown };
@@ -26,10 +17,24 @@ describe('Application settings subdocument', () => {
     assert.ok(settingsPath?.schema, 'settings subdocument is missing');
   });
 
-  test('should declare exactly the settings fields', () => {
-    assert.deepStrictEqual(Object.keys(settingsPath.schema.paths).sort(), [
-      ...SETTINGS_FIELDS,
+  test('should declare exactly the fields of SETTINGS_FIELDS', () => {
+    assert.deepStrictEqual(SETTINGS_FIELDS, [
+      'accessTokenTtl',
+      'refreshTokenTtl',
+      'mfaPolicy',
+      'maxSessionsPerUser',
+      'requireVerifiedEmail',
+      'invitationTtlMs',
+      'appName',
     ]);
+  });
+
+  test('should keep the schema paths aligned with SETTINGS_FIELDS', () => {
+    assert.deepStrictEqual(
+      Object.keys(settingsPath.schema.paths).sort(),
+      [...SETTINGS_FIELDS].sort(),
+      'a settings field is missing from the schema (strict mode would drop it)',
+    );
   });
 
   test('should keep every settings field optional', () => {
@@ -52,6 +57,18 @@ describe('Application settings subdocument', () => {
         options.default,
         undefined,
         `${field} must not have a default`,
+      );
+    }
+  });
+
+  test('should validate every settings field with a domain predicate', () => {
+    for (const field of SETTINGS_FIELDS) {
+      const options = settingsPath.schema.path(field)?.options ?? {};
+
+      assert.strictEqual(
+        typeof (options as { validate?: unknown }).validate,
+        'object',
+        `${field} must declare a validator`,
       );
     }
   });

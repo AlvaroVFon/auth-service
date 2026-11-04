@@ -1,61 +1,60 @@
-import { Schema, model } from 'mongoose';
+import { Schema, SchemaDefinitionProperty, model } from 'mongoose';
 
-import { MfaPolicy, ApplicationSettings } from '../settings/settings.interface';
+import { ApplicationSettings } from '../settings/settings.interface';
 import {
-  isNonEmptyString,
-  isNonNegativeInteger,
-  isPositiveInteger,
-  SETTINGS_VALIDATION_MESSAGES,
+  SETTINGS_FIELD_DESCRIPTORS,
+  SETTINGS_FIELDS,
+  type SettingsField,
+  type SettingsFieldDescriptor,
 } from '../settings/settings.validation';
 import { Application } from './applications.interface';
 
+const SETTINGS_PRIMITIVES = {
+  number: Number,
+  string: String,
+  boolean: Boolean,
+} as const;
+
+/**
+ * Mongoose casts `1`, `0`, `'yes'` and `'true'` to booleans *before* running
+ * validators, which would accept values rejected by
+ * `validateApplicationSettings`. The identity cast disables that coercion so
+ * the shared predicate stays authoritative for direct model writes.
+ */
+const castBooleanWithoutCoercion = (value: boolean): boolean => value;
+
+const buildSettingsPath = (field: SettingsField): SchemaDefinitionProperty => {
+  const descriptor: SettingsFieldDescriptor = SETTINGS_FIELD_DESCRIPTORS[field];
+  const definition = {
+    type: SETTINGS_PRIMITIVES[descriptor.type],
+    validate: {
+      validator: descriptor.validate,
+      message: descriptor.message,
+    },
+  };
+
+  if (descriptor.type === 'boolean') {
+    return { ...definition, cast: castBooleanWithoutCoercion };
+  }
+  if (descriptor.enumValues !== undefined) {
+    return {
+      ...definition,
+      enum: { values: [...descriptor.enumValues], message: descriptor.message },
+    };
+  }
+  if (descriptor.trim === true) {
+    return { ...definition, trim: true };
+  }
+
+  return definition;
+};
+
+const settingsDefinition = Object.fromEntries(
+  SETTINGS_FIELDS.map((field) => [field, buildSettingsPath(field)]),
+) as Record<SettingsField, SchemaDefinitionProperty>;
+
 const applicationSettingsSchema = new Schema<ApplicationSettings>(
-  {
-    accessTokenTtl: {
-      type: Number,
-      validate: {
-        validator: isNonNegativeInteger,
-        message: SETTINGS_VALIDATION_MESSAGES.accessTokenTtl,
-      },
-    },
-    refreshTokenTtl: {
-      type: Number,
-      validate: {
-        validator: isNonNegativeInteger,
-        message: SETTINGS_VALIDATION_MESSAGES.refreshTokenTtl,
-      },
-    },
-    mfaPolicy: {
-      type: String,
-      enum: {
-        values: Object.values(MfaPolicy),
-        message: SETTINGS_VALIDATION_MESSAGES.mfaPolicy,
-      },
-    },
-    maxSessionsPerUser: {
-      type: Number,
-      validate: {
-        validator: isPositiveInteger,
-        message: SETTINGS_VALIDATION_MESSAGES.maxSessionsPerUser,
-      },
-    },
-    requireVerifiedEmail: { type: Boolean },
-    invitationTtlMs: {
-      type: Number,
-      validate: {
-        validator: isNonNegativeInteger,
-        message: SETTINGS_VALIDATION_MESSAGES.invitationTtlMs,
-      },
-    },
-    appName: {
-      type: String,
-      trim: true,
-      validate: {
-        validator: isNonEmptyString,
-        message: SETTINGS_VALIDATION_MESSAGES.appName,
-      },
-    },
-  },
+  settingsDefinition,
   { _id: false },
 );
 

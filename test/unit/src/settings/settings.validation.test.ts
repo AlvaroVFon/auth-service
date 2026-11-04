@@ -39,10 +39,40 @@ describe('validateApplicationSettings', () => {
     });
   });
 
+  test('should express token TTLs in seconds and invitation TTL in ms', () => {
+    const ONE_HOUR_IN_SECONDS = 60 * 60;
+    const ONE_DAY_IN_SECONDS = 24 * ONE_HOUR_IN_SECONDS;
+    const ONE_WEEK_IN_MILLISECONDS = 7 * ONE_DAY_IN_SECONDS * 1000;
+
+    assert.deepStrictEqual(
+      validateApplicationSettings({
+        accessTokenTtl: ONE_HOUR_IN_SECONDS,
+        refreshTokenTtl: ONE_DAY_IN_SECONDS,
+        invitationTtlMs: ONE_WEEK_IN_MILLISECONDS,
+      }),
+      {
+        accessTokenTtl: 3600,
+        refreshTokenTtl: 86400,
+        invitationTtlMs: 604800000,
+      },
+    );
+  });
+
+  test('should trim appName', () => {
+    assert.deepStrictEqual(
+      validateApplicationSettings({ appName: ' Billing ' }),
+      {
+        appName: 'Billing',
+      },
+    );
+  });
+
   test('should reject a negative accessTokenTtl', () => {
     assert.throws(
       () => validateApplicationSettings({ accessTokenTtl: -1 }),
-      new InvalidArgumentError('accessTokenTtl must be a non-negative integer'),
+      new InvalidArgumentError(
+        'accessTokenTtl must be a non-negative integer (seconds)',
+      ),
     );
   });
 
@@ -50,7 +80,7 @@ describe('validateApplicationSettings', () => {
     assert.throws(
       () => validateApplicationSettings({ refreshTokenTtl: -3600 }),
       new InvalidArgumentError(
-        'refreshTokenTtl must be a non-negative integer',
+        'refreshTokenTtl must be a non-negative integer (seconds)',
       ),
     );
   });
@@ -59,7 +89,7 @@ describe('validateApplicationSettings', () => {
     assert.throws(
       () => validateApplicationSettings({ invitationTtlMs: -1 }),
       new InvalidArgumentError(
-        'invitationTtlMs must be a non-negative integer',
+        'invitationTtlMs must be a non-negative integer (milliseconds)',
       ),
     );
   });
@@ -70,7 +100,9 @@ describe('validateApplicationSettings', () => {
         validateApplicationSettings({
           accessTokenTtl: 'soon' as unknown as number,
         }),
-      new InvalidArgumentError('accessTokenTtl must be a non-negative integer'),
+      new InvalidArgumentError(
+        'accessTokenTtl must be a non-negative integer (seconds)',
+      ),
     );
   });
 
@@ -78,7 +110,7 @@ describe('validateApplicationSettings', () => {
     assert.throws(
       () => validateApplicationSettings({ refreshTokenTtl: 1.5 }),
       new InvalidArgumentError(
-        'refreshTokenTtl must be a non-negative integer',
+        'refreshTokenTtl must be a non-negative integer (seconds)',
       ),
     );
   });
@@ -107,13 +139,15 @@ describe('validateApplicationSettings', () => {
   });
 
   test('should reject a non boolean requireVerifiedEmail', () => {
-    assert.throws(
-      () =>
-        validateApplicationSettings({
-          requireVerifiedEmail: 'yes' as unknown as boolean,
-        }),
-      new InvalidArgumentError('requireVerifiedEmail must be a boolean'),
-    );
+    for (const value of ['yes', 1, 0]) {
+      assert.throws(
+        () =>
+          validateApplicationSettings({
+            requireVerifiedEmail: value as unknown as boolean,
+          }),
+        new InvalidArgumentError('requireVerifiedEmail must be a boolean'),
+      );
+    }
   });
 
   test('should reject an empty appName', () => {
@@ -131,6 +165,27 @@ describe('validateApplicationSettings', () => {
         validateApplicationSettings(
           'settings' as unknown as Record<string, never>,
         ),
+      new InvalidArgumentError('settings must be an object'),
+    );
+  });
+
+  test('should reject a misspelled settings key instead of dropping it', () => {
+    assert.throws(
+      () =>
+        validateApplicationSettings({
+          accessTokenTTL: 900,
+        } as unknown as Record<string, never>),
+      new InvalidArgumentError('settings must be an object'),
+    );
+  });
+
+  test('should reject unknown keys even when known keys are valid', () => {
+    assert.throws(
+      () =>
+        validateApplicationSettings({
+          appName: 'Billing',
+          unknownField: true,
+        } as unknown as Record<string, never>),
       new InvalidArgumentError('settings must be an object'),
     );
   });

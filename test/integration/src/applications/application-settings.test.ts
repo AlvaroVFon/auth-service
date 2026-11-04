@@ -154,4 +154,37 @@ describe('Application settings', () => {
       0,
     );
   });
+
+  test('should reject a non boolean requireVerifiedEmail without coercing it', async () => {
+    const application = ApplicationFactory.generate();
+
+    await assert.rejects(
+      ApplicationModel.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+        settings: { requireVerifiedEmail: 1 as unknown as boolean },
+      }),
+      isValidationError,
+    );
+
+    assert.strictEqual(
+      await ApplicationModel.countDocuments({ slug: application.slug }),
+      0,
+    );
+  });
+
+  test('should reject a stringified requireVerifiedEmail', async () => {
+    const application = ApplicationFactory.generate();
+
+    await assert.rejects(
+      ApplicationModel.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+        settings: { requireVerifiedEmail: 'true' as unknown as boolean },
+      }),
+      isValidationError,
+    );
+  });
 });
