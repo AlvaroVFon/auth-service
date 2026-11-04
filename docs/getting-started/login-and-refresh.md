@@ -154,8 +154,11 @@ curl -s http://localhost:3000/auth/me \
   `401 Invalid token payload`.
 
 Any other authenticated route behaves the same way. The access level still
-matters: a valid application token is rejected with `403` on owner routes such
-as `/users`, `/applications` and `/audit-events`.
+matters: `/users`, `/applications` and `/audit-events` only accept the unscoped
+owner token, so an application token is rejected with
+`401 Invalid token payload` before the role guard runs. A `403 Access denied` is
+reachable only with an unscoped token whose global role is not `owner`, such as
+a legacy `user` token; `/auth/login` no longer issues one.
 
 ## 3. Refresh the tokens
 
