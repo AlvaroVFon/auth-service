@@ -10,7 +10,11 @@ import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { assertObjectId } from '../common/validators/object-id';
 import type { UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
-import type { AssignRoleInput, GrantsPort } from './grants.port';
+import type {
+  AssignRoleInput,
+  GrantedApplication,
+  GrantsPort,
+} from './grants.port';
 
 export class GrantsService implements GrantsPort {
   constructor(
@@ -79,21 +83,12 @@ export class GrantsService implements GrantsPort {
   }
 
   async listByUser(userId: string): Promise<Grant[]> {
-    assertObjectId(userId, 'userId');
+    return (await this.loadActiveGrants(userId)).map(({ grant }) => grant);
+  }
 
-    const grants = await this.grantModel.find({
-      userId: new Types.ObjectId(userId),
-    });
-
-    const activeApplications = await this.applicationsService.findActiveByIds(
-      grants.map((grant) => grant.applicationId.toString()),
-    );
-    const activeIds = new Set(
-      activeApplications.map((application) => application._id.toString()),
-    );
-
-    return grants.filter((grant) =>
-      activeIds.has(grant.applicationId.toString()),
+  async listActiveByUser(userId: string): Promise<GrantedApplication[]> {
+    return (await this.loadActiveGrants(userId)).map(
+      ({ grant, application }) => ({ application, role: grant.role }),
     );
   }
 
@@ -156,6 +151,39 @@ export class GrantsService implements GrantsPort {
         ...(actorId === undefined ? {} : { actorId }),
       });
     }
+  }
+
+  /**
+   * Single source of truth for "grants of this user on active applications".
+   * Both public projections share it so the activity filter cannot drift.
+   */
+  private async loadActiveGrants(
+    userId: string,
+  ): Promise<Array<{ grant: Grant; application: Application }>> {
+    assertObjectId(userId, 'userId');
+
+    const grants = await this.grantModel.find({
+      userId: new Types.ObjectId(userId),
+    });
+
+    const activeApplications = await this.applicationsService.findActiveByIds(
+      grants.map((grant) => grant.applicationId.toString()),
+    );
+    const applicationsById = new Map(
+      activeApplications.map((application) => [
+        application._id.toString(),
+        application,
+      ]),
+    );
+
+    // Ordering belongs to the consumer that renders the list, not to the
+    // projection: keeping it here would duplicate the comparator in the panel
+    // and the catalog endpoints.
+    return grants.flatMap((grant) => {
+      const application = applicationsById.get(grant.applicationId.toString());
+
+      return application ? [{ grant, application }] : [];
+    });
   }
 
   private async recordGrantEvent(

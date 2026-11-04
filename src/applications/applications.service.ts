@@ -90,7 +90,9 @@ export class ApplicationsService implements ApplicationsPort {
   }
 
   async findAll(): Promise<Application[]> {
-    return this.applicationModel.find();
+    // This order belongs to the catalog endpoint; consumers that build their own
+    // view (the panel context) must order their response themselves.
+    return this.applicationModel.find().sort({ name: 1, slug: 1, _id: 1 });
   }
 
   async findActiveByIds(ids: string[]): Promise<Application[]> {

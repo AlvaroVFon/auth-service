@@ -296,6 +296,8 @@ export const createApplicationComposition = (
     usersModule.service,
     jwtService,
     blacklistService,
+    grantsModule.service,
+    applicationsModule.service,
   );
   const linksService = new LinksService(
     LinkModel,

@@ -170,6 +170,15 @@ export class AuthController {
   }
 
   @Catch()
+  async context(req: Request, res: Response): Promise<void> {
+    const context = await this.profileService.getContext(
+      this.buildIdentity(req),
+    );
+
+    res.status(200).json(context);
+  }
+
+  @Catch()
   async introspect(req: Request, res: Response): Promise<void> {
     const { token } = req.body as { token?: unknown };
 
