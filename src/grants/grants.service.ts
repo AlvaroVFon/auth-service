@@ -12,6 +12,7 @@ import type { UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
 import type {
   AssignRoleInput,
+  GrantApplicationScope,
   GrantedApplication,
   GrantsPort,
 } from './grants.port';
@@ -24,7 +25,10 @@ export class GrantsService implements GrantsPort {
     private readonly auditService?: AuditPort,
   ) {}
 
-  async assignRole(input: AssignRoleInput): Promise<Grant> {
+  async assignRole(
+    input: AssignRoleInput,
+    scope?: GrantApplicationScope,
+  ): Promise<Grant> {
     const { userId, applicationId, role, actorId } = input;
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
@@ -32,11 +36,9 @@ export class GrantsService implements GrantsPort {
       throw new InvalidArgumentError('Invalid role');
     }
 
-    const application =
-      await this.applicationsService.findAssignableById(applicationId);
-    if (!application) {
-      throw new EntityNotFoundError('Application not found');
-    }
+    // The caller decides whether an archived application is still manageable,
+    // so the owner keeps administering its grants after the archive.
+    await this.resolveApplication(applicationId, scope);
 
     const user = await this.usersService.findById(userId);
     if (!user) {
@@ -61,7 +63,7 @@ export class GrantsService implements GrantsPort {
   async findByUserAndApplication(
     userId: string,
     applicationId: string,
-    loadedApplication?: Application,
+    scope?: GrantApplicationScope,
   ): Promise<Grant | null> {
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
@@ -75,11 +77,13 @@ export class GrantsService implements GrantsPort {
       return null;
     }
 
-    const application =
-      loadedApplication ??
-      (await this.applicationsService.findAssignableById(applicationId));
+    const application = await this.findApplication(applicationId, scope);
 
-    return application?.active ? grant : null;
+    if (!application || (!scope?.includeArchived && !application.active)) {
+      return null;
+    }
+
+    return grant;
   }
 
   async listByUser(userId: string): Promise<Grant[]> {
@@ -92,14 +96,13 @@ export class GrantsService implements GrantsPort {
     );
   }
 
-  async listByApplication(applicationId: string): Promise<Grant[]> {
+  async listByApplication(
+    applicationId: string,
+    scope?: GrantApplicationScope,
+  ): Promise<Grant[]> {
     assertObjectId(applicationId, 'applicationId');
 
-    const application =
-      await this.applicationsService.findAssignableById(applicationId);
-    if (!application) {
-      throw new EntityNotFoundError('Application not found');
-    }
+    await this.resolveApplication(applicationId, scope);
 
     return this.grantModel.find({
       applicationId: new Types.ObjectId(applicationId),
@@ -151,6 +154,32 @@ export class GrantsService implements GrantsPort {
         ...(actorId === undefined ? {} : { actorId }),
       });
     }
+  }
+
+  private async findApplication(
+    applicationId: string,
+    scope?: GrantApplicationScope,
+  ): Promise<Application | null> {
+    if (scope?.application) {
+      return scope.application;
+    }
+
+    return scope?.includeArchived
+      ? this.applicationsService.findById(applicationId)
+      : this.applicationsService.findAssignableById(applicationId);
+  }
+
+  private async resolveApplication(
+    applicationId: string,
+    scope?: GrantApplicationScope,
+  ): Promise<Application> {
+    const application = await this.findApplication(applicationId, scope);
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    return application;
   }
 
   /**

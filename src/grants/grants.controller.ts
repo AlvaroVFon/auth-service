@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 
 import { Catch } from '../common/decorators/catch.decorator';
+import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import type { GrantApplicationScope } from './grants.port';
 import { GrantsService } from './grants.service';
 
 export class GrantsController {
@@ -11,12 +13,15 @@ export class GrantsController {
   async upsert(req: Request, res: Response): Promise<void> {
     const applicationId = req.params.applicationId as string;
     const { userId, role } = req.body ?? {};
-    const grant = await this.grantsService.assignRole({
-      userId,
-      applicationId,
-      role,
-      ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
-    });
+    const grant = await this.grantsService.assignRole(
+      {
+        userId,
+        applicationId,
+        role,
+        ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
+      },
+      this.scopeFor(req),
+    );
 
     res.status(200).json(grant);
   }
@@ -24,7 +29,10 @@ export class GrantsController {
   @Catch()
   async list(req: Request, res: Response): Promise<void> {
     const applicationId = req.params.applicationId as string;
-    const grants = await this.grantsService.listByApplication(applicationId);
+    const grants = await this.grantsService.listByApplication(
+      applicationId,
+      this.scopeFor(req),
+    );
 
     res.status(200).json(grants);
   }
@@ -36,6 +44,7 @@ export class GrantsController {
     const grant = await this.grantsService.findByUserAndApplication(
       userId,
       applicationId,
+      this.scopeFor(req),
     );
 
     if (!grant) {
@@ -52,5 +61,14 @@ export class GrantsController {
     await this.grantsService.revokeRole(userId, applicationId, req.user?.id);
 
     res.status(204).json();
+  }
+
+  /**
+   * Archiving keeps every grant, so the owner must keep administering them
+   * afterwards. An app admin never sets this scope: the authorization
+   * middleware already rejects it on an inactive application with `403`.
+   */
+  private scopeFor(req: Request): GrantApplicationScope {
+    return req.user?.role === Roles.OWNER ? { includeArchived: true } : {};
   }
 }

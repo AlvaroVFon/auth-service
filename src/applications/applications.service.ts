@@ -1,8 +1,10 @@
 import { Model } from 'mongoose';
 
+import { AuditEvent, AuditPort, AuditResult } from '../audit';
 import { SLUG_REGEX } from '../common/constants/regex';
 import {
   EntityAlreadyExistsError,
+  EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import {
@@ -12,10 +14,19 @@ import {
 } from '../common/mongo/duplicate-key';
 import { assertObjectId } from '../common/validators/object-id';
 import { Application } from './applications.interface';
-import { ApplicationsPort, CreateApplicationInput } from './applications.port';
+import {
+  ApplicationsPort,
+  CreateApplicationInput,
+  UpdateApplicationInput,
+} from './applications.port';
+
+const MUTABLE_APPLICATION_FIELDS = ['name', 'active'] as const;
 
 export class ApplicationsService implements ApplicationsPort {
-  constructor(private readonly applicationModel: Model<Application>) {}
+  constructor(
+    private readonly applicationModel: Model<Application>,
+    private readonly auditService?: AuditPort,
+  ) {}
 
   async create(input: CreateApplicationInput): Promise<Application> {
     const name = input.name?.trim();
@@ -50,6 +61,133 @@ export class ApplicationsService implements ApplicationsPort {
       }
       throw error;
     }
+  }
+
+  async update(
+    id: string,
+    input: UpdateApplicationInput,
+    actorId?: string,
+  ): Promise<Application> {
+    assertObjectId(id);
+
+    const payload = input ?? {};
+    const fields = Object.keys(payload).filter(
+      (field) => (payload as Record<string, unknown>)[field] !== undefined,
+    );
+
+    if (fields.length === 0) {
+      throw new InvalidArgumentError('Name or active is required');
+    }
+
+    const immutable = fields.find(
+      (field) =>
+        !MUTABLE_APPLICATION_FIELDS.includes(
+          field as (typeof MUTABLE_APPLICATION_FIELDS)[number],
+        ),
+    );
+    if (immutable !== undefined) {
+      throw new InvalidArgumentError('Only name and active can be updated');
+    }
+
+    const update: Partial<Pick<Application, 'name' | 'active'>> = {};
+
+    if (fields.includes('name')) {
+      if (typeof payload.name !== 'string') {
+        throw new InvalidArgumentError('Name must be a string');
+      }
+
+      const name = payload.name.trim();
+      if (!name) {
+        throw new InvalidArgumentError('Name is required');
+      }
+      update.name = name;
+    }
+
+    if (fields.includes('active')) {
+      if (typeof payload.active !== 'boolean') {
+        throw new InvalidArgumentError('Active must be a boolean');
+      }
+      update.active = payload.active;
+    }
+
+    // One conditional write: the filter only matches when at least one value
+    // really changes, so two concurrent requests cannot audit the same
+    // transition and a repeated payload is a no-op.
+    const before = await this.applicationModel.findOneAndUpdate(
+      {
+        _id: id,
+        $or: Object.entries(update).map(([field, value]) => ({
+          [field]: { $ne: value },
+        })),
+      },
+      { $set: update },
+      { returnDocument: 'before' },
+    );
+
+    if (!before) {
+      const existing = await this.applicationModel.findById(id);
+
+      if (!existing) {
+        throw new EntityNotFoundError('Application not found');
+      }
+
+      // Nothing changed: there is no transition to audit.
+      return existing;
+    }
+
+    const events: AuditEvent[] = [];
+
+    if (update.name !== undefined && update.name !== before.name) {
+      events.push(AuditEvent.APPLICATION_UPDATED);
+    }
+
+    if (update.active !== undefined && update.active !== before.active) {
+      events.push(
+        update.active
+          ? AuditEvent.APPLICATION_ACTIVATED
+          : AuditEvent.APPLICATION_DEACTIVATED,
+      );
+    }
+
+    for (const event of events) {
+      await this.recordApplicationEvent(event, id, actorId);
+    }
+
+    // The pre-image plus the applied changes is the post-image without a second
+    // round-trip that could race with another writer.
+    return { ...before.toObject(), ...update } as Application;
+  }
+
+  /**
+   * Archives the application: it is never deleted, so its grants and its audit
+   * trail survive and the owner keeps administering them. Repeating the call is
+   * an idempotent no-op: only the real transition is audited.
+   */
+  async archive(id: string, actorId?: string): Promise<Application> {
+    assertObjectId(id);
+
+    // One conditional write covers all three cases: `null` is the 404, a
+    // pre-image with `active: true` is the real transition and a pre-image with
+    // `active: false` is the idempotent repeat.
+    const before = await this.applicationModel.findOneAndUpdate(
+      { _id: id },
+      { $set: { active: false } },
+      { returnDocument: 'before' },
+    );
+
+    if (!before) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    if (before.active) {
+      await this.recordApplicationEvent(
+        AuditEvent.APPLICATION_ARCHIVED,
+        id,
+        actorId,
+      );
+    }
+
+    return { ...before.toObject(), active: false } as Application;
   }
 
   async findById(id: string): Promise<Application | null> {
@@ -114,6 +252,23 @@ export class ApplicationsService implements ApplicationsPort {
     const application = await this.findById(id);
 
     return application?.active ? application : null;
+  }
+
+  private async recordApplicationEvent(
+    event: AuditEvent,
+    applicationId: string,
+    actorId?: string,
+  ): Promise<void> {
+    if (!this.auditService) {
+      return;
+    }
+
+    await this.auditService.record({
+      event,
+      result: AuditResult.SUCCESS,
+      applicationId,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
   }
 
   private duplicateApplicationMessage(error: DuplicateKeyError): string {

@@ -28,7 +28,7 @@
 - **Composition root**: `application.composition.ts` builds every service, module and adapter and exposes `initialize(app)`, which mounts the routes. `bootstrap.ts` loads `.env`, connects MongoDB, provisions the owner and starts listening. New services must be wired in the composition, not in `bootstrap.ts`.
 - **Feature modules** (`{module,controller,router,service,interface,port,schema}`): `users/`, `auth/` (with `codes/`, `mfa/`, `services/`, `tokens/`), `applications/`, `grants/`, `links/`, `audit/`, `health/`, `jwks/`. `holders/` is domain-only (pre-verification accounts, no HTTP surface).
 - **HTTP surface**: `/health` and `/ready` (probes), `/.well-known/jwks.json` (public keys), `/jwks/status` (owner-only key rotation status), `/auth/*` (session and account flows), `/users/*` (owner only), `/applications*` (catalog owner only; `/:id/grants` and `/:id/invitations` for the app admin), `/audit-events` (owner only).
-- **Authorization**: global role `owner` (single, partial unique index) plus per-application grants (`viewer`/`editor`/`admin`). `ADMIN` is legacy and no longer authorizes; `OWNER_EMAIL`/`OWNER_PASSWORD` seed the owner. App admins manage grants and invitations only for their own application, checked on every request.
+- **Authorization**: global role `owner` (single, partial unique index) plus per-application grants (`viewer`/`editor`/`admin`). `ADMIN` is legacy and no longer authorizes; `OWNER_EMAIL`/`OWNER_PASSWORD` seed the owner. App admins manage grants and invitations only for their own application, checked on every request. Archived applications keep their grants manageable by the owner only; an app admin gets `403` on an inactive application.
 - **Tokens**: RS256 signed with a `JwtKeyring` (active key + retired public keys) and published as JWKS; `JWT_SECRET` only verifies legacy HS256 tokens without audience. Ephemeral keys are allowed locally and rejected when `NODE_ENV=production`.
 - **`src/libs/`**: shared infrastructure (logger/winston, crypto/bcrypt + AES-256-GCM `SecretCipher`, jwt/keyring, mailer/nodemailer, templates/handlebars, telegram).
 - **`src/common/`**: interceptors, middlewares (authentication, authorization, application authorization, rate limiting), mongo helpers, ports, validators and the exception hierarchy.
@@ -43,7 +43,7 @@
 - **MongoDB must be running** for integration/e2e only (use `docker-compose up -d mongo-auth`)
 - **Globals**: `describe`, `test`, `assert`, `mock`, `before`, `beforeEach`, `after`, `afterEach` are attached to `global` in setup — do not import them in test files
 - **Layout**: pure unit tests in `test/unit/` (no DB), DB-backed service tests in `test/integration/`, HTTP flows in `test/e2e/`
-- **Current size**: 742 tests (248 unit, 312 integration, 182 e2e), all green
+- **Current size**: 875 tests (320 unit, 353 integration, 202 e2e), all green
 
 ## Linting / Formatting
 
@@ -133,6 +133,6 @@
 
 ## Project Status
 
-- Delivered: user CRUD (owner-only), signup + email verification (holder -> user), login scoped to an application, refresh rotation, logout, access-token blacklist, device sessions, password reset, account lockout, per-route rate limiting, RS256 + JWKS key rotation, owner bootstrap, applications and per-user grants, shareable invitation and reset links, owner audit log, Telegram link notifications and TOTP MFA with recovery codes.
-- Pending candidates: OAuth2 providers, application lifecycle (`PATCH`/`DELETE /applications`), distributed stores for rate limiting and the token blacklist, MFA recovery-code regeneration.
+- Delivered: user CRUD (owner-only), signup + email verification (holder -> user), login scoped to an application, refresh rotation, logout, access-token blacklist, device sessions, password reset, account lockout, per-route rate limiting, RS256 + JWKS key rotation, owner bootstrap, applications and per-user grants, application lifecycle (rename, activate/deactivate and archive with lifecycle auditing), shareable invitation and reset links, owner audit log, Telegram link notifications and TOTP MFA with recovery codes.
+- Pending candidates: OAuth2 providers, distributed stores for rate limiting and the token blacklist, MFA recovery-code regeneration.
 - The implementation and documentation backlogs are closed. See `ROADMAP.md` for phases and next steps.

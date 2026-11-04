@@ -1,5 +1,6 @@
 import type { Application } from 'express';
 
+import type { AuditPort } from '../audit';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { LoggerInterface } from '../libs/logger';
@@ -16,8 +17,9 @@ export class ApplicationsModule {
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly authorizationMiddleware: AuthorizationMiddleware,
     private readonly logger: LoggerInterface,
+    auditService?: AuditPort,
   ) {
-    this.service = new ApplicationsService(ApplicationModel);
+    this.service = new ApplicationsService(ApplicationModel, auditService);
     this.controller = new ApplicationsController(this.service);
   }
 

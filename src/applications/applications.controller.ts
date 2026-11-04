@@ -37,4 +37,27 @@ export class ApplicationsController {
 
     res.status(200).json(application);
   }
+
+  @Catch()
+  async update(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const application = await this.applicationsService.update(
+      id,
+      req.body ?? {},
+      req.user?.id,
+    );
+
+    res.status(200).json(application);
+  }
+
+  @Catch()
+  async archive(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const application = await this.applicationsService.archive(
+      id,
+      req.user?.id,
+    );
+
+    res.status(200).json(application);
+  }
 }

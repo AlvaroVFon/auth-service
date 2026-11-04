@@ -38,5 +38,17 @@ export class ApplicationsRouter {
       ...ownerOnly,
       this.applicationsController.findById.bind(this.applicationsController),
     );
+
+    this.app.patch(
+      '/applications/:id',
+      ...ownerOnly,
+      this.applicationsController.update.bind(this.applicationsController),
+    );
+
+    this.app.delete(
+      '/applications/:id',
+      ...ownerOnly,
+      this.applicationsController.archive.bind(this.applicationsController),
+    );
   }
 }
