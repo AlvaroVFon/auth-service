@@ -89,13 +89,7 @@ export class ApplicationsService implements ApplicationsPort {
       throw new InvalidArgumentError('Only name and active can be updated');
     }
 
-    // Audit only real transitions: each field is written with a conditional
-    // update so two concurrent requests cannot both report the same transition.
-    const changes: Array<{
-      field: 'name' | 'active';
-      value: string | boolean;
-      event: AuditEvent;
-    }> = [];
+    const update: Partial<Pick<Application, 'name' | 'active'>> = {};
 
     if (fields.includes('name')) {
       if (typeof payload.name !== 'string') {
@@ -106,54 +100,62 @@ export class ApplicationsService implements ApplicationsPort {
       if (!name) {
         throw new InvalidArgumentError('Name is required');
       }
-      changes.push({
-        field: 'name',
-        value: name,
-        event: AuditEvent.APPLICATION_UPDATED,
-      });
+      update.name = name;
     }
 
     if (fields.includes('active')) {
       if (typeof payload.active !== 'boolean') {
         throw new InvalidArgumentError('Active must be a boolean');
       }
-      changes.push({
-        field: 'active',
-        value: payload.active,
-        event: payload.active
-          ? AuditEvent.APPLICATION_ACTIVATED
-          : AuditEvent.APPLICATION_DEACTIVATED,
-      });
+      update.active = payload.active;
+    }
+
+    // One conditional write: the filter only matches when at least one value
+    // really changes, so two concurrent requests cannot audit the same
+    // transition and a repeated payload is a no-op.
+    const before = await this.applicationModel.findOneAndUpdate(
+      {
+        _id: id,
+        $or: Object.entries(update).map(([field, value]) => ({
+          [field]: { $ne: value },
+        })),
+      },
+      { $set: update },
+      { returnDocument: 'before' },
+    );
+
+    if (!before) {
+      const existing = await this.applicationModel.findById(id);
+
+      if (!existing) {
+        throw new EntityNotFoundError('Application not found');
+      }
+
+      // Nothing changed: there is no transition to audit.
+      return existing;
     }
 
     const events: AuditEvent[] = [];
 
-    for (const change of changes) {
-      const result = await this.applicationModel.updateOne(
-        { _id: id, [change.field]: { $ne: change.value } },
-        { $set: { [change.field]: change.value } },
-      );
-
-      // `matchedCount` is 0 when the value was already stored (no transition)
-      // or the document does not exist; the read below tells them apart.
-      if (result.matchedCount > 0) {
-        events.push(change.event);
-      }
+    if (update.name !== undefined && update.name !== before.name) {
+      events.push(AuditEvent.APPLICATION_UPDATED);
     }
 
-    // The slug and the audience identify the application for every issued
-    // token: they are never part of the update, even when sent by mistake.
-    const application = await this.applicationModel.findById(id);
-
-    if (!application) {
-      throw new EntityNotFoundError('Application not found');
+    if (update.active !== undefined && update.active !== before.active) {
+      events.push(
+        update.active
+          ? AuditEvent.APPLICATION_ACTIVATED
+          : AuditEvent.APPLICATION_DEACTIVATED,
+      );
     }
 
     for (const event of events) {
       await this.recordApplicationEvent(event, id, actorId);
     }
 
-    return application;
+    // The pre-image plus the applied changes is the post-image without a second
+    // round-trip that could race with another writer.
+    return { ...before.toObject(), ...update } as Application;
   }
 
   /**
@@ -164,30 +166,28 @@ export class ApplicationsService implements ApplicationsPort {
   async archive(id: string, actorId?: string): Promise<Application> {
     assertObjectId(id);
 
-    // Conditional write: only the request that really flips `active` audits the
-    // transition, so concurrent DELETEs cannot duplicate the event.
-    const archived = await this.applicationModel.findOneAndUpdate(
-      { _id: id, active: true },
+    // One conditional write covers all three cases: `null` is the 404, a
+    // pre-image with `active: true` is the real transition and a pre-image with
+    // `active: false` is the idempotent repeat.
+    const before = await this.applicationModel.findOneAndUpdate(
+      { _id: id },
       { $set: { active: false } },
-      { returnDocument: 'after' },
+      { returnDocument: 'before' },
     );
 
-    if (archived) {
+    if (!before) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    if (before.active) {
       await this.recordApplicationEvent(
         AuditEvent.APPLICATION_ARCHIVED,
         id,
         actorId,
       );
-      return archived;
     }
 
-    const existing = await this.applicationModel.findById(id);
-    if (!existing) {
-      throw new EntityNotFoundError('Application not found');
-    }
-
-    // Already archived: idempotent 200 without a duplicate audit event.
-    return existing;
+    return { ...before.toObject(), active: false } as Application;
   }
 
   async findById(id: string): Promise<Application | null> {
