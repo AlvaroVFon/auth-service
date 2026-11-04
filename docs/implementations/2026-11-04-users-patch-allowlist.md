@@ -73,5 +73,6 @@ seguridad quedan pendientes de los endpoints de operaciones de soporte.
 ## Fuera de alcance
 
 Endpoints de desbloqueo, reset de MFA y verificación de cuenta; flujo de
-verificación al cambiar el email (se mantiene el comportamiento actual y se
-documenta); auditoría de los cambios de perfil.
+verificación al cambiar el email. El cambio de email mantiene el comportamiento
+actual (la cuenta conserva `verified`) tal como acepta #104, con el riesgo
+documentado y el seguimiento en #193; auditoría de los cambios de perfil.
