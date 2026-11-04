@@ -176,36 +176,14 @@ export class GrantsService implements GrantsPort {
       ]),
     );
 
-    // Keep the projection stable: the panel renders this list directly.
-    return grants
-      .flatMap((grant) => {
-        const application = applicationsById.get(
-          grant.applicationId.toString(),
-        );
+    // Ordering belongs to the consumer that renders the list, not to the
+    // projection: keeping it here would duplicate the comparator in the panel
+    // and the catalog endpoints.
+    return grants.flatMap((grant) => {
+      const application = applicationsById.get(grant.applicationId.toString());
 
-        return application ? [{ grant, application }] : [];
-      })
-      .sort((left, right) =>
-        this.compareApplications(left.application, right.application),
-      );
-  }
-
-  private compareApplications(left: Application, right: Application): number {
-    if (left.name !== right.name) {
-      return left.name < right.name ? -1 : 1;
-    }
-    if (left.slug !== right.slug) {
-      return left.slug < right.slug ? -1 : 1;
-    }
-
-    const leftId = left._id.toString();
-    const rightId = right._id.toString();
-
-    if (leftId === rightId) {
-      return 0;
-    }
-
-    return leftId < rightId ? -1 : 1;
+      return application ? [{ grant, application }] : [];
+    });
   }
 
   private async recordGrantEvent(

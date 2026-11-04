@@ -407,7 +407,7 @@ describe('GrantsService', () => {
       );
     });
 
-    test('should order grants by application name', async () => {
+    test('should expose the same active grants through both projections', async () => {
       const userId = await createUser();
       const zebraTemplate = ApplicationFactory.generate({ name: 'Zebra' });
       const alphaTemplate = ApplicationFactory.generate({ name: 'Alpha' });
@@ -435,14 +435,14 @@ describe('GrantsService', () => {
 
       const entries = await grantsService.listActiveByUser(userId);
       assert.deepStrictEqual(
-        entries.map(({ application }) => application.name),
-        ['Alpha', 'Zebra'],
+        entries.map(({ application }) => application._id.toString()).sort(),
+        [alpha._id.toString(), zebra._id.toString()].sort(),
       );
 
       const grants = await grantsService.listByUser(userId);
       assert.deepStrictEqual(
-        grants.map(({ applicationId }) => applicationId.toString()),
-        [alpha._id.toString(), zebra._id.toString()],
+        grants.map(({ applicationId }) => applicationId.toString()).sort(),
+        entries.map(({ application }) => application._id.toString()).sort(),
       );
     });
 
