@@ -45,6 +45,18 @@ describe('parseUserUpdatePayload', () => {
     }
   });
 
+  test('should trim the username and reject a blank one', () => {
+    assert.deepStrictEqual(parseUserUpdatePayload({ username: '  ali  ' }), {
+      username: 'ali',
+    });
+    assert.throws(
+      () => parseUserUpdatePayload({ username: '   ' }),
+      (error: unknown) =>
+        error instanceof InvalidArgumentError &&
+        error.message === 'username must not be empty',
+    );
+  });
+
   test('should reject an empty or whitespace-only password', () => {
     for (const password of ['', '   ']) {
       assert.throws(

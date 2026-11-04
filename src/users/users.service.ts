@@ -22,10 +22,15 @@ import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
-import type { UserGrantsCleanerPort, UsersPort } from './users.port';
+import type {
+  UserGrantsCleanerPort,
+  UserSessionRevokerPort,
+  UsersPort,
+} from './users.port';
 
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
+  private sessionRevoker?: UserSessionRevokerPort;
 
   constructor(
     private readonly usersModel: Model<UserInterface>,
@@ -192,6 +197,10 @@ export class UsersService implements UsersPort {
     this.grantsCleaner = cleaner;
   }
 
+  setSessionRevoker(revoker: UserSessionRevokerPort): void {
+    this.sessionRevoker = revoker;
+  }
+
   async updateOneById(
     id: string,
     updateData: UserUpdatePayload,
@@ -247,6 +256,12 @@ export class UsersService implements UsersPort {
 
     if (!user) {
       throw new EntityNotFoundError('User not found');
+    }
+
+    // A rotated password must invalidate every session issued with the old one,
+    // exactly like the reset flow does.
+    if (updateData.password !== undefined) {
+      await this.sessionRevoker?.revokeAll(id);
     }
 
     return user;

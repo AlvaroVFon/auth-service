@@ -527,6 +527,46 @@ describe('UsersService', () => {
         assert.strictEqual(updatedUser!.email, newUser.email);
       });
 
+      test('should revoke the sessions of the user after a password change', async () => {
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('revokesessions+'),
+          password: 'hashedpassword123',
+        });
+        const newUser = await usersService.create(userData);
+        const revoked: string[] = [];
+        usersService.setSessionRevoker({
+          revokeAll: async (id) => {
+            revoked.push(id);
+          },
+        });
+
+        await usersService.updateOneById(newUser._id.toString(), {
+          password: 'NewStrongPassword456!',
+        });
+
+        assert.deepStrictEqual(revoked, [newUser._id.toString()]);
+      });
+
+      test('should not revoke sessions when only profile fields change', async () => {
+        const userData: Partial<UserInterface> = UserFactory.generate({
+          email: generateRandomEmail('keepsesions+'),
+          password: 'hashedpassword123',
+        });
+        const newUser = await usersService.create(userData);
+        const revoked: string[] = [];
+        usersService.setSessionRevoker({
+          revokeAll: async (id) => {
+            revoked.push(id);
+          },
+        });
+
+        await usersService.updateOneById(newUser._id.toString(), {
+          username: 'renameduser',
+        });
+
+        assert.deepStrictEqual(revoked, []);
+      });
+
       test('should return null when updating a non-existent user', async () => {
         const nonExistentId = '60d21b4667d0d8992e610c85'; // Example of a valid but non-existent ObjectId
         await assert.rejects(

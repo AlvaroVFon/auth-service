@@ -48,7 +48,14 @@ export const parseUserUpdatePayload = (
   const update: UserUpdatePayload = {};
 
   if ('username' in payload) {
-    update.username = assertStringField('username', payload['username']);
+    const username = assertStringField('username', payload['username']).trim();
+
+    // The schema trims too, so a blank value would persist as an empty name.
+    if (username.length === 0) {
+      throw new InvalidArgumentError('username must not be empty');
+    }
+
+    update.username = username;
   }
   if ('email' in payload) {
     // Email is the login identifier: it must be stored exactly in the form
@@ -59,6 +66,8 @@ export const parseUserUpdatePayload = (
       throw new InvalidArgumentError('Invalid email format');
     }
 
+    // Known risk, tracked in #193: the email changes without resetting
+    // `verified`, as #104 accepts. Never set `verified` here.
     update.email = email;
   }
   if ('password' in payload) {

@@ -149,6 +149,15 @@ describe('E2E Test - Update User By ID', () => {
     const { application } = await createApplicationAccess(user._id.toString());
     const newPassword = 'NewStrongPassword456!';
 
+    const session = await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(200);
+
     const response = await request(app)
       .patch(`/users/${user._id}`)
       .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
@@ -178,6 +187,12 @@ describe('E2E Test - Update User By ID', () => {
         password: DEFAULT_USER_PLAIN_PASSWORD,
         application: application.slug,
       })
+      .expect(401);
+
+    // Sessions issued before the rotation must stop refreshing.
+    await request(app)
+      .post('/auth/refresh')
+      .send({ refreshToken: session.body.refreshToken })
       .expect(401);
   });
 
