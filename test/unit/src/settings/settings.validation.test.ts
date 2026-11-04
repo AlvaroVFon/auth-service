@@ -175,7 +175,7 @@ describe('validateApplicationSettings', () => {
         validateApplicationSettings({
           accessTokenTTL: 900,
         } as unknown as Record<string, never>),
-      new InvalidArgumentError('settings must be an object'),
+      new InvalidArgumentError("settings has unknown field 'accessTokenTTL'"),
     );
   });
 
@@ -186,7 +186,7 @@ describe('validateApplicationSettings', () => {
           appName: 'Billing',
           unknownField: true,
         } as unknown as Record<string, never>),
-      new InvalidArgumentError('settings must be an object'),
+      new InvalidArgumentError("settings has unknown field 'unknownField'"),
     );
   });
 });

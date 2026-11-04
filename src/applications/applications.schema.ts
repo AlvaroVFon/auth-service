@@ -55,7 +55,7 @@ const settingsDefinition = Object.fromEntries(
 
 const applicationSettingsSchema = new Schema<ApplicationSettings>(
   settingsDefinition,
-  { _id: false },
+  { _id: false, strict: 'throw' },
 );
 
 const applicationSchema = new Schema<Application>(

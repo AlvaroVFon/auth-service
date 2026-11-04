@@ -53,6 +53,26 @@ describe('Application settings', () => {
     assert.deepStrictEqual(stored?.settings, settings);
   });
 
+  test('should reject an unknown settings key on a direct model write', async () => {
+    const application = ApplicationFactory.generate();
+
+    await assert.rejects(
+      ApplicationModel.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+        settings: { accessTokenTTL: 900 },
+      }),
+      (error: Error) =>
+        isValidationError(error) && error.message.includes('accessTokenTTL'),
+    );
+
+    assert.strictEqual(
+      await ApplicationModel.countDocuments({ slug: application.slug }),
+      0,
+    );
+  });
+
   test('should keep settings undefined when the application has none', async () => {
     const application = ApplicationFactory.generate();
 

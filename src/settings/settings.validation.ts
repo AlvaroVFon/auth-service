@@ -5,7 +5,9 @@ import {
   MfaPolicy,
 } from './settings.interface';
 
-export const MFA_POLICIES = Object.values(MfaPolicy);
+export const MFA_POLICIES = Object.freeze(
+  Object.values(MfaPolicy),
+) as readonly MfaPolicy[];
 
 /** Keys accepted by `ApplicationSettings`, used as the single source of truth. */
 export type SettingsField = keyof ApplicationSettings;
@@ -93,9 +95,9 @@ export const SETTINGS_FIELD_DESCRIPTORS = {
   },
 } as const satisfies Record<SettingsField, SettingsFieldDescriptor>;
 
-export const SETTINGS_FIELDS = Object.keys(
-  SETTINGS_FIELD_DESCRIPTORS,
-) as SettingsField[];
+export const SETTINGS_FIELDS = Object.freeze(
+  Object.keys(SETTINGS_FIELD_DESCRIPTORS) as SettingsField[],
+);
 
 const isSettingsField = (key: string): key is SettingsField =>
   (SETTINGS_FIELDS as readonly string[]).includes(key);
@@ -110,7 +112,7 @@ const assertKnownSettingsFields = (input: ApplicationSettingsInput): void => {
   const unknown = Object.keys(input).find((key) => !isSettingsField(key));
 
   if (unknown !== undefined) {
-    throw new InvalidArgumentError(SETTINGS_VALIDATION_MESSAGES.settings);
+    throw new InvalidArgumentError(`settings has unknown field '${unknown}'`);
   }
 };
 
