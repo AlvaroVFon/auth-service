@@ -1,3 +1,7 @@
+import { Types } from 'mongoose';
+
+import { Application } from '../../../../../src/applications/applications.interface';
+import { ApplicationsPort } from '../../../../../src/applications/applications.port';
 import {
   UserProfile,
   ProfileService,
@@ -6,13 +10,28 @@ import { Roles } from '../../../../../src/common/enums/roles.enum';
 import { EntityNotFoundError } from '../../../../../src/common/exceptions/base.exception';
 import { TokenBlacklistPort } from '../../../../../src/common/ports/token-blacklist.port';
 import { GrantRoles } from '../../../../../src/grants/grants.interface';
+import { GrantsPort } from '../../../../../src/grants/grants.port';
 import { JwtService } from '../../../../../src/libs/jwt/jwt.service';
 import { TokenTypes } from '../../../../../src/libs/jwt/token-types.enum';
 import { UsersPort } from '../../../../../src/users/users.port';
 
 const USER_ID = '507f191e810c19729de860ea';
 const OTHER_USER_ID = '507f191e810c19729de860eb';
+const APPLICATION_ID = '507f191e810c19729de860e1';
+const OTHER_APPLICATION_ID = '507f191e810c19729de860e2';
 const EXPIRES_AT = new Date('2030-01-01T00:00:00.000Z');
+
+const buildApplication = (
+  id: string,
+  overrides: Partial<Application> = {},
+): Application => ({
+  _id: new Types.ObjectId(id),
+  name: `Application ${id.slice(-2)}`,
+  slug: `app-${id.slice(-2)}`,
+  audience: `aud-${id.slice(-2)}`,
+  active: true,
+  ...overrides,
+});
 
 const caller = {
   id: USER_ID,
@@ -35,20 +54,28 @@ describe('ProfileService', () => {
   let findById: ReturnType<typeof mock.fn>;
   let verifyToken: ReturnType<typeof mock.fn>;
   let isBlacklisted: ReturnType<typeof mock.fn>;
+  let listActiveByUser: ReturnType<typeof mock.fn>;
+  let findAll: ReturnType<typeof mock.fn>;
   let service: ProfileService;
 
   beforeEach(() => {
     findById = mock.fn(async () => ({
       _id: USER_ID,
       email: 'user@example.com',
+      verified: true,
+      mfaEnabled: false,
     }));
     verifyToken = mock.fn(() => claims());
     isBlacklisted = mock.fn(async () => false);
+    listActiveByUser = mock.fn(async () => []);
+    findAll = mock.fn(async () => []);
 
     service = new ProfileService(
       { findById } as unknown as UsersPort,
       { verifyToken } as unknown as JwtService,
       { isBlacklisted } as unknown as TokenBlacklistPort,
+      { listActiveByUser } as unknown as GrantsPort,
+      { findAll } as unknown as ApplicationsPort,
     );
   });
 
@@ -80,6 +107,139 @@ describe('ProfileService', () => {
       findById.mock.mockImplementation(async () => null);
 
       await assert.rejects(service.getProfile(caller), EntityNotFoundError);
+    });
+  });
+
+  describe('getContext', () => {
+    const ownerIdentity = {
+      id: USER_ID,
+      role: Roles.OWNER,
+      expiresAt: EXPIRES_AT,
+    };
+
+    test('should return the whole catalog with the owner role for the owner', async () => {
+      const applicationA = buildApplication(APPLICATION_ID);
+      const applicationB = buildApplication(OTHER_APPLICATION_ID);
+      findAll.mock.mockImplementation(async () => [applicationA, applicationB]);
+
+      const context = await service.getContext(ownerIdentity);
+
+      assert.deepStrictEqual(context, {
+        user: {
+          id: USER_ID,
+          email: 'user@example.com',
+          verified: true,
+          mfaEnabled: false,
+        },
+        role: Roles.OWNER,
+        applications: [
+          {
+            id: APPLICATION_ID,
+            name: applicationA.name,
+            slug: applicationA.slug,
+            audience: applicationA.audience,
+            active: true,
+            role: Roles.OWNER,
+          },
+          {
+            id: OTHER_APPLICATION_ID,
+            name: applicationB.name,
+            slug: applicationB.slug,
+            audience: applicationB.audience,
+            active: true,
+            role: Roles.OWNER,
+          },
+        ],
+      });
+      assert.strictEqual(listActiveByUser.mock.callCount(), 0);
+    });
+
+    test('should return only the granted applications for an app admin', async () => {
+      const application = buildApplication(APPLICATION_ID);
+      listActiveByUser.mock.mockImplementation(async () => [
+        { application, role: GrantRoles.ADMIN },
+      ]);
+
+      const context = await service.getContext({
+        id: USER_ID,
+        role: GrantRoles.ADMIN,
+        audience: application.audience,
+        expiresAt: EXPIRES_AT,
+      });
+
+      assert.strictEqual(context.role, GrantRoles.ADMIN);
+      assert.deepStrictEqual(context.applications, [
+        {
+          id: APPLICATION_ID,
+          name: application.name,
+          slug: application.slug,
+          audience: application.audience,
+          active: true,
+          role: GrantRoles.ADMIN,
+        },
+      ]);
+      assert.strictEqual(findAll.mock.callCount(), 0);
+    });
+
+    test('should return an empty list and the token role without grants', async () => {
+      const context = await service.getContext({
+        id: USER_ID,
+        role: Roles.USER,
+        expiresAt: EXPIRES_AT,
+      });
+
+      assert.deepStrictEqual(context.applications, []);
+      assert.strictEqual(context.role, Roles.USER);
+      assert.strictEqual(context.user.id, USER_ID);
+    });
+
+    test('should default mfaEnabled to false when it is unset', async () => {
+      findById.mock.mockImplementation(async () => ({
+        _id: USER_ID,
+        email: 'user@example.com',
+        verified: true,
+      }));
+
+      const context = await service.getContext(ownerIdentity);
+
+      assert.strictEqual(context.user.mfaEnabled, false);
+    });
+
+    test('should reject a token whose user no longer exists', async () => {
+      findById.mock.mockImplementation(async () => null);
+
+      await assert.rejects(
+        service.getContext(ownerIdentity),
+        EntityNotFoundError,
+      );
+    });
+
+    test('should never expose sensitive user fields', async () => {
+      findById.mock.mockImplementation(async () => ({
+        _id: USER_ID,
+        email: 'user@example.com',
+        password: 'hash',
+        verified: true,
+        mfaEnabled: true,
+        mfaSecret: 'secret',
+        mfaPendingSecret: 'pending',
+        mfaRecoveryCodes: ['recovery'],
+        loginAttempts: 3,
+        mfaFailedAttempts: 2,
+      }));
+
+      const context = await service.getContext(ownerIdentity);
+
+      assert.deepStrictEqual(context.user, {
+        id: USER_ID,
+        email: 'user@example.com',
+        verified: true,
+        mfaEnabled: true,
+      });
+      const serialized = JSON.stringify(context);
+      assert.ok(!serialized.includes('secret'));
+      assert.ok(!serialized.includes('recovery'));
+      assert.ok(!serialized.includes('hash'));
     });
   });
 

@@ -17,7 +17,7 @@ concepts, local setup and the three integration flows.
 - Role-based authorization: a single `owner` administers the home while legacy `ADMIN` no longer authorizes
 - Home applications with per-user roles (viewer, editor, admin)
 - Login scoped to a concrete application (audience + grant role)
-- Session profile (`GET /auth/me`) and token introspection (`POST /auth/introspect`)
+- Session profile (`GET /auth/me`), panel bootstrap (`GET /auth/context`) and token introspection (`POST /auth/introspect`)
 - Refresh rotation with the refresh token alone, even after the access token expired
 - Independent device sessions with listing and selective revocation
 - Shareable, single-use invitation and password-reset links (no SMTP required)
@@ -179,6 +179,7 @@ Every route is declared in a module router and mounted by
 | `POST`   | `/auth/forgot-password`     | Public        | Rate-limited; never reveals whether the email exists.                                    |
 | `POST`   | `/auth/reset-password`      | Public        | `userId` + emailed code.                                                                 |
 | `GET`    | `/auth/me`                  | Authenticated | Identity, audience/app and token role.                                                   |
+| `GET`    | `/auth/context`             | Authenticated | Identity, global role and applications with the caller's role.                           |
 | `POST`   | `/auth/introspect`          | Authenticated | Answers `active` only for the caller's own tokens.                                       |
 | `GET`    | `/auth/sessions`            | Authenticated | Active device sessions.                                                                  |
 | `DELETE` | `/auth/sessions/:sessionId` | Authenticated | Revokes one session; repeating it is a no-op.                                            |
@@ -284,6 +285,37 @@ while invalid credentials always return the same generic `401`.
 `GET /auth/me` returns the authenticated identity (`id`, `email`), the application
 (audience or `null`) and the role and expiration of the presented token. Apps expose it
 to their own frontends after validating the JWT.
+
+`GET /auth/context` is the single bootstrap read for the panel: the caller's minimal
+identity (`id`, `email`, `verified`, `mfaEnabled`), the role of the presented token and
+every application the caller can act on. The owner receives the whole catalog with
+`role: "owner"`; any other user receives only the active applications where it holds a
+grant, with that grant's role. A user without grants gets an empty list, so the response
+never distinguishes "unknown application" from "no access". The endpoint reads only the
+bearer's data: no sessions, settings, other users, MFA secrets, password hashes or
+lockout counters, and it neither issues nor refreshes tokens.
+
+```json
+{
+  "user": {
+    "id": "665f1f1f1f1f1f1f1f1f1f1f",
+    "email": "admin@example.com",
+    "verified": true,
+    "mfaEnabled": false
+  },
+  "role": "admin",
+  "applications": [
+    {
+      "id": "665f2a2a2a2a2a2a2a2a2a2a",
+      "name": "Panel",
+      "slug": "panel",
+      "audience": "panel",
+      "active": true,
+      "role": "admin"
+    }
+  ]
+}
+```
 
 `POST /auth/introspect` takes `{ "token": "..." }` and requires a valid access token as
 the caller. It answers `{ "active": true, ... }` only for the caller's own tokens in the

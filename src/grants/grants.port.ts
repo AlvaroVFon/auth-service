@@ -8,6 +8,11 @@ export interface AssignRoleInput {
   actorId?: string;
 }
 
+export interface GrantedApplication {
+  application: Application;
+  role: GrantRoles;
+}
+
 export interface GrantsPort {
   assignRole(input: AssignRoleInput): Promise<Grant>;
   findByUserAndApplication(
@@ -16,6 +21,7 @@ export interface GrantsPort {
     application?: Application,
   ): Promise<Grant | null>;
   listByUser(userId: string): Promise<Grant[]>;
+  listActiveByUser(userId: string): Promise<GrantedApplication[]>;
   listByApplication(applicationId: string): Promise<Grant[]>;
   revokeRole(
     userId: string,

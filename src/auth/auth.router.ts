@@ -149,6 +149,12 @@ export class AuthRouter {
       this.authController.me.bind(this.authController),
     );
 
+    this.app.get(
+      '/auth/context',
+      this.authenticationMiddleware.authenticateAny,
+      this.authController.context.bind(this.authController),
+    );
+
     this.app.post(
       '/auth/introspect',
       this.authenticationMiddleware.authenticateAny,

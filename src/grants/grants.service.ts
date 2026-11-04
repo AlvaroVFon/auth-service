@@ -10,7 +10,11 @@ import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { assertObjectId } from '../common/validators/object-id';
 import type { UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
-import type { AssignRoleInput, GrantsPort } from './grants.port';
+import type {
+  AssignRoleInput,
+  GrantedApplication,
+  GrantsPort,
+} from './grants.port';
 
 export class GrantsService implements GrantsPort {
   constructor(
@@ -95,6 +99,30 @@ export class GrantsService implements GrantsPort {
     return grants.filter((grant) =>
       activeIds.has(grant.applicationId.toString()),
     );
+  }
+
+  async listActiveByUser(userId: string): Promise<GrantedApplication[]> {
+    assertObjectId(userId, 'userId');
+
+    const grants = await this.grantModel.find({
+      userId: new Types.ObjectId(userId),
+    });
+
+    const activeApplications = await this.applicationsService.findActiveByIds(
+      grants.map((grant) => grant.applicationId.toString()),
+    );
+    const applicationsById = new Map(
+      activeApplications.map((application) => [
+        application._id.toString(),
+        application,
+      ]),
+    );
+
+    return grants.flatMap((grant) => {
+      const application = applicationsById.get(grant.applicationId.toString());
+
+      return application ? [{ application, role: grant.role }] : [];
+    });
   }
 
   async listByApplication(applicationId: string): Promise<Grant[]> {
