@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 
+import { ISO_DATE_TIME_REGEX } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { JwtKeyring, JwtKeyMaterial } from '../libs/jwt';
 
@@ -25,6 +26,21 @@ interface RetiredKeyEntry {
 let ephemeralKeyPair: { privateKey: string; publicKey: string } | undefined;
 
 const normalizePem = (value: string): string => value.replace(/\\n/g, '\n');
+
+const isIsoDateTime = (value: string): boolean => {
+  const match = ISO_DATE_TIME_REGEX.exec(value);
+
+  if (!match || Number.isNaN(Date.parse(value))) {
+    return false;
+  }
+
+  const [, year, month, day] = match;
+  const daysInMonth = new Date(
+    Date.UTC(Number(year), Number(month), 0),
+  ).getUTCDate();
+
+  return Number(day) <= daysInMonth;
+};
 
 const readPem = (env: NodeJS.ProcessEnv, key: string): string | undefined => {
   const value = env[key]?.trim();
@@ -63,7 +79,7 @@ const parseRetiredKeys = (rawValue: string | undefined): RetiredKeyEntry[] => {
       !(entry as RetiredKeyEntry).publicKey.trim()
     ) {
       throw new InvalidArgumentError(
-        'JWT_RETIRED_PUBLIC_KEYS entries must be { kid, publicKey } objects with string values',
+        'JWT_RETIRED_PUBLIC_KEYS entries must be { kid, publicKey, publishedAt? } objects with string values',
       );
     }
 
@@ -71,7 +87,7 @@ const parseRetiredKeys = (rawValue: string | undefined): RetiredKeyEntry[] => {
 
     if (
       publishedAt !== undefined &&
-      (typeof publishedAt !== 'string' || Number.isNaN(Date.parse(publishedAt)))
+      (typeof publishedAt !== 'string' || !isIsoDateTime(publishedAt))
     ) {
       throw new InvalidArgumentError(
         'JWT_RETIRED_PUBLIC_KEYS entries publishedAt must be a valid ISO date',
@@ -113,7 +129,7 @@ export const resolveJwtConfig = (
   const allowEphemeralKeys =
     env.JWT_ALLOW_EPHEMERAL_KEYS?.trim().toLowerCase() === 'true';
 
-  if (keyPublishedAt && Number.isNaN(Date.parse(keyPublishedAt))) {
+  if (keyPublishedAt && !isIsoDateTime(keyPublishedAt)) {
     throw new InvalidArgumentError(
       'JWT_KEY_PUBLISHED_AT must be a valid ISO date',
     );
