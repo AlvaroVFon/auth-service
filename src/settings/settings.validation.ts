@@ -44,6 +44,10 @@ export const isBoolean = (value: unknown): value is boolean =>
 export const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
+/** Freezes a descriptor so consumers cannot replace its validators at runtime. */
+const frozen = <T extends SettingsFieldDescriptor>(value: T): Readonly<T> =>
+  Object.freeze(value);
+
 /**
  * Single source of truth for the settings contract: the domain validation, the
  * allowed keys and the Mongoose schema are all derived from this map.
@@ -52,10 +56,6 @@ export const isNonEmptyString = (value: unknown): value is string =>
  * `refreshTokenTtlSeconds`) whereas `invitationTtlMs` is in milliseconds; the
  * units are explicit in each field name and message.
  */
-/** Freezes a descriptor so consumers cannot replace its validators at runtime. */
-const frozen = <T extends SettingsFieldDescriptor>(value: T): Readonly<T> =>
-  Object.freeze(value);
-
 export const SETTINGS_FIELD_DESCRIPTORS = Object.freeze({
   accessTokenTtlSeconds: frozen({
     type: 'number',
