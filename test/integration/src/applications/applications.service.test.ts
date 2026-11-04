@@ -637,7 +637,7 @@ describe('ApplicationsService', () => {
       const events = await auditEvents(created._id.toString());
       assert.deepStrictEqual(
         events.map((event) => event.event),
-        [AuditEvent.APPLICATION_ARCHIVED, AuditEvent.APPLICATION_ARCHIVED],
+        [AuditEvent.APPLICATION_ARCHIVED],
       );
       assert.strictEqual(events[0]?.actorId?.toString(), actorId);
     });

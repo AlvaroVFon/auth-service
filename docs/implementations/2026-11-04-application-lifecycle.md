@@ -20,9 +20,11 @@ owner conservando los grants y el rastro de auditoría.
 clave del payload (`slug`, `audience`, `_id`, `__v`, …) devuelve `400` sin
 escribir, porque el `slug` y la `audience` identifican la aplicación en cada
 token emitido. `DELETE /applications/:id` no borra: archiva (`active=false`),
-conserva el documento y sus grants, y es idempotente. Cada transición se audita
-como `application.updated`, `application.activated`, `application.deactivated`
-o `application.archived` con el actor y el id de la aplicación.
+conserva el documento y sus grants, y es idempotente. Cada transición real se
+audita como `application.updated`, `application.activated`,
+`application.deactivated` o `application.archived` con el actor y el id de la
+aplicación; repetir `DELETE` devuelve `200` sin duplicar el evento, igual que
+un `PATCH` que repite el valor almacenado no genera auditoría.
 
 Los grants de una aplicación archivada siguen siendo administrables por el
 owner. La superficie de grants resuelve la aplicación con
@@ -62,18 +64,18 @@ anteriormente respondía "required" y ocultaba la causa real.
 
 ## Test Plan
 
-| Case                                 | Type        | Input / state                                | Expected result                               | Test file                                                        |
-| ------------------------------------ | ----------- | -------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------- |
-| Renombrar y auditar                  | integration | `{ name: '  Renamed  ' }` + `actorId`        | nombre recortado y `application.updated`      | `test/integration/src/applications/applications.service.test.ts` |
-| Campos inmutables                    | integration | `slug`, `audience`, `_id`, `__v`             | `InvalidArgumentError`, documento intacto     | `test/integration/src/applications/applications.service.test.ts` |
-| Nombre vacío vs. tipo incorrecto     | integration | `{ name: '' }` / `{ name: 42 }`              | `Name is required` / `Name must be a string`  | `test/integration/src/applications/applications.service.test.ts` |
-| Archivar dos veces                   | integration | `archive()` dos veces                        | `active=false`, grant conservado, dos eventos | `test/integration/src/applications/applications.service.test.ts` |
-| Listar grants de archivada (owner)   | integration | `listByApplication(id, { includeArchived })` | un grant                                      | `test/integration/src/grants/grants.service.test.ts`             |
-| Listar grants de archivada sin scope | integration | `listByApplication(id)`                      | `EntityNotFoundError`                         | `test/integration/src/grants/grants.service.test.ts`             |
-| Asignar grant en archivada (owner)   | integration | `assignRole(..., { includeArchived })`       | grant creado                                  | `test/integration/src/grants/grants.service.test.ts`             |
-| Ciclo completo sobre archivada       | e2e         | `DELETE` app, luego `PUT/GET/DELETE` grants  | `200`, `200`, `204` y `404` final             | `test/e2e/grants/administration.test.ts`                         |
-| App admin sobre archivada            | e2e         | grant `admin` + `DELETE` app                 | `403` en listar, leer, asignar y revocar      | `test/e2e/grants/administration.test.ts`                         |
-| Nombre con tipo incorrecto por HTTP  | e2e         | `PATCH { name: 42 }`                         | `400` con `Name must be a string`             | `test/e2e/applications/lifecycle.test.ts`                        |
+| Case                                 | Type        | Input / state                                | Expected result                              | Test file                                                        |
+| ------------------------------------ | ----------- | -------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| Renombrar y auditar                  | integration | `{ name: '  Renamed  ' }` + `actorId`        | nombre recortado y `application.updated`     | `test/integration/src/applications/applications.service.test.ts` |
+| Campos inmutables                    | integration | `slug`, `audience`, `_id`, `__v`             | `InvalidArgumentError`, documento intacto    | `test/integration/src/applications/applications.service.test.ts` |
+| Nombre vacío vs. tipo incorrecto     | integration | `{ name: '' }` / `{ name: 42 }`              | `Name is required` / `Name must be a string` | `test/integration/src/applications/applications.service.test.ts` |
+| Archivar dos veces                   | integration | `archive()` dos veces                        | `active=false`, grant conservado, un evento  | `test/integration/src/applications/applications.service.test.ts` |
+| Listar grants de archivada (owner)   | integration | `listByApplication(id, { includeArchived })` | un grant                                     | `test/integration/src/grants/grants.service.test.ts`             |
+| Listar grants de archivada sin scope | integration | `listByApplication(id)`                      | `EntityNotFoundError`                        | `test/integration/src/grants/grants.service.test.ts`             |
+| Asignar grant en archivada (owner)   | integration | `assignRole(..., { includeArchived })`       | grant creado                                 | `test/integration/src/grants/grants.service.test.ts`             |
+| Ciclo completo sobre archivada       | e2e         | `DELETE` app, luego `PUT/GET/DELETE` grants  | `200`, `200`, `204` y `404` final            | `test/e2e/grants/administration.test.ts`                         |
+| App admin sobre archivada            | e2e         | grant `admin` + `DELETE` app                 | `403` en listar, leer, asignar y revocar     | `test/e2e/grants/administration.test.ts`                         |
+| Nombre con tipo incorrecto por HTTP  | e2e         | `PATCH { name: 42 }`                         | `400` con `Name must be a string`            | `test/e2e/applications/lifecycle.test.ts`                        |
 
 ## Verificación
 

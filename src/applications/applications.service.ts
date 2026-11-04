@@ -150,10 +150,15 @@ export class ApplicationsService implements ApplicationsPort {
   /**
    * Archives the application: it is never deleted, so its grants and its audit
    * trail survive and the owner keeps administering them. Repeating the call is
-   * a no-op that still records the event.
+   * an idempotent no-op: only the real transition is audited.
    */
   async archive(id: string, actorId?: string): Promise<Application> {
     assertObjectId(id);
+
+    const current = await this.applicationModel.findById(id);
+    if (!current) {
+      throw new EntityNotFoundError('Application not found');
+    }
 
     const application = await this.applicationModel.findByIdAndUpdate(
       id,
@@ -165,11 +170,13 @@ export class ApplicationsService implements ApplicationsPort {
       throw new EntityNotFoundError('Application not found');
     }
 
-    await this.recordApplicationEvent(
-      AuditEvent.APPLICATION_ARCHIVED,
-      id,
-      actorId,
-    );
+    if (current.active) {
+      await this.recordApplicationEvent(
+        AuditEvent.APPLICATION_ARCHIVED,
+        id,
+        actorId,
+      );
+    }
 
     return application;
   }

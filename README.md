@@ -292,7 +292,8 @@ issued token. An empty payload, a blank name (`Name is required`), a non-string 
 
 `DELETE /applications/:id` archives the application instead of deleting it: it sets
 `active` to `false`, keeps the document and its grants, and is idempotent, so calling it
-again still returns `200`. There is no physical deletion.
+again still returns `200`. There is no physical deletion, and repeating the call does not
+duplicate the `application.archived` audit event.
 
 Archiving keeps every grant, so the owner keeps administering them: `PUT`,
 `GET /applications/:applicationId/grants`, `GET /applications/:applicationId/grants/:userId`

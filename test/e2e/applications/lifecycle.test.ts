@@ -254,7 +254,7 @@ describe('E2E Applications lifecycle', () => {
       applicationId,
       AuditEvent.APPLICATION_ARCHIVED,
     );
-    assert.strictEqual(events.length, 2);
+    assert.strictEqual(events.length, 1);
   });
 
   test('returns 404 for an unknown application and 400 for an invalid id', async () => {
