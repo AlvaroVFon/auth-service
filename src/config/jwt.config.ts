@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 
+import { ISO_DATE_TIME_REGEX } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { JwtKeyring, JwtKeyMaterial } from '../libs/jwt';
 
@@ -19,11 +20,27 @@ export interface ResolveJwtConfigOptions {
 interface RetiredKeyEntry {
   kid: string;
   publicKey: string;
+  publishedAt?: string;
 }
 
 let ephemeralKeyPair: { privateKey: string; publicKey: string } | undefined;
 
 const normalizePem = (value: string): string => value.replace(/\\n/g, '\n');
+
+const isIsoDateTime = (value: string): boolean => {
+  const match = ISO_DATE_TIME_REGEX.exec(value);
+
+  if (!match || Number.isNaN(Date.parse(value))) {
+    return false;
+  }
+
+  const [, year, month, day] = match;
+  const daysInMonth = new Date(
+    Date.UTC(Number(year), Number(month), 0),
+  ).getUTCDate();
+
+  return Number(day) <= daysInMonth;
+};
 
 const readPem = (env: NodeJS.ProcessEnv, key: string): string | undefined => {
   const value = env[key]?.trim();
@@ -62,13 +79,26 @@ const parseRetiredKeys = (rawValue: string | undefined): RetiredKeyEntry[] => {
       !(entry as RetiredKeyEntry).publicKey.trim()
     ) {
       throw new InvalidArgumentError(
-        'JWT_RETIRED_PUBLIC_KEYS entries must be { kid, publicKey } objects with string values',
+        'JWT_RETIRED_PUBLIC_KEYS entries must be { kid, publicKey, publishedAt? } objects with string values',
       );
     }
 
-    const { kid, publicKey } = entry as RetiredKeyEntry;
+    const { kid, publicKey, publishedAt } = entry as RetiredKeyEntry;
 
-    return { kid: kid.trim(), publicKey: normalizePem(publicKey) };
+    if (
+      publishedAt !== undefined &&
+      (typeof publishedAt !== 'string' || !isIsoDateTime(publishedAt))
+    ) {
+      throw new InvalidArgumentError(
+        'JWT_RETIRED_PUBLIC_KEYS entries publishedAt must be an ISO 8601 timestamp with an explicit timezone (Z or offset)',
+      );
+    }
+
+    return {
+      kid: kid.trim(),
+      publicKey: normalizePem(publicKey),
+      ...(publishedAt === undefined ? {} : { publishedAt }),
+    };
   });
 };
 
@@ -92,11 +122,18 @@ export const resolveJwtConfig = (
   const privateKey = readPem(env, 'JWT_PRIVATE_KEY');
   const publicKey = readPem(env, 'JWT_PUBLIC_KEY');
   const kid = env.JWT_KEY_ID?.trim();
+  const keyPublishedAt = env.JWT_KEY_PUBLISHED_AT?.trim() || undefined;
   const issuer = env.JWT_ISSUER?.trim() || DEFAULT_ISSUER;
   const legacySecret = env.JWT_SECRET?.trim() || undefined;
   const retiredKeys = parseRetiredKeys(env.JWT_RETIRED_PUBLIC_KEYS);
   const allowEphemeralKeys =
     env.JWT_ALLOW_EPHEMERAL_KEYS?.trim().toLowerCase() === 'true';
+
+  if (keyPublishedAt && !isIsoDateTime(keyPublishedAt)) {
+    throw new InvalidArgumentError(
+      'JWT_KEY_PUBLISHED_AT must be an ISO 8601 timestamp with an explicit timezone (Z or offset)',
+    );
+  }
 
   if (!privateKey) {
     if (publicKey) {
@@ -124,6 +161,7 @@ export const resolveJwtConfig = (
   const activeKey: JwtKeyMaterial = {
     ...signingPair,
     ...(kid ? { kid } : {}),
+    ...(keyPublishedAt ? { publishedAt: keyPublishedAt } : {}),
     active: true,
   };
   const materials: JwtKeyMaterial[] = [activeKey, ...retiredKeys];

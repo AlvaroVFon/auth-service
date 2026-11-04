@@ -57,6 +57,113 @@ describe('resolveJwtConfig', () => {
     assert.strictEqual(config.keyring.getJwks().length, 2);
   });
 
+  test('should expose the rotation status with configured publication dates', () => {
+    const retired = createRsaKeyPair();
+    const active = createRsaKeyPair();
+
+    const config = resolveJwtConfig({
+      env: env({
+        JWT_PRIVATE_KEY: active.privateKey,
+        JWT_PUBLIC_KEY: active.publicKey,
+        JWT_KEY_ID: 'current',
+        JWT_KEY_PUBLISHED_AT: '2026-11-01T00:00:00.000Z',
+        JWT_RETIRED_PUBLIC_KEYS: JSON.stringify([
+          {
+            kid: 'previous',
+            publicKey: retired.publicKey,
+            publishedAt: '2026-10-01T00:00:00.000Z',
+          },
+        ]),
+      }),
+    });
+
+    assert.deepStrictEqual(config.keyring.getStatus(), {
+      activeKid: 'current',
+      keys: [
+        {
+          kid: 'current',
+          status: 'active',
+          publishedAt: '2026-11-01T00:00:00.000Z',
+        },
+        {
+          kid: 'previous',
+          status: 'retired',
+          publishedAt: '2026-10-01T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  test('should accept full ISO-8601 publication timestamps with an explicit timezone', () => {
+    const active = createRsaKeyPair();
+    const retired = createRsaKeyPair();
+
+    const config = resolveJwtConfig({
+      env: env({
+        JWT_PRIVATE_KEY: active.privateKey,
+        JWT_PUBLIC_KEY: active.publicKey,
+        JWT_KEY_ID: 'current',
+        JWT_KEY_PUBLISHED_AT: '2026-11-01T00:00:00Z',
+        JWT_RETIRED_PUBLIC_KEYS: JSON.stringify([
+          {
+            kid: 'previous',
+            publicKey: retired.publicKey,
+            publishedAt: '2026-10-01T09:00:00+02:00',
+          },
+        ]),
+      }),
+    });
+
+    assert.strictEqual(
+      config.keyring.getStatus().keys[1]?.publishedAt,
+      '2026-10-01T07:00:00.000Z',
+    );
+  });
+
+  test('should reject invalid publication dates', () => {
+    const pair = createRsaKeyPair();
+
+    for (const publishedAt of [
+      'yesterday',
+      'not-a-date',
+      '2026-11',
+      'March 5 2026',
+      '1',
+      '2026-11-01T00:00:00',
+      '2026-02-30T00:00:00.000Z',
+    ]) {
+      assert.throws(
+        () =>
+          resolveJwtConfig({
+            env: env({
+              JWT_PRIVATE_KEY: pair.privateKey,
+              JWT_PUBLIC_KEY: pair.publicKey,
+              JWT_KEY_PUBLISHED_AT: publishedAt,
+            }),
+          }),
+        InvalidArgumentError,
+      );
+
+      assert.throws(
+        () =>
+          resolveJwtConfig({
+            env: env({
+              JWT_PRIVATE_KEY: pair.privateKey,
+              JWT_PUBLIC_KEY: pair.publicKey,
+              JWT_RETIRED_PUBLIC_KEYS: JSON.stringify([
+                {
+                  kid: 'old',
+                  publicKey: createRsaKeyPair().publicKey,
+                  publishedAt,
+                },
+              ]),
+            }),
+          }),
+        InvalidArgumentError,
+      );
+    }
+  });
+
   test('should reject malformed retired keys JSON', () => {
     const pair = createRsaKeyPair();
 

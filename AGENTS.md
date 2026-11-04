@@ -27,7 +27,7 @@
 - **Entry point**: `src/index.ts` -> `src/config/bootstrap.ts` -> `createApplicationComposition()` in `src/config/application.composition.ts`
 - **Composition root**: `application.composition.ts` builds every service, module and adapter and exposes `initialize(app)`, which mounts the routes. `bootstrap.ts` loads `.env`, connects MongoDB, provisions the owner and starts listening. New services must be wired in the composition, not in `bootstrap.ts`.
 - **Feature modules** (`{module,controller,router,service,interface,port,schema}`): `users/`, `auth/` (with `codes/`, `mfa/`, `services/`, `tokens/`), `applications/`, `grants/`, `links/`, `audit/`, `health/`, `jwks/`. `holders/` is domain-only (pre-verification accounts, no HTTP surface).
-- **HTTP surface**: `/health` and `/ready` (probes), `/.well-known/jwks.json` (public keys), `/auth/*` (session and account flows), `/users/*` (owner only), `/applications*` (catalog owner only; `/:id/grants` and `/:id/invitations` for the app admin), `/audit-events` (owner only).
+- **HTTP surface**: `/health` and `/ready` (probes), `/.well-known/jwks.json` (public keys), `/jwks/status` (owner-only key rotation status), `/auth/*` (session and account flows), `/users/*` (owner only), `/applications*` (catalog owner only; `/:id/grants` and `/:id/invitations` for the app admin), `/audit-events` (owner only).
 - **Authorization**: global role `owner` (single, partial unique index) plus per-application grants (`viewer`/`editor`/`admin`). `ADMIN` is legacy and no longer authorizes; `OWNER_EMAIL`/`OWNER_PASSWORD` seed the owner. App admins manage grants and invitations only for their own application, checked on every request.
 - **Tokens**: RS256 signed with a `JwtKeyring` (active key + retired public keys) and published as JWKS; `JWT_SECRET` only verifies legacy HS256 tokens without audience. Ephemeral keys are allowed locally and rejected when `NODE_ENV=production`.
 - **`src/libs/`**: shared infrastructure (logger/winston, crypto/bcrypt + AES-256-GCM `SecretCipher`, jwt/keyring, mailer/nodemailer, templates/handlebars, telegram).
@@ -43,7 +43,7 @@
 - **MongoDB must be running** for integration/e2e only (use `docker-compose up -d mongo-auth`)
 - **Globals**: `describe`, `test`, `assert`, `mock`, `before`, `beforeEach`, `after`, `afterEach` are attached to `global` in setup — do not import them in test files
 - **Layout**: pure unit tests in `test/unit/` (no DB), DB-backed service tests in `test/integration/`, HTTP flows in `test/e2e/`
-- **Current size**: 708 tests (226 unit, 304 integration, 178 e2e), all green
+- **Current size**: 742 tests (248 unit, 312 integration, 182 e2e), all green
 
 ## Linting / Formatting
 
@@ -73,9 +73,10 @@
 | `JWT_PRIVATE_KEY`                      | RS256 private key (PEM, `\n` escapes allowed)       | None                        | Yes                    |
 | `JWT_PUBLIC_KEY`                       | RS256 public key                                    | Derived from private key    | No                     |
 | `JWT_KEY_ID`                           | `kid` published in the JWKS                         | RFC 7638 thumbprint         | No                     |
+| `JWT_KEY_PUBLISHED_AT`                 | ISO date the active key was published               | Keyring load time           | No                     |
 | `JWT_ISSUER`                           | `iss` claim of every token                          | `auth-service`              | No                     |
 | `JWT_ALLOW_EPHEMERAL_KEYS`             | In-memory keys when no PEM is set (local/test only) | `false`                     | No (must be false)     |
-| `JWT_RETIRED_PUBLIC_KEYS`              | Retired `{kid, publicKey}` entries used in rotation | `[]`                        | No                     |
+| `JWT_RETIRED_PUBLIC_KEYS`              | Retired `{kid, publicKey, publishedAt}` entries     | `[]`                        | No                     |
 | `JWT_SECRET`                           | Legacy HS256 secret, no-audience tokens only        | None                        | No                     |
 | `JWT_EXPIRATION`                       | Access token TTL (seconds)                          | `3600`                      | No                     |
 | `JWT_REFRESH_EXPIRATION`               | Refresh token TTL (seconds)                         | `86400`                     | No                     |
@@ -127,6 +128,7 @@
 - `ROADMAP.md`: phases, delivered scope and next steps.
 - `.memory-bank/decisions.md` and `.memory-bank/systemPatterns.md`: ADRs and architectural patterns.
 - `docs/implementations/`: one note per delivered issue; `docs/module-design/` and the scan reports live under `docs/`.
+- `docs/runbooks/`: operational procedures; `jwt-key-rotation.md` covers rotation, status, grace period and rollback.
 - `docs/getting-started/`: flow-based guide for API integrators (concepts, local setup and the three integration flows).
 
 ## Project Status

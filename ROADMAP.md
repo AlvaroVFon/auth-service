@@ -72,12 +72,12 @@ Objetivo: sesiones largas y seguras sin comprometer la seguridad.
 
 ## Cobertura de Tests
 
-- **Total:** 708 tests en verde con `node --test` y `tsx`.
-  - 226 unitarios (`pnpm test:unit`, sin MongoDB): configuración, JWT/keyring,
+- **Total:** 742 tests en verde con `node --test` y `tsx`.
+  - 248 unitarios (`pnpm test:unit`, sin MongoDB): configuración, JWT/keyring,
     criptografía, mailer, plantillas, códigos, validadores y composición.
-  - 304 de integración (`pnpm test:integration`, con MongoDB): servicios de usuarios,
+  - 312 de integración (`pnpm test:integration`, con MongoDB): servicios de usuarios,
     auth, holders, applications, grants, links, audit y tokens.
-  - 178 e2e (`pnpm test:e2e`, con MongoDB): flujos HTTP completos de signup, login,
+  - 182 e2e (`pnpm test:e2e`, con MongoDB): flujos HTTP completos de signup, login,
     refresh, logout, verificación, reset, sesiones, MFA, invitaciones, auditoría,
     owner bootstrap, CORS y cascada de borrado.
 - Base de datos aislada por proceso (`auth_db_test_${pid}`), sembrada y vaciada por
@@ -105,8 +105,10 @@ Los siguientes candidatos, por orden de valor:
 - **Stack:** Express 5 + Mongoose (MongoDB) + TypeScript (ESM via `tsx`).
 - **Tokens:** JWT RS256 con `jti`; access 1h y refresh 24h por defecto
   (`JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`), rotación completa. JWKS en
-  `/.well-known/jwks.json` y `JWT_RETIRED_PUBLIC_KEYS` para rotar sin cortar sesiones.
-  `JWT_SECRET` solo verifica tokens HS256 heredados sin audiencia.
+  `/.well-known/jwks.json`, estado owner-only en `/jwks/status` y
+  `JWT_RETIRED_PUBLIC_KEYS` para rotar sin cortar sesiones. El procedimiento está en
+  `docs/runbooks/jwt-key-rotation.md`. `JWT_SECRET` solo verifica tokens HS256
+  heredados sin audiencia.
 - **Rate limiting:** `express-rate-limit` con store en memoria; los límites se reinician
   al reiniciar y no se comparten entre instancias.
 - **Aplicaciones del hogar:** `Application` (slug + audience) y `Grant` por par
