@@ -2748,7 +2748,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
-                  "pm.test('returns UNAUTHORIZED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));"
+                  "pm.test('returns INVALID_CREDENTIALS', () => pm.expect(pm.response.json().code).to.eql('INVALID_CREDENTIALS'));"
                 ]
               }
             }
@@ -2764,20 +2764,20 @@
               "host": ["{{baseUrl}}"],
               "path": ["applications"]
             },
-            "description": "`GET /applications` — **Owner**. Without `Authorization: Bearer` the request must be rejected.\n\nExpected: `401 { \"message\": \"Invalid or missing authorization header\", \"code\": \"UNAUTHORIZED\" }`."
+            "description": "`GET /applications` — **Owner**. Without `Authorization: Bearer` the request is rejected by the authentication middleware.\n\nExpected: `401 { \"message\": \"Invalid or missing authorization header\", \"code\": \"INVALID_CREDENTIALS\" }`."
           },
           "response": []
         },
         {
-          "name": "Application token on an owner route · 403",
+          "name": "Application token on an owner route · 401",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('403 Forbidden', () => pm.response.to.have.status(403));",
-                  "pm.test('returns FORBIDDEN', () => pm.expect(pm.response.json().code).to.eql('FORBIDDEN'));"
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+                  "pm.test('returns INVALID_CREDENTIALS', () => pm.expect(pm.response.json().code).to.eql('INVALID_CREDENTIALS'));"
                 ]
               }
             }
@@ -2800,7 +2800,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["users"]
             },
-            "description": "`GET /users` — **Owner**. A scoped token carries a grant role (`admin`) that must never satisfy a global role guard.\n\nExpected: `403 { \"message\": \"Access denied\", \"code\": \"FORBIDDEN\" }`."
+            "description": "`GET /users` — **Owner**. The authentication middleware rejects a scoped token before the role guard runs: an application token carries `aud`, and owner routes only accept the unscoped owner token.\n\nExpected: `401 { \"message\": \"Invalid token payload\", \"code\": \"INVALID_CREDENTIALS\" }`. A `403` is not reachable here: `/auth/login` only issues unscoped tokens to the owner."
           },
           "response": []
         },
