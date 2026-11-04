@@ -94,7 +94,7 @@ describe('resolveJwtConfig', () => {
     });
   });
 
-  test('should accept full ISO-8601 publication timestamps with an optional offset', () => {
+  test('should accept full ISO-8601 publication timestamps with an explicit timezone', () => {
     const active = createRsaKeyPair();
     const retired = createRsaKeyPair();
 
@@ -103,7 +103,7 @@ describe('resolveJwtConfig', () => {
         JWT_PRIVATE_KEY: active.privateKey,
         JWT_PUBLIC_KEY: active.publicKey,
         JWT_KEY_ID: 'current',
-        JWT_KEY_PUBLISHED_AT: '2026-11-01T00:00:00',
+        JWT_KEY_PUBLISHED_AT: '2026-11-01T00:00:00Z',
         JWT_RETIRED_PUBLIC_KEYS: JSON.stringify([
           {
             kid: 'previous',
@@ -129,6 +129,7 @@ describe('resolveJwtConfig', () => {
       '2026-11',
       'March 5 2026',
       '1',
+      '2026-11-01T00:00:00',
       '2026-02-30T00:00:00.000Z',
     ]) {
       assert.throws(

@@ -94,7 +94,9 @@ Reglas que valida el arranque:
 - `kid` único entre la activa y las retiradas; si se omite, se deriva del
   thumbprint RFC 7638 de la clave pública (estable entre arranques, pero pierde
   la legibilidad del identificador).
-- `JWT_KEY_PUBLISHED_AT` y `publishedAt` deben ser fechas ISO válidas.
+- `JWT_KEY_PUBLISHED_AT` y `publishedAt` deben ser timestamps ISO 8601 con zona
+  explícita (`Z` u offset), para que `/jwks/status` no dependa del `TZ` del
+  proceso.
 
 Guarda la privada en el gestor de secretos. El par antiguo **no se borra** hasta
 que termine el periodo de gracia.
@@ -236,8 +238,8 @@ Otros fallos de arranque y su causa:
 | `Duplicated JWT key id: <kid>`                         | La activa repite el `kid` de una retirada.             |
 | `JWT RSA keys must be at least 2048 bits`              | Clave demasiado corta.                                 |
 | `JWT_RETIRED_PUBLIC_KEYS must be a JSON array`         | Comillas o `\n` mal escapados en el entorno.           |
-| `JWT_RETIRED_PUBLIC_KEYS entries publishedAt must ...` | Fecha no ISO.                                          |
-| `JWT_KEY_PUBLISHED_AT must be a valid ISO date`        | Fecha no ISO en la clave activa.                       |
+| `JWT_RETIRED_PUBLIC_KEYS entries publishedAt must ...` | Falta la zona o no es ISO 8601.                        |
+| `JWT_KEY_PUBLISHED_AT must be an ISO 8601 ...`         | Falta la zona o no es ISO 8601 en la clave activa.     |
 
 ## Higiene de secretos
 

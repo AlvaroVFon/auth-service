@@ -83,7 +83,7 @@ for the purpose, default value and production requirement of each one, and
 | `JWT_PRIVATE_KEY`          | RS256 private key in PEM; `\n` escapes are accepted.                      | None                | Yes                    |
 | `JWT_PUBLIC_KEY`           | RS256 public key in PEM; derived from the private key when omitted.       | Derived             | No                     |
 | `JWT_KEY_ID`               | `kid` published in the JWKS; used to rotate keys.                         | RFC 7638 thumbprint | No                     |
-| `JWT_KEY_PUBLISHED_AT`     | ISO date the active key was published; reported by `/jwks/status`.        | Keyring load time   | No                     |
+| `JWT_KEY_PUBLISHED_AT`     | ISO 8601 timestamp with explicit `Z`/offset; shown by `/jwks/status`.     | Keyring load time   | No                     |
 | `JWT_ISSUER`               | `iss` claim of every token.                                               | `auth-service`      | No                     |
 | `JWT_ALLOW_EPHEMERAL_KEYS` | Generates in-memory keys when no PEM is configured; local/test only.      | `false`             | No (must be false)     |
 | `JWT_RETIRED_PUBLIC_KEYS`  | JSON `{"kid","publicKey","publishedAt"}` entries accepted while rotating. | `[]`                | No                     |

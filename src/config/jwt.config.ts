@@ -90,7 +90,7 @@ const parseRetiredKeys = (rawValue: string | undefined): RetiredKeyEntry[] => {
       (typeof publishedAt !== 'string' || !isIsoDateTime(publishedAt))
     ) {
       throw new InvalidArgumentError(
-        'JWT_RETIRED_PUBLIC_KEYS entries publishedAt must be a valid ISO date',
+        'JWT_RETIRED_PUBLIC_KEYS entries publishedAt must be an ISO 8601 timestamp with an explicit timezone (Z or offset)',
       );
     }
 
@@ -131,7 +131,7 @@ export const resolveJwtConfig = (
 
   if (keyPublishedAt && !isIsoDateTime(keyPublishedAt)) {
     throw new InvalidArgumentError(
-      'JWT_KEY_PUBLISHED_AT must be a valid ISO date',
+      'JWT_KEY_PUBLISHED_AT must be an ISO 8601 timestamp with an explicit timezone (Z or offset)',
     );
   }
 
