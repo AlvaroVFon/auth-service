@@ -473,6 +473,25 @@ describe('ApplicationsService', () => {
       );
     });
 
+    test('records a single event for concurrent identical patches', async () => {
+      const created = await createApplication();
+
+      await Promise.all([
+        applicationsService.update(created._id.toString(), {
+          name: 'Concurrent',
+        }),
+        applicationsService.update(created._id.toString(), {
+          name: 'Concurrent',
+        }),
+      ]);
+
+      const events = await auditEvents(created._id.toString());
+      assert.deepStrictEqual(
+        events.map((event) => event.event),
+        [AuditEvent.APPLICATION_UPDATED],
+      );
+    });
+
     test('does not record a transition when the stored value does not change', async () => {
       const created = await createApplication();
 
@@ -640,6 +659,21 @@ describe('ApplicationsService', () => {
         [AuditEvent.APPLICATION_ARCHIVED],
       );
       assert.strictEqual(events[0]?.actorId?.toString(), actorId);
+    });
+
+    test('records a single event for concurrent archives', async () => {
+      const created = await createApplication();
+
+      const [first, second] = await Promise.all([
+        applicationsService.archive(created._id.toString()),
+        applicationsService.archive(created._id.toString()),
+      ]);
+
+      assert.strictEqual(first.active, false);
+      assert.strictEqual(second.active, false);
+
+      const events = await auditEvents(created._id.toString());
+      assert.strictEqual(events.length, 1);
     });
 
     test('rejects an unknown application', async () => {

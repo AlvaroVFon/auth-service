@@ -89,15 +89,13 @@ export class ApplicationsService implements ApplicationsPort {
       throw new InvalidArgumentError('Only name and active can be updated');
     }
 
-    // Audit only real transitions: a PATCH that repeats the stored value must
-    // not report an activation or an update that never happened.
-    const current = await this.applicationModel.findById(id);
-    if (!current) {
-      throw new EntityNotFoundError('Application not found');
-    }
-
-    const update: Partial<Pick<Application, 'name' | 'active'>> = {};
-    const events: AuditEvent[] = [];
+    // Audit only real transitions: each field is written with a conditional
+    // update so two concurrent requests cannot both report the same transition.
+    const changes: Array<{
+      field: 'name' | 'active';
+      value: string | boolean;
+      event: AuditEvent;
+    }> = [];
 
     if (fields.includes('name')) {
       if (typeof payload.name !== 'string') {
@@ -108,33 +106,44 @@ export class ApplicationsService implements ApplicationsPort {
       if (!name) {
         throw new InvalidArgumentError('Name is required');
       }
-      update.name = name;
-      if (name !== current.name) {
-        events.push(AuditEvent.APPLICATION_UPDATED);
-      }
+      changes.push({
+        field: 'name',
+        value: name,
+        event: AuditEvent.APPLICATION_UPDATED,
+      });
     }
 
     if (fields.includes('active')) {
       if (typeof payload.active !== 'boolean') {
         throw new InvalidArgumentError('Active must be a boolean');
       }
-      update.active = payload.active;
-      if (payload.active !== current.active) {
-        events.push(
-          payload.active
-            ? AuditEvent.APPLICATION_ACTIVATED
-            : AuditEvent.APPLICATION_DEACTIVATED,
-        );
+      changes.push({
+        field: 'active',
+        value: payload.active,
+        event: payload.active
+          ? AuditEvent.APPLICATION_ACTIVATED
+          : AuditEvent.APPLICATION_DEACTIVATED,
+      });
+    }
+
+    const events: AuditEvent[] = [];
+
+    for (const change of changes) {
+      const result = await this.applicationModel.updateOne(
+        { _id: id, [change.field]: { $ne: change.value } },
+        { $set: { [change.field]: change.value } },
+      );
+
+      // `matchedCount` is 0 when the value was already stored (no transition)
+      // or the document does not exist; the read below tells them apart.
+      if (result.matchedCount > 0) {
+        events.push(change.event);
       }
     }
 
     // The slug and the audience identify the application for every issued
     // token: they are never part of the update, even when sent by mistake.
-    const application = await this.applicationModel.findByIdAndUpdate(
-      id,
-      { $set: update },
-      { returnDocument: 'after' },
-    );
+    const application = await this.applicationModel.findById(id);
 
     if (!application) {
       throw new EntityNotFoundError('Application not found');
@@ -155,30 +164,30 @@ export class ApplicationsService implements ApplicationsPort {
   async archive(id: string, actorId?: string): Promise<Application> {
     assertObjectId(id);
 
-    const current = await this.applicationModel.findById(id);
-    if (!current) {
-      throw new EntityNotFoundError('Application not found');
-    }
-
-    const application = await this.applicationModel.findByIdAndUpdate(
-      id,
+    // Conditional write: only the request that really flips `active` audits the
+    // transition, so concurrent DELETEs cannot duplicate the event.
+    const archived = await this.applicationModel.findOneAndUpdate(
+      { _id: id, active: true },
       { $set: { active: false } },
       { returnDocument: 'after' },
     );
 
-    if (!application) {
-      throw new EntityNotFoundError('Application not found');
-    }
-
-    if (current.active) {
+    if (archived) {
       await this.recordApplicationEvent(
         AuditEvent.APPLICATION_ARCHIVED,
         id,
         actorId,
       );
+      return archived;
     }
 
-    return application;
+    const existing = await this.applicationModel.findById(id);
+    if (!existing) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    // Already archived: idempotent 200 without a duplicate audit event.
+    return existing;
   }
 
   async findById(id: string): Promise<Application | null> {
