@@ -23,6 +23,7 @@ describe('UsersService', () => {
   before(() => {
     usersService = new UsersService(User, new CryptoService());
     usersService.setGrantsCleaner({ deleteByUser: async () => {} });
+    usersService.setSessionRevoker({ revokeAll: async () => {} });
   });
 
   describe('UsersService Initialization', () => {
@@ -740,6 +741,28 @@ describe('UsersService', () => {
         );
         assert.ok(stillThere);
         assert.strictEqual(stillThere?.role, Roles.OWNER);
+      });
+
+      test('should refuse to rotate a password when no session revoker is configured', async () => {
+        const unconfigured = new UsersService(User, new CryptoService());
+        const user = await fixture.create<UserInterface>(
+          'User',
+          UserFactory.generate(),
+        );
+
+        await assert.rejects(
+          unconfigured.updateOneById(user._id.toString(), {
+            password: 'NewStrongPassword456!',
+          }),
+          /Session revoker is not configured/,
+        );
+
+        const stillThere = await fixture.findById<UserInterface>(
+          'User',
+          user._id.toString(),
+        );
+        assert.ok(stillThere);
+        assert.strictEqual(stillThere?.password, user.password);
       });
 
       test('should refuse to delete when no grants cleaner is configured', async () => {

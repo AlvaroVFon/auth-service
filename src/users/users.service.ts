@@ -212,10 +212,18 @@ export class UsersService implements UsersPort {
       throw new InvalidArgumentError('Invalid ID format');
     }
 
+    let passwordRevoker: UserSessionRevokerPort | undefined;
+
     if (updateData.password !== undefined) {
       if (updateData.password.trim().length === 0) {
         throw new InvalidArgumentError('Password must not be empty');
       }
+      // Fail closed before touching the document: rotating the password without
+      // a revoker would leave every session issued with the old one alive.
+      if (!this.sessionRevoker) {
+        throw new Error('Session revoker is not configured');
+      }
+      passwordRevoker = this.sessionRevoker;
     }
 
     const update: UpdateQuery<UserInterface> = { $set: { ...updateData } };
@@ -260,8 +268,8 @@ export class UsersService implements UsersPort {
 
     // A rotated password must invalidate every session issued with the old one,
     // exactly like the reset flow does.
-    if (updateData.password !== undefined) {
-      await this.sessionRevoker?.revokeAll(id);
+    if (passwordRevoker) {
+      await passwordRevoker.revokeAll(id);
     }
 
     return user;
