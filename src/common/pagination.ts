@@ -39,9 +39,17 @@ export interface PaginatedResult<T> {
 export interface ListQueryOptions<TField extends string = string> {
   /** Fields accepted by `sort`; anything else is rejected with a 400. */
   sortableFields: readonly TField[];
-  /** Page size used when `limit` is absent. It is capped by the maximum. */
+  /**
+   * Page size used when `limit` is absent. It is clamped to the range
+   * `[1, MAX_LIST_LIMIT]` so a zero or negative value can never turn the
+   * listing into an unbounded one.
+   */
   defaultLimit?: number;
-  /** Ordering used when `sort` is absent. */
+  /**
+   * Ordering used when `sort` is absent. Its field must belong to
+   * `sortableFields`, just like a client supplied one; when omitted,
+   * `DEFAULT_LIST_SORT` is used and `createdAt` must be sortable.
+   */
   defaultSort?: ListSort<TField>;
 }
 
@@ -95,6 +103,11 @@ export function buildPaginatedResult<T>(
  * Parses `page`, `limit`, `q` and `sort` from a raw query object. Invalid
  * parameters raise `InvalidArgumentError`, which the exception interceptor
  * translates into a 400 response.
+ *
+ * A configuration whose defaults fall outside the contract (a non positive
+ * `defaultLimit` or a `defaultSort` that is not part of `sortableFields`)
+ * raises a plain `Error` on every call, even when the request sends its own
+ * `sort`, so the mistake surfaces as soon as the endpoint is exercised.
  */
 export function parseListQuery<TField extends string = string>(
   raw: Record<string, unknown>,
@@ -104,15 +117,23 @@ export function parseListQuery<TField extends string = string>(
   const requestedLimit = parsePositiveInteger(raw.limit, 'limit');
   const q = parseSearchTerm(raw.q);
 
-  const defaultLimit = options.defaultLimit ?? DEFAULT_LIST_LIMIT;
+  const defaultLimit = resolveDefaultLimit(options.defaultLimit);
   const limit = Math.min(requestedLimit ?? defaultLimit, MAX_LIST_LIMIT);
+  const defaultSort = resolveDefaultSort(options);
 
   return {
     page,
     limit,
-    sort: parseSort(raw.sort, options),
+    sort: parseSort(raw.sort, options, defaultSort),
     ...(q === undefined ? {} : { q }),
   };
+}
+
+function resolveDefaultLimit(defaultLimit: number | undefined): number {
+  return Math.min(
+    Math.max(defaultLimit ?? DEFAULT_LIST_LIMIT, 1),
+    MAX_LIST_LIMIT,
+  );
 }
 
 function parsePositiveInteger(
@@ -147,14 +168,38 @@ function parseSearchTerm(value: unknown): string | undefined {
   return term === '' ? undefined : term;
 }
 
+/**
+ * Resolves the ordering used when `sort` is absent and proves it belongs to
+ * the whitelist, so the returned type cannot hold a field that clients are
+ * not allowed to sort by.
+ */
+function resolveDefaultSort<TField extends string>(
+  options: ListQueryOptions<TField>,
+): ListSort<TField> {
+  const fallback: ListSort<string> = options.defaultSort ?? DEFAULT_LIST_SORT;
+  const field = fallback.field;
+  if (!isSortableField(field, options.sortableFields)) {
+    throw new Error(
+      `Default sort field "${field}" is not part of sortableFields`,
+    );
+  }
+  return { field, direction: fallback.direction };
+}
+
+function isSortableField<TField extends string>(
+  field: string,
+  sortableFields: readonly TField[],
+): field is TField {
+  return (sortableFields as readonly string[]).includes(field);
+}
+
 function parseSort<TField extends string>(
   value: unknown,
   options: ListQueryOptions<TField>,
+  defaultSort: ListSort<TField>,
 ): ListSort<TField> {
   if (value === undefined) {
-    return {
-      ...(options.defaultSort ?? DEFAULT_LIST_SORT),
-    } as ListSort<TField>;
+    return { ...defaultSort };
   }
   if (typeof value !== 'string') {
     throw new InvalidArgumentError('Invalid sort');
@@ -179,9 +224,9 @@ function parseSort<TField extends string>(
     }
   }
 
-  if (field === '' || !options.sortableFields.includes(field as TField)) {
+  if (field === '' || !isSortableField(field, options.sortableFields)) {
     throw new InvalidArgumentError('Invalid sort');
   }
 
-  return { field: field as TField, direction };
+  return { field, direction };
 }

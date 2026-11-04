@@ -34,6 +34,24 @@ describe('parseListQuery', () => {
     assert.strictEqual(query.limit, 5);
   });
 
+  test('should clamp a non positive default limit to a single item', () => {
+    for (const defaultLimit of [0, -10]) {
+      const query = parseListQuery(
+        {},
+        { sortableFields: SORTABLE_FIELDS, defaultLimit },
+      );
+
+      assert.strictEqual(query.limit, 1);
+      assert.strictEqual(
+        parseListQuery(
+          { limit: '5' },
+          { sortableFields: SORTABLE_FIELDS, defaultLimit },
+        ).limit,
+        5,
+      );
+    }
+  });
+
   test('should parse page, limit and search term', () => {
     const query = parse({ page: '3', limit: '25', q: '  ali  ' });
 
@@ -114,6 +132,26 @@ describe('parseListQuery', () => {
     );
 
     assert.deepStrictEqual(query.sort, { field: 'email', direction: 1 });
+  });
+
+  test('should require the default sort to be a sortable field', () => {
+    const sortableFields = ['email'] as const;
+
+    assert.throws(
+      () => parseListQuery({}, { sortableFields }),
+      /Default sort field "createdAt" is not part of sortableFields/,
+    );
+    assert.throws(
+      () => parseListQuery({ sort: 'email' }, { sortableFields }),
+      /Default sort field "createdAt" is not part of sortableFields/,
+    );
+    assert.deepStrictEqual(
+      parseListQuery(
+        {},
+        { sortableFields, defaultSort: { field: 'email', direction: 1 } },
+      ).sort,
+      { field: 'email', direction: 1 },
+    );
   });
 });
 
