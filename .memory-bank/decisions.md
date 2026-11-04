@@ -109,3 +109,15 @@
   - Todo servicio nuevo se registra en la composición, no en el entry point.
   - Los tests de bootstrap pueden inyectar logger, base de datos, JWT y mailer sin arrancar procesos.
   - Ver `docs/implementations/2026-10-04-application-composition.md`.
+
+## ADR-011: Runbook de rotación y estado observable de claves JWT
+
+- **Date:** 2026-11-04
+- **Context:** La rotación de #39 estaba descrita de forma dispersa entre el README y la nota de implementación, y no había forma de comprobar qué `kid` firmaba ni qué claves seguían aceptándose. Rotar mal rompe refresh tokens vivos sin que el operador lo detecte.
+- **Decision:** Versionar el procedimiento completo en `docs/runbooks/jwt-key-rotation.md` y exponer `JwtKeyring.getStatus()` mediante `GET /jwks/status`, owner-only y con `Cache-Control: no-store`. El estado solo publica `kid`, rol (`active`/`retired`) y fecha de publicación; la fecha se declara con `JWT_KEY_PUBLISHED_AT` o `publishedAt` en las entradas retiradas y cae al instante de carga del keyring. El estado no admite escrituras y no hay rotación automática ni edición de claves desde el panel.
+- **Consequences:**
+  - El operador verifica la rotación sin acceso a secretos ni a la base de datos.
+  - Las fechas declaradas son la única fuente fiable de "publicada desde"; sin ellas el endpoint informa de cuándo cargó la clave la instancia.
+  - Nuevas variables (`JWT_KEY_PUBLISHED_AT`, `publishedAt` opcional) se validan al construir el keyring; una fecha inválida impide el arranque.
+  - El endpoint añade una ruta owner-only de solo lectura, sin superficie de escritura nueva.
+  - Ver `docs/implementations/2026-11-04-jwt-key-rotation.md` y ADR-005.
