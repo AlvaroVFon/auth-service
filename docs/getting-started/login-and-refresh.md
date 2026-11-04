@@ -5,10 +5,11 @@ access token against an authenticated route, rotates the refresh token and ends
 the session. It is the flow every client repeats on startup and whenever the
 access token expires.
 
-Before starting you need an application, an account with a grant on it and a
-verified email: follow [Bootstrap an application](application-bootstrap.md) and,
-if the account does not exist yet, [Sign up and verify an
-email](signup-and-verification.md).
+## Before you start
+
+You need an application, an account with a grant on it and a verified email:
+follow [Bootstrap an application](application-bootstrap.md) and, if the account
+does not exist yet, [Sign up and verify an email](signup-and-verification.md).
 
 ## Access levels used here
 

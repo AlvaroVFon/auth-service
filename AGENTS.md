@@ -133,4 +133,4 @@
 
 - Delivered: user CRUD (owner-only), signup + email verification (holder -> user), login scoped to an application, refresh rotation, logout, access-token blacklist, device sessions, password reset, account lockout, per-route rate limiting, RS256 + JWKS key rotation, owner bootstrap, applications and per-user grants, shareable invitation and reset links, owner audit log, Telegram link notifications and TOTP MFA with recovery codes.
 - Pending candidates: OAuth2 providers, application lifecycle (`PATCH`/`DELETE /applications`), distributed stores for rate limiting and the token blacklist, MFA recovery-code regeneration.
-- The implementation backlog is closed; the flow-based getting-started guide (#88) is the last open documentation task. See `ROADMAP.md` for phases and next steps.
+- The implementation and documentation backlogs are closed. See `ROADMAP.md` for phases and next steps.

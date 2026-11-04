@@ -6,9 +6,11 @@ application, and a user with access to it. Only the global owner can run it.
 At the end you have a `slug` (or `audience`) to send as `application` on
 `POST /auth/login` and a user that is allowed to log in with it.
 
-If you have not started the stack yet, follow
-[Getting Started](../../README.md#getting-started) first and check that
-`GET /health` answers `200`.
+## Before you start
+
+The local stack must be running: follow [Getting started](README.md) and check
+that `GET /health` answers `200`. You also need the owner credentials from
+`.env` (`OWNER_EMAIL`/`OWNER_PASSWORD`).
 
 ## Access levels used here
 

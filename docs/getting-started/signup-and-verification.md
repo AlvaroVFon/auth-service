@@ -6,8 +6,14 @@ turns the holder into a verified user. It is the only self-service way to obtain
 an account: every other path starts from an owner or an app admin invitation.
 
 You finish with a user that can log in, but with no access to any application
-yet: grants are given by an owner or an app admin in the application bootstrap
-flow.
+yet: grants are given by an owner or an app admin in the [application bootstrap
+flow](application-bootstrap.md).
+
+## Before you start
+
+The local stack must be running: follow [Getting started](README.md) and check
+that `GET /health` answers `200`. MailHog must be reachable at
+<http://localhost:8025> to read the verification code.
 
 ## Access levels used here
 
