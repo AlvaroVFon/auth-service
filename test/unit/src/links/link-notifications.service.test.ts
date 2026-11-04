@@ -128,15 +128,23 @@ describe('LinkNotificationsService', () => {
   test('should bound a hanging delivery', async () => {
     sendMessage.mock.mockImplementation(() => new Promise(() => {}));
 
-    const result = await build('999').notifyInvitation({
-      linkId: LINK_ID,
-      link: LINK,
-    });
+    // The service timeout timer is unref'd, so keep the loop alive long enough
+    // for it to fire when this file runs without other handles.
+    const keepAlive = setTimeout(() => undefined, 100);
 
-    assert.deepStrictEqual(result, {
-      delivered: false,
-      recipient: 'owner',
-    });
+    try {
+      const result = await build('999').notifyInvitation({
+        linkId: LINK_ID,
+        link: LINK,
+      });
+
+      assert.deepStrictEqual(result, {
+        delivered: false,
+        recipient: 'owner',
+      });
+    } finally {
+      clearTimeout(keepAlive);
+    }
   });
 
   test('should never log the link, token or chat id', async () => {
