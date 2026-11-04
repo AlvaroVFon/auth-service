@@ -93,7 +93,11 @@ export class ApplicationsService implements ApplicationsPort {
     const events: AuditEvent[] = [];
 
     if (fields.includes('name')) {
-      const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+      if (typeof payload.name !== 'string') {
+        throw new InvalidArgumentError('Name must be a string');
+      }
+
+      const name = payload.name.trim();
       if (!name) {
         throw new InvalidArgumentError('Name is required');
       }
@@ -134,7 +138,8 @@ export class ApplicationsService implements ApplicationsPort {
 
   /**
    * Archives the application: it is never deleted, so its grants and its audit
-   * trail survive. Repeating the call is a no-op that still records the event.
+   * trail survive and the owner keeps administering them. Repeating the call is
+   * a no-op that still records the event.
    */
   async archive(id: string, actorId?: string): Promise<Application> {
     assertObjectId(id);

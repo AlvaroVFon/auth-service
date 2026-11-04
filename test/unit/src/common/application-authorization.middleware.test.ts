@@ -83,7 +83,9 @@ describe('ApplicationAuthorizationMiddleware', () => {
     assert.deepStrictEqual(findByUserAndApplication.mock.calls[0]?.arguments, [
       '507f191e810c19729de860ea',
       APPLICATION_ID,
-      { _id: APPLICATION_ID, audience: 'app-aud', active: true },
+      {
+        application: { _id: APPLICATION_ID, audience: 'app-aud', active: true },
+      },
     ]);
   });
 

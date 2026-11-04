@@ -50,7 +50,7 @@ export class ApplicationAuthorizationMiddleware {
       const grant = await this.grantsService.findByUserAndApplication(
         user.id,
         applicationId,
-        application,
+        { application },
       );
 
       if (!grant || grant.role !== GrantRoles.ADMIN) {

@@ -256,6 +256,21 @@ describe('GrantsService', () => {
       assert.strictEqual((await fixture.find<Grant>('Grant', {})).length, 0);
     });
 
+    test('should keep an archived application assignable for the owner', async () => {
+      const application = await createApplication();
+      const userId = await createUser();
+      const applicationId = application._id.toString();
+      await applicationsService.archive(applicationId);
+
+      const grant = await grantsService.assignRole(
+        { userId, applicationId, role: GrantRoles.VIEWER },
+        { includeArchived: true },
+      );
+
+      assert.strictEqual(grant.role, GrantRoles.VIEWER);
+      assert.strictEqual(grant.applicationId.toString(), applicationId);
+    });
+
     test('should reject an unknown user', async () => {
       const application = await createApplication();
 
@@ -386,6 +401,38 @@ describe('GrantsService', () => {
         null,
       );
       assert.deepStrictEqual(await grantsService.listByUser(userId), []);
+    });
+
+    test('should expose the grants of an archived application to the owner', async () => {
+      const application = await createApplication();
+      const userId = await createUser();
+      const applicationId = application._id.toString();
+
+      await grantsService.assignRole({
+        userId,
+        applicationId,
+        role: GrantRoles.EDITOR,
+      });
+      await applicationsService.archive(applicationId);
+
+      const grant = await grantsService.findByUserAndApplication(
+        userId,
+        applicationId,
+        { includeArchived: true },
+      );
+      assert.strictEqual(grant?.role, GrantRoles.EDITOR);
+
+      assert.deepStrictEqual(await grantsService.listByUser(userId), []);
+    });
+
+    test('should reject an archived application without the owner scope', async () => {
+      const application = await createApplication();
+      await applicationsService.archive(application._id.toString());
+
+      await assert.rejects(
+        grantsService.listByApplication(application._id.toString()),
+        new EntityNotFoundError('Application not found'),
+      );
     });
   });
 

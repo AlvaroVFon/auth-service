@@ -498,13 +498,30 @@ describe('ApplicationsService', () => {
       assert.strictEqual((await auditEvents(created._id.toString())).length, 0);
     });
 
-    test('AC-5: rejects an empty or non-string name without modifying the document', async () => {
+    test('AC-5: rejects a blank name without modifying the document', async () => {
       const created = await createApplication();
 
-      for (const payload of [{ name: '' }, { name: '   ' }, { name: 42 }]) {
+      for (const payload of [{ name: '' }, { name: '   ' }]) {
         await assert.rejects(
           applicationsService.update(created._id.toString(), payload),
-          InvalidArgumentError,
+          new InvalidArgumentError('Name is required'),
+        );
+      }
+
+      const persisted = await applicationsService.findById(
+        created._id.toString(),
+      );
+      assert.strictEqual(persisted?.name, created.name);
+      assert.strictEqual((await auditEvents(created._id.toString())).length, 0);
+    });
+
+    test('rejects a non-string name with a type error', async () => {
+      const created = await createApplication();
+
+      for (const name of [42, 0, null, true, ['Renamed'], { a: 1 }]) {
+        await assert.rejects(
+          applicationsService.update(created._id.toString(), { name }),
+          new InvalidArgumentError('Name must be a string'),
         );
       }
 

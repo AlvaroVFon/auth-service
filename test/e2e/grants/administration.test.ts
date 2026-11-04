@@ -214,6 +214,99 @@ describe('E2E Grants administration', () => {
       .expect(403);
   });
 
+  test('should let the owner administer the grants of an archived application', async () => {
+    const application = await createApplication();
+    const user = await createUser();
+    const applicationId = application._id.toString();
+    const userId = user._id.toString();
+    const path = `/applications/${applicationId}/grants`;
+
+    await request(app)
+      .delete(`/applications/${applicationId}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(200);
+
+    await request(app)
+      .put(path)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .send({ userId, role: GrantRoles.EDITOR })
+      .expect(200);
+
+    const fetched = await request(app)
+      .get(`${path}/${userId}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(200);
+    assert.strictEqual(fetched.body.role, GrantRoles.EDITOR);
+
+    const list = await request(app)
+      .get(path)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(200);
+    assert.strictEqual((list.body as unknown[]).length, 1);
+
+    await request(app)
+      .delete(`${path}/${userId}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(204);
+
+    await request(app)
+      .get(`${path}/${userId}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(404);
+  });
+
+  test('should keep an archived application closed to its app admin', async () => {
+    const application = await createApplication();
+    const admin = await createUser();
+    const target = await createUser();
+    const applicationId = application._id.toString();
+    const adminId = admin._id.toString();
+    const targetId = target._id.toString();
+    const path = `/applications/${applicationId}/grants`;
+    await grantRole(adminId, applicationId, GrantRoles.ADMIN);
+
+    const adminToken = signTestAccessToken(adminId);
+
+    await request(app)
+      .get(path)
+      .set('Authorization', bearer(adminToken))
+      .expect(200);
+
+    await request(app)
+      .delete(`/applications/${applicationId}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(200);
+
+    await request(app)
+      .get(path)
+      .set('Authorization', bearer(adminToken))
+      .expect(403);
+
+    await request(app)
+      .get(`${path}/${targetId}`)
+      .set('Authorization', bearer(adminToken))
+      .expect(403);
+
+    await request(app)
+      .put(path)
+      .set('Authorization', bearer(adminToken))
+      .send({ userId: targetId, role: GrantRoles.VIEWER })
+      .expect(403);
+
+    await request(app)
+      .delete(`${path}/${targetId}`)
+      .set('Authorization', bearer(adminToken))
+      .expect(403);
+
+    // Archiving revoked nobody: the admin keeps its grant, it is the archived
+    // application that closes the surface.
+    const grants = await fixture.find<Grant>('Grant', {
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 1);
+    assert.strictEqual(grants[0]?.role, GrantRoles.ADMIN);
+  });
+
   test('should validate grants', async () => {
     const application = await createApplication();
     const user = await createUser();

@@ -144,6 +144,21 @@ describe('E2E Applications lifecycle', () => {
     assert.strictEqual(persisted?.audience, application.audience);
     assert.strictEqual(persisted?.active, true);
 
+    // A present-but-wrong type is not a missing value: the message must not
+    // claim the name is absent.
+    const wrongType = await request(app)
+      .patch(`/applications/${application._id.toString()}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .send({ name: 42 })
+      .expect(400);
+    assert.strictEqual(wrongType.body.message, 'Name must be a string');
+
+    const stillPersisted = await fixture.findOne<ApplicationInterface>(
+      'Application',
+      { _id: application._id },
+    );
+    assert.strictEqual(stillPersisted?.name, application.name);
+
     const events = await auditEvents(
       application._id.toString(),
       AuditEvent.APPLICATION_UPDATED,

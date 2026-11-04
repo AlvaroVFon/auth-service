@@ -1,5 +1,9 @@
 export type { Grant } from './grants.interface';
 export { GrantRoles } from './grants.interface';
 export { GrantsModule } from './grants.module';
-export type { AssignRoleInput, GrantsPort } from './grants.port';
+export type {
+  AssignRoleInput,
+  GrantApplicationScope,
+  GrantsPort,
+} from './grants.port';
 export { GrantsService } from './grants.service';

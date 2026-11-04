@@ -199,22 +199,22 @@ Every route is declared in a module router and mounted by
 
 ### Users, applications and grants
 
-| Method   | Route                                         | Access    | Notes                                                                   |
-| -------- | --------------------------------------------- | --------- | ----------------------------------------------------------------------- |
-| `POST`   | `/users`                                      | Owner     | Creates a verified user directly.                                       |
-| `GET`    | `/users`                                      | Owner     | Lists users.                                                            |
-| `GET`    | `/users/:id`                                  | Owner     | Reads one user.                                                         |
-| `PATCH`  | `/users/:id`                                  | Owner     | Updates profile fields (including `telegramChatId`); `role` is ignored. |
-| `DELETE` | `/users/:id`                                  | Owner     | Deletes the user and cascades its grants; not the owner.                |
-| `POST`   | `/applications`                               | Owner     | Creates an application (name, slug, audience).                          |
-| `GET`    | `/applications`                               | Owner     | Lists applications.                                                     |
-| `GET`    | `/applications/:id`                           | Owner     | Reads one application.                                                  |
-| `PATCH`  | `/applications/:id`                           | Owner     | Renames or (de)activates; `slug` and `audience` are immutable.          |
-| `DELETE` | `/applications/:id`                           | Owner     | Archives the application (`active=false`); it is never deleted.         |
-| `PUT`    | `/applications/:applicationId/grants`         | App admin | Upserts the role of a user in the application.                          |
-| `GET`    | `/applications/:applicationId/grants`         | App admin | Lists the application grants.                                           |
-| `GET`    | `/applications/:applicationId/grants/:userId` | App admin | Reads one grant.                                                        |
-| `DELETE` | `/applications/:applicationId/grants/:userId` | App admin | Revokes a grant.                                                        |
+| Method   | Route                                         | Access           | Notes                                                                   |
+| -------- | --------------------------------------------- | ---------------- | ----------------------------------------------------------------------- |
+| `POST`   | `/users`                                      | Owner            | Creates a verified user directly.                                       |
+| `GET`    | `/users`                                      | Owner            | Lists users.                                                            |
+| `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                         |
+| `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields (including `telegramChatId`); `role` is ignored. |
+| `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.                |
+| `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                          |
+| `GET`    | `/applications`                               | Owner            | Lists applications.                                                     |
+| `GET`    | `/applications/:id`                           | Owner            | Reads one application.                                                  |
+| `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.          |
+| `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted.         |
+| `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                          |
+| `GET`    | `/applications/:applicationId/grants`         | Owner, app admin | Lists the application grants.                                           |
+| `GET`    | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant.                                                        |
+| `DELETE` | `/applications/:applicationId/grants/:userId` | Owner, app admin | Revokes a grant.                                                        |
 
 ### Audit
 
@@ -287,12 +287,20 @@ The owner renames an application with `PATCH /applications/:id { "name": "..." }
 activates or deactivates it with `PATCH /applications/:id { "active": false }`. Only
 `name` and `active` are mutable: sending `slug`, `audience`, `id` or `__v` returns `400`
 and writes nothing, because the slug and the audience identify the application in every
-issued token. A blank name, a non-boolean `active` or an empty payload also returns
-`400`.
+issued token. An empty payload, a blank name (`Name is required`), a non-string name
+(`Name must be a string`) or a non-boolean `active` also returns `400` without writing.
 
 `DELETE /applications/:id` archives the application instead of deleting it: it sets
 `active` to `false`, keeps the document and its grants, and is idempotent, so calling it
 again still returns `200`. There is no physical deletion.
+
+Archiving keeps every grant, so the owner keeps administering them: `PUT`,
+`GET /applications/:applicationId/grants`, `GET /applications/:applicationId/grants/:userId`
+and `DELETE /applications/:applicationId/grants/:userId` keep working on an archived
+application. The application admin does not keep working: the grant surface resolves the
+application with `findAssignableById` for any non-owner caller, so an archived
+application answers `403` to its admin and to every app-scoped token. Neither the
+archive nor the deactivation revokes existing grants.
 
 Deactivating or archiving does not revoke live sessions or already issued access tokens;
 the refresh endpoint stops minting new tokens, revokes the session that attempted it and
