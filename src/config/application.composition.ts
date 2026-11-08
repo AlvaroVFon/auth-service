@@ -53,6 +53,11 @@ import {
   LinkNotificationsService,
   PasswordResetLinksService,
 } from '../links';
+import {
+  GlobalSettingsRepository,
+  SettingsService,
+  type SettingsPort,
+} from '../settings';
 import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
 import { USER_SUPPORT_BODYLESS_PATHS } from '../users/users.router';
@@ -73,6 +78,7 @@ export interface ApplicationComposition {
   readonly database: Database;
   readonly applications: ApplicationsPort;
   readonly grants: GrantsPort;
+  readonly settings: SettingsPort;
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
   readonly linksModule: LinksModule;
@@ -229,6 +235,11 @@ export const createApplicationComposition = (
     logger,
     auditService,
   );
+  const settingsService = new SettingsService(
+    applicationsModule.service,
+    new GlobalSettingsRepository(),
+    applicationsModule.service,
+  );
   const usersModule = new UsersModule(
     cryptoService,
     authenticationMiddleware,
@@ -375,6 +386,7 @@ export const createApplicationComposition = (
     database,
     applications: applicationsModule.service,
     grants: grantsModule.service,
+    settings: settingsService,
     usersModule,
     authModule,
     linksModule,

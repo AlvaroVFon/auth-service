@@ -1262,3 +1262,36 @@ describe('UsersService session revocation', () => {
     assert.strictEqual(record.mock.callCount(), 0);
   });
 });
+
+describe('UsersService.recordLogin', () => {
+  let service: UsersService;
+
+  before(() => {
+    service = new UsersService(User, new CryptoService());
+  });
+
+  test('updates lastLoginAt without touching credentials or flags', async () => {
+    const user = await service.create({
+      email: generateRandomEmail('lastlogin+'),
+      password: 'hashedpassword123',
+      verified: true,
+    });
+    const before = await service.findById(user._id.toString());
+
+    await service.recordLogin(user._id.toString());
+
+    const after = await service.findById(user._id.toString());
+    assert.ok(after?.lastLoginAt instanceof Date);
+    assert.strictEqual(after?.password, before?.password);
+    assert.strictEqual(after?.role, before?.role);
+    assert.strictEqual(after?.verified, before?.verified);
+    assert.strictEqual(after?.mfaEnabled, before?.mfaEnabled);
+  });
+
+  test('rejects a malformed id', async () => {
+    await assert.rejects(
+      service.recordLogin('bad-id'),
+      new InvalidArgumentError('Invalid ID format'),
+    );
+  });
+});

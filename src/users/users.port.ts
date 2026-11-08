@@ -86,6 +86,7 @@ export interface UsersPort {
   findById(id: string): Promise<User | null>;
   findByRole(role: Roles): Promise<User | null>;
   setPassword(id: string, newPassword: string): Promise<void>;
+  recordLogin(id: string): Promise<void>;
   deleteOneById(id: string, actorId?: string): Promise<User | null>;
   setMfaPendingSecret(id: string, secret: string): Promise<void>;
   activateMfa(

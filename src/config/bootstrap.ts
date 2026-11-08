@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import express, { Application } from 'express';
 
+import { ensureGlobalSettings } from '../settings';
 import { startServer } from './app.config';
 import { createApplicationComposition } from './application.composition';
 import { BootstrapOverrides } from './bootstrap.interface';
@@ -22,6 +23,7 @@ export const bootstrap = async (overrides: BootstrapOverrides = {}) => {
   const expressApp = overrides.app ?? app;
   const listen = overrides.startServer ?? startServer;
   const ownerBootstrap = overrides.ownerBootstrap ?? composition.ownerBootstrap;
+  const settingsSeed = overrides.settingsSeed ?? (() => ensureGlobalSettings());
 
   try {
     const ownerCredentials =
@@ -30,6 +32,8 @@ export const bootstrap = async (overrides: BootstrapOverrides = {}) => {
         : overrides.ownerCredentials;
 
     await db.connect();
+
+    await settingsSeed();
 
     await provisionOwnerFromEnv({
       credentials: ownerCredentials,

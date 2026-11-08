@@ -496,6 +496,16 @@ export class UsersService implements UsersPort {
     return user;
   }
 
+  /** Marks a successful authentication; it never revalidates credentials. */
+  async recordLogin(id: string): Promise<void> {
+    this.assertValidId(id);
+
+    await this.usersModel.updateOne(
+      { _id: id },
+      { $set: { lastLoginAt: new Date() } },
+    );
+  }
+
   async setPassword(id: string, newPassword: string): Promise<void> {
     if (!id) {
       throw new InvalidArgumentError('ID is required');

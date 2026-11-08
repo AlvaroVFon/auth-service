@@ -37,6 +37,7 @@ describe('bootstrap', () => {
     const server = await bootstrap({
       logger,
       app,
+      settingsSeed: async () => {},
       database: createDatabase(connect),
       startServer: startServer as any,
     });
@@ -55,6 +56,7 @@ describe('bootstrap', () => {
     await bootstrap({
       logger,
       app,
+      settingsSeed: async () => {},
       database: createDatabase(async () => {}),
       startServer: (() => ({ close: () => {} })) as any,
     });
@@ -70,6 +72,7 @@ describe('bootstrap', () => {
     await bootstrap({
       logger,
       app,
+      settingsSeed: async () => {},
       database: createDatabase(async () => {}),
       startServer: (() => ({ close: () => {} })) as any,
     });
@@ -93,6 +96,7 @@ describe('bootstrap', () => {
       bootstrap({
         logger,
         app,
+        settingsSeed: async () => {},
         database: createDatabase(async () => {
           throw failure;
         }),
@@ -130,6 +134,7 @@ describe('bootstrap', () => {
         bootstrap({
           logger,
           app,
+          settingsSeed: async () => {},
           database: createDatabase(async () => {}),
           startServer: (() => ({ close: () => {} })) as any,
         }),
@@ -163,6 +168,9 @@ describe('bootstrap', () => {
         return { created: true, userId: '1', email: 'owner@example.com' };
       }),
     };
+    const settingsSeed = mock.fn(async () => {
+      order.push('seed');
+    });
     const startServer = mock.fn(() => {
       order.push('start');
       return { close: () => {} };
@@ -171,6 +179,7 @@ describe('bootstrap', () => {
     await bootstrap({
       logger,
       app,
+      settingsSeed,
       database: createDatabase(connect),
       ownerBootstrap: ownerBootstrap as never,
       ownerCredentials: {
@@ -180,7 +189,7 @@ describe('bootstrap', () => {
       startServer: startServer as never,
     });
 
-    assert.deepStrictEqual(order, ['connect', 'owner', 'start']);
+    assert.deepStrictEqual(order, ['connect', 'seed', 'owner', 'start']);
     assert.deepStrictEqual(
       (
         ownerBootstrap.ensureOwner as unknown as {
@@ -188,6 +197,38 @@ describe('bootstrap', () => {
         }
       ).mock.calls[0]?.arguments,
       ['owner@example.com', 'StrongOwner123!'],
+    );
+  });
+
+  test('should log and exit when the settings seed fails', async () => {
+    const exit = mock.method(process, 'exit', (() => {
+      throw new Error('process.exit');
+    }) as never);
+    const startServer = mock.fn(() => ({ close: () => {} }));
+    const failure = new Error('seed failed');
+
+    await assert.rejects(
+      bootstrap({
+        logger,
+        app,
+        settingsSeed: async () => {
+          throw failure;
+        },
+        database: createDatabase(async () => {}),
+        startServer: startServer as never,
+      }),
+      /process\.exit/,
+    );
+
+    assert.strictEqual(exit.mock.callCount(), 1);
+    assert.strictEqual(startServer.mock.callCount(), 0);
+    assert.deepStrictEqual(
+      (
+        logger.error as unknown as {
+          mock: { calls: { arguments: unknown[] }[] };
+        }
+      ).mock.calls[0]?.arguments,
+      ['Application bootstrap failed', failure],
     );
   });
 
@@ -203,6 +244,7 @@ describe('bootstrap', () => {
     await bootstrap({
       logger,
       app,
+      settingsSeed: async () => {},
       database: createDatabase(async () => {}),
       ownerBootstrap: ownerBootstrap as never,
       ownerCredentials: null,
@@ -229,6 +271,7 @@ describe('bootstrap', () => {
       bootstrap({
         logger,
         app,
+        settingsSeed: async () => {},
         database: createDatabase(async () => {}),
         ownerBootstrap: {
           ensureOwner: async () => {
@@ -267,6 +310,7 @@ describe('bootstrap', () => {
         bootstrap({
           logger,
           app,
+          settingsSeed: async () => {},
           database: createDatabase(async () => {}),
           startServer: (() => ({ close: () => {} })) as never,
         }),
@@ -303,6 +347,7 @@ describe('bootstrap', () => {
       bootstrap({
         logger,
         app,
+        settingsSeed: async () => {},
         database: createDatabase(async () => {
           throw new Error('db down');
         }),
@@ -318,6 +363,7 @@ describe('bootstrap', () => {
     const server = (await bootstrap({
       logger,
       app,
+      settingsSeed: async () => {},
       database: createDatabase(async () => {}),
     })) as Server;
 
