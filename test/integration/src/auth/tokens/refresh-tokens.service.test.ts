@@ -587,6 +587,7 @@ describe('RefreshTokenService revokeAllByAudience', () => {
     ]);
 
     assert.strictEqual(result.revoked, 2);
+    assert.strictEqual(result.complete, true);
     assert.deepStrictEqual(
       result.sessions.map((session) => session.jti).sort(),
       [active.jti, alsoActive.jti].sort(),
@@ -610,6 +611,10 @@ describe('RefreshTokenService revokeAllByAudience', () => {
   test('returns an empty result for an audience without active sessions', async () => {
     const result = await refreshTokenService.revokeAllByAudience('empty-aud');
 
-    assert.deepStrictEqual(result, { sessions: [], revoked: 0 });
+    assert.deepStrictEqual(result, {
+      sessions: [],
+      revoked: 0,
+      complete: true,
+    });
   });
 });

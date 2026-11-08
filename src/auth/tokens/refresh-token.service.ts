@@ -22,8 +22,14 @@ export interface RevokedAudienceSession {
 }
 
 export interface RevokeAllByAudienceResult {
+  /**
+   * Tokens observed before each update. A token created between the listing and
+   * the update is revoked but not listed; `revoked` is the authoritative count.
+   */
   sessions: RevokedAudienceSession[];
   revoked: number;
+  /** False when the last pass still found active tokens; the caller can retry. */
+  complete: boolean;
 }
 
 const MAX_REVOCATION_PASSES = 5;
@@ -203,6 +209,7 @@ export class RefreshTokenService {
 
     const sessions: RevokedAudienceSession[] = [];
     let revoked = 0;
+    let complete = true;
 
     // Re-evaluate the filter on every pass so a token issued while the call is
     // running is revoked too. The `_id` list is never sent to the server: the
@@ -214,14 +221,12 @@ export class RefreshTokenService {
         .select('_id userId sessionId jti')
         .lean<ActiveAudienceToken[]>();
 
-      if (active.length > 0) {
-        sessions.push(
-          ...active.map((token) => ({
-            userId: token.userId.toString(),
-            sessionId: token.sessionId,
-            jti: token.jti,
-          })),
-        );
+      for (const token of active) {
+        sessions.push({
+          userId: token.userId.toString(),
+          sessionId: token.sessionId,
+          jti: token.jti,
+        });
       }
 
       const result = await this.refreshTokenModel.updateMany(filter, {
@@ -230,11 +235,16 @@ export class RefreshTokenService {
       revoked += result.modifiedCount ?? 0;
 
       if (active.length === 0) {
+        complete = true;
         break;
       }
+
+      // The loop is bounded; if the last pass still found tokens the caller
+      // must know the revocation may not be exhaustive.
+      complete = pass < MAX_REVOCATION_PASSES - 1;
     }
 
-    return { sessions, revoked };
+    return { sessions, revoked, complete };
   }
 
   async revokeAllByUserId(userId: string, audience?: string): Promise<void> {
