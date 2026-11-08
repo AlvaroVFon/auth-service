@@ -174,12 +174,7 @@ export class UsersService implements UsersPort {
   }
 
   async findById(id: string): Promise<UserInterface | null> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
-    }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
-    }
+    this.assertValidId(id);
 
     const user = await this.usersModel.findById(id);
 
@@ -301,12 +296,7 @@ export class UsersService implements UsersPort {
     id: string,
     updateData: UserUpdatePayload,
   ): Promise<UserInterface | null> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
-    }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
-    }
+    this.assertValidId(id);
 
     let passwordRevoker: UserSessionRevokerPort | undefined;
 
@@ -550,12 +540,7 @@ export class UsersService implements UsersPort {
     id: string,
     actorId?: string,
   ): Promise<UserInterface | null> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
-    }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
-    }
+    this.assertValidId(id);
 
     const user = await this.usersModel.findById(id);
     if (!user) {

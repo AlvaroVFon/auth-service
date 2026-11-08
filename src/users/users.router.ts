@@ -11,6 +11,14 @@ export interface UsersSupportRateLimitConfig {
   max: number;
 }
 
+/**
+ * Support actions take no input beyond the path parameter. Exported next to the
+ * routes so the global body guard cannot drift from the route shapes.
+ */
+export const USER_SUPPORT_BODYLESS_PATHS: readonly RegExp[] = [
+  /^\/users\/[0-9a-f]{24}\/(unlock|verify)$/i,
+];
+
 export class UsersRouter {
   constructor(
     private readonly authenticationMiddleware: AuthenticationMiddleware,
@@ -54,8 +62,9 @@ export class UsersRouter {
       this.userController.deleteUser.bind(this.userController),
     );
 
-    // Support actions reuse the login window and budget instead of adding new
-    // environment variables.
+    // The support actions use the login window and budget numbers, but their
+    // own limiter store: the two routes share a budget with each other, not
+    // with /auth/login.
     const supportRateLimiter = createRateLimiter(
       this.supportRateLimit.windowMs,
       this.supportRateLimit.max,

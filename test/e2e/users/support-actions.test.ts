@@ -120,4 +120,25 @@ describe('E2E users support actions', () => {
         .expect(401);
     }
   });
+
+  test('AC-4: the support routes share the configured budget', async () => {
+    const unknown = new Types.ObjectId().toString();
+    let status = 0;
+
+    for (let attempt = 0; attempt < 20 && status !== 429; attempt += 1) {
+      status = (
+        await request(app)
+          .post(`/users/${unknown}/unlock`)
+          .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      ).status;
+    }
+
+    assert.strictEqual(status, 429);
+
+    // The budget belongs to the support routes as a pair.
+    await request(app)
+      .post(`/users/${unknown}/verify`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(429);
+  });
 });

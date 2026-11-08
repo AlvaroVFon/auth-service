@@ -4,7 +4,6 @@ import type { AuditPort } from '../audit';
 import { assertDependencies } from '../common/depencencies-validator';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
-import { getNumberEnvVariable } from '../config/env.config';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
 import { UsersController } from './users.controller';
@@ -23,12 +22,9 @@ export class UsersModule {
     private readonly logger: LoggerInterface,
     private readonly maxLoginAttempts: number = 5,
     private readonly lockoutDurationMs: number = 900000,
-    private readonly mfaCipher?: SecretCipher,
-    private readonly auditService?: AuditPort,
-    private readonly supportRateLimit: UsersSupportRateLimitConfig = {
-      windowMs: getNumberEnvVariable('RATE_LIMIT_LOGIN_WINDOW_MS', 900000),
-      max: getNumberEnvVariable('RATE_LIMIT_LOGIN_MAX', 5),
-    },
+    private readonly mfaCipher: SecretCipher | undefined,
+    private readonly auditService: AuditPort,
+    private readonly supportRateLimit: UsersSupportRateLimitConfig,
   ) {
     assertDependencies(
       {

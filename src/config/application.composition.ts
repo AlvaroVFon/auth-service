@@ -55,6 +55,7 @@ import {
 } from '../links';
 import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
+import { USER_SUPPORT_BODYLESS_PATHS } from '../users/users.router';
 import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import {
@@ -400,11 +401,7 @@ export const createApplicationComposition = (
       );
       GlobalMiddlewares.initialize(
         app,
-        [
-          '/auth/logout',
-          // Support actions take no input beyond the path parameter.
-          /^\/users\/[0-9a-f]{24}\/(unlock|verify)$/i,
-        ],
+        ['/auth/logout', ...USER_SUPPORT_BODYLESS_PATHS],
         corsOrigins,
       );
       healthModule.initialize(app);
