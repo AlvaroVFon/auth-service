@@ -1,5 +1,5 @@
 import type { ApplicationsPort } from '../applications';
-import { PASSWORD_REGEX } from '../common/constants/regex';
+import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
 import {
   EntityNotFoundError,
@@ -13,6 +13,7 @@ import type { HoldersPort } from '../holders';
 import { CryptoService } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
 import type { UsersPort } from '../users';
+import type { InviteMemberInput } from './invitations.port';
 import {
   LinkNotificationsService,
   LinkNotificationResult,
@@ -98,6 +99,44 @@ export class InvitationsService {
       role: input.role,
       notification,
     };
+  }
+
+  /**
+   * Invites an email that has no verified account. A pre-verification holder is
+   * a valid target here, unlike the public invitation flow, because the member
+   * is being onboarded by an administrator.
+   */
+  async inviteMember(input: InviteMemberInput): Promise<void> {
+    const email = normalizeEmail(input.email ?? '');
+
+    if (!EMAIL_REGEX.test(email)) {
+      throw new InvalidArgumentError('Invalid email format');
+    }
+
+    const application = await this.applicationsService.findAssignableById(
+      input.applicationId,
+    );
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const existingUser = await this.usersService.findByEmail(email);
+    if (existingUser) {
+      throw new InvalidArgumentError('Invitation could not be created');
+    }
+
+    const created = await this.linksService.createInvitation({
+      email,
+      applicationId: input.applicationId,
+      role: input.role,
+    });
+
+    const link = buildInvitationLink(this.publicAppUrl, created.token);
+
+    await this.notifications.notifyInvitation({
+      linkId: created.link._id.toString(),
+      link,
+    });
   }
 
   async accept(input: AcceptInvitationInput): Promise<void> {

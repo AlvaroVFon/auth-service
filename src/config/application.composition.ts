@@ -334,6 +334,7 @@ export const createApplicationComposition = (
     linkNotifications,
     logger,
   );
+  grantsModule.service.setInvitationsPort(invitationsService);
   const passwordResetLinksService = new PasswordResetLinksService(
     linksService,
     usersModule.service,

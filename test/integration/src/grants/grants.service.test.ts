@@ -3,6 +3,9 @@ import { Model, Types } from 'mongoose';
 import { Application as ApplicationInterface } from '../../../../src/applications/applications.interface';
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
+import { AuditEvent } from '../../../../src/audit';
+import { Roles } from '../../../../src/common/enums/roles.enum';
+import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -16,6 +19,7 @@ import { User } from '../../../../src/users/users.schema';
 import { UsersService } from '../../../../src/users/users.service';
 import fixture from '../../../fixtures';
 import { ApplicationFactory } from '../../../helpers/factories/application.factory';
+import { HolderFactory } from '../../../helpers/factories/holder.factory';
 import { MotherFactory } from '../../../helpers/factories/mother.factory';
 import { UserFactory } from '../../../helpers/factories/user.factory';
 
@@ -657,5 +661,256 @@ describe('GrantsService', () => {
         1,
       );
     });
+  });
+});
+
+describe('GrantsService.grantMemberByEmail', () => {
+  let applicationsService: ApplicationsService;
+  let usersService: UsersService;
+
+  before(() => {
+    applicationsService = new ApplicationsService(ApplicationModel);
+    usersService = new UsersService(User, new CryptoService());
+  });
+
+  const createService = (record?: ReturnType<typeof mock.fn>) => {
+    const service = new GrantsService(
+      GrantModel,
+      applicationsService,
+      usersService,
+      record === undefined ? undefined : ({ record } as never),
+    );
+
+    return service;
+  };
+
+  const createApplication = async () => {
+    const application = ApplicationFactory.generate();
+
+    return applicationsService.create({
+      name: application.name,
+      slug: application.slug,
+      audience: application.audience,
+    });
+  };
+
+  const createAccount = async () => {
+    const email = MotherFactory.email();
+    const user = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate({ email, verified: true }),
+    );
+
+    return { id: user._id.toString(), email };
+  };
+
+  test('AC-1: an existing account gets the grant and one member.granted event', async () => {
+    const record = mock.fn(async () => {});
+    const service = createService(record);
+    const application = await createApplication();
+    const account = await createAccount();
+
+    const result = await service.grantMemberByEmail({
+      email: account.email.toUpperCase(),
+      applicationId: application._id.toString(),
+      role: GrantRoles.EDITOR,
+      actorRole: GrantRoles.ADMIN,
+      actorId: new Types.ObjectId().toString(),
+    });
+
+    assert.deepStrictEqual(result, {
+      email: account.email,
+      role: GrantRoles.EDITOR,
+    });
+
+    const grants = await fixture.find<Grant>(GrantModel.modelName, {
+      userId: new Types.ObjectId(account.id),
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 1);
+
+    const calls = record.mock.calls as Array<{
+      arguments: [{ event: AuditEvent }];
+    }>;
+    const events = calls
+      .map((call) => call.arguments[0])
+      .filter((event) => event.event === AuditEvent.MEMBER_GRANTED);
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual(
+      calls.some(
+        (call) => call.arguments[0].event === AuditEvent.GRANT_ASSIGNED,
+      ),
+      false,
+    );
+  });
+
+  test('AC-2: an email without an account receives an invitation', async () => {
+    const inviteMember = mock.fn(async () => {});
+    const service = createService();
+    service.setInvitationsPort({ inviteMember });
+    const application = await createApplication();
+    const email = `unknown-${Date.now()}@example.com`;
+
+    const result = await service.grantMemberByEmail({
+      email,
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+      actorRole: GrantRoles.ADMIN,
+    });
+
+    assert.deepStrictEqual(result, { email, role: GrantRoles.VIEWER });
+    assert.strictEqual(inviteMember.mock.callCount(), 1);
+
+    const grants = await fixture.find<Grant>(GrantModel.modelName, {
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 0);
+  });
+
+  test('AC-2: a pre-verification holder receives an invitation', async () => {
+    const inviteMember = mock.fn(async () => {});
+    const service = createService();
+    service.setInvitationsPort({ inviteMember });
+    const application = await createApplication();
+    const holder = await fixture.create(
+      'Holder',
+      HolderFactory.generate({ email: MotherFactory.email() }),
+    );
+
+    const result = await service.grantMemberByEmail({
+      email: holder.email,
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+      actorRole: GrantRoles.ADMIN,
+    });
+
+    assert.deepStrictEqual(result, {
+      email: holder.email,
+      role: GrantRoles.VIEWER,
+    });
+    assert.strictEqual(inviteMember.mock.callCount(), 1);
+
+    const grants = await fixture.find<Grant>(GrantModel.modelName, {
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 0);
+  });
+
+  test('AC-3: an app admin cannot grant admin or touch an admin member', async () => {
+    const service = createService();
+    const application = await createApplication();
+    const account = await createAccount();
+    const adminAccount = await createAccount();
+
+    await assert.rejects(
+      service.grantMemberByEmail({
+        email: account.email,
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+        actorRole: GrantRoles.ADMIN,
+      }),
+      ForbiddenError,
+    );
+
+    await fixture.create<Grant>(GrantModel.modelName, {
+      userId: new Types.ObjectId(adminAccount.id),
+      applicationId: application._id,
+      role: GrantRoles.ADMIN,
+    });
+
+    await assert.rejects(
+      service.grantMemberByEmail({
+        email: adminAccount.email,
+        applicationId: application._id.toString(),
+        role: GrantRoles.VIEWER,
+        actorRole: GrantRoles.ADMIN,
+      }),
+      ForbiddenError,
+    );
+
+    // The owner can manage an existing admin member.
+    const result = await service.grantMemberByEmail({
+      email: adminAccount.email,
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+      actorRole: Roles.OWNER,
+    });
+    assert.deepStrictEqual(result, {
+      email: adminAccount.email,
+      role: GrantRoles.VIEWER,
+    });
+  });
+
+  test('AC-4: repeating the grant converges the role without duplicates', async () => {
+    const service = createService();
+    const application = await createApplication();
+    const account = await createAccount();
+
+    const input = {
+      email: account.email,
+      applicationId: application._id.toString(),
+      actorRole: Roles.OWNER,
+    } as const;
+
+    await service.grantMemberByEmail({ ...input, role: GrantRoles.EDITOR });
+    const result = await service.grantMemberByEmail({
+      ...input,
+      role: GrantRoles.VIEWER,
+    });
+
+    assert.deepStrictEqual(result, {
+      email: account.email,
+      role: GrantRoles.VIEWER,
+    });
+
+    const grants = await fixture.find<Grant>(GrantModel.modelName, {
+      userId: new Types.ObjectId(account.id),
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 1);
+    assert.strictEqual(grants[0]?.role, GrantRoles.VIEWER);
+  });
+
+  test('AC-5: rejects an invalid email and a missing or inactive application', async () => {
+    const service = createService();
+    const inviteMember = mock.fn(async () => {});
+    service.setInvitationsPort({ inviteMember });
+
+    await assert.rejects(
+      service.grantMemberByEmail({
+        email: 'not-an-email',
+        applicationId: new Types.ObjectId().toString(),
+        role: GrantRoles.VIEWER,
+        actorRole: Roles.OWNER,
+      }),
+      InvalidArgumentError,
+    );
+
+    await assert.rejects(
+      service.grantMemberByEmail({
+        email: MotherFactory.email(),
+        applicationId: new Types.ObjectId().toString(),
+        role: GrantRoles.VIEWER,
+        actorRole: Roles.OWNER,
+      }),
+      EntityNotFoundError,
+    );
+
+    const application = await createApplication();
+    await ApplicationModel.updateOne(
+      { _id: application._id },
+      { active: false },
+    );
+
+    await assert.rejects(
+      service.grantMemberByEmail({
+        email: MotherFactory.email(),
+        applicationId: application._id.toString(),
+        role: GrantRoles.VIEWER,
+        actorRole: Roles.OWNER,
+      }),
+      EntityNotFoundError,
+    );
+    assert.strictEqual(inviteMember.mock.callCount(), 0);
   });
 });

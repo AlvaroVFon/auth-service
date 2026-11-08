@@ -2,22 +2,31 @@ import { Model, Types } from 'mongoose';
 
 import type { Application, ApplicationsPort } from '../applications';
 import { AuditEvent, AuditPort, AuditResult } from '../audit';
+import { EMAIL_REGEX } from '../common/constants/regex';
+import { normalizeEmail } from '../common/email';
+import { Roles } from '../common/enums/roles.enum';
+import { ForbiddenError } from '../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import { assertObjectId } from '../common/validators/object-id';
+import type { InvitationsPort } from '../links';
 import type { UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
 import type {
   AssignRoleInput,
   GrantApplicationScope,
   GrantedApplication,
+  GrantedMember,
+  GrantMemberInput,
   GrantsPort,
 } from './grants.port';
 
 export class GrantsService implements GrantsPort {
+  private invitations?: InvitationsPort;
+
   constructor(
     private readonly grantModel: Model<Grant>,
     private readonly applicationsService: ApplicationsPort,
@@ -58,6 +67,92 @@ export class GrantsService implements GrantsPort {
     });
 
     return grant;
+  }
+
+  /**
+   * Grants a role by email: an existing account gets (or converges to) the
+   * grant, and an email without an account receives an invitation. The result
+   * is identical in both cases so the caller cannot probe account existence.
+   */
+  async grantMemberByEmail(input: GrantMemberInput): Promise<GrantedMember> {
+    const email = normalizeEmail(input.email ?? '');
+
+    if (!EMAIL_REGEX.test(email)) {
+      throw new InvalidArgumentError('Invalid email format');
+    }
+    assertObjectId(input.applicationId, 'applicationId');
+    if (!Object.values(GrantRoles).includes(input.role)) {
+      throw new InvalidArgumentError('Invalid role');
+    }
+
+    const application = await this.applicationsService.findAssignableById(
+      input.applicationId,
+    );
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const isOwner = input.actorRole === Roles.OWNER;
+
+    if (input.role === GrantRoles.ADMIN && !isOwner) {
+      throw new ForbiddenError('Only the owner can grant the admin role');
+    }
+
+    const user = await this.usersService.findByEmail(email);
+
+    if (!user) {
+      return this.inviteMember({
+        email,
+        applicationId: input.applicationId,
+        role: input.role,
+      });
+    }
+
+    const existing = await this.grantModel.findOne({
+      userId: user._id,
+      applicationId: new Types.ObjectId(input.applicationId),
+    });
+
+    if (!isOwner && existing?.role === GrantRoles.ADMIN) {
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
+
+    const grant = await this.upsertGrant(
+      user._id.toString(),
+      input.applicationId,
+      input.role,
+    );
+
+    if (!grant) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+
+    await this.recordGrantEvent(AuditEvent.MEMBER_GRANTED, {
+      targetUserId: user._id.toString(),
+      applicationId: input.applicationId,
+      role: input.role,
+      ...(input.actorId === undefined ? {} : { actorId: input.actorId }),
+    });
+
+    return { email, role: input.role };
+  }
+
+  setInvitationsPort(invitations: InvitationsPort): void {
+    this.invitations = invitations;
+  }
+
+  private async inviteMember(input: {
+    email: string;
+    applicationId: string;
+    role: GrantRoles;
+  }): Promise<GrantedMember> {
+    if (!this.invitations) {
+      throw new Error('Invitations port is not configured');
+    }
+
+    await this.invitations.inviteMember(input);
+
+    return { email: input.email, role: input.role };
   }
 
   async findByUserAndApplication(

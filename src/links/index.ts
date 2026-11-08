@@ -1,4 +1,5 @@
 export { InvitationsService } from './invitations.service';
+export type { InvitationsPort, InviteMemberInput } from './invitations.port';
 export type {
   AcceptInvitationInput,
   CreateInvitationInput,
