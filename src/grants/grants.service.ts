@@ -107,9 +107,10 @@ export class GrantsService implements GrantsPort {
   async listMembers(
     applicationId: string,
     query: ListQuery<GrantMemberSortField>,
+    scope?: GrantApplicationScope,
   ): Promise<PaginatedResult<GrantMember>> {
     assertObjectId(applicationId, 'applicationId');
-    await this.resolveApplication(applicationId);
+    await this.resolveApplication(applicationId, scope);
 
     const filter = { applicationId: new Types.ObjectId(applicationId) };
     const [grants, total] = await Promise.all([

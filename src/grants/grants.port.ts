@@ -68,6 +68,7 @@ export interface GrantsPort {
   listMembers(
     applicationId: string,
     query: ListQuery<GrantMemberSortField>,
+    scope?: GrantApplicationScope,
   ): Promise<PaginatedResult<GrantMember>>;
   revokeRole(
     userId: string,

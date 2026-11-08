@@ -155,6 +155,24 @@ describe('E2E application members listing', () => {
       .expect(401);
   });
 
+  test('the owner can list the members of an archived application', async () => {
+    const application = await createApplication();
+    const member = await createUser();
+    await grantRole(
+      member._id.toString(),
+      application._id.toString(),
+      GrantRoles.VIEWER,
+    );
+    await fixture.updateOne(
+      'Application',
+      { _id: application._id },
+      { active: false },
+    );
+
+    const response = await listMembers(application._id.toString()).expect(200);
+    assert.strictEqual(response.body.total, 1);
+  });
+
   test('rejects a q search instead of silently ignoring it', async () => {
     const application = await createApplication();
 

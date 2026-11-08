@@ -43,7 +43,11 @@ export class GrantsController {
       throw new InvalidArgumentError('q is not supported on this listing');
     }
 
-    const members = await this.grantsService.listMembers(applicationId, query);
+    const members = await this.grantsService.listMembers(
+      applicationId,
+      query,
+      this.scopeFor(req),
+    );
 
     res.status(200).json(members);
   }
