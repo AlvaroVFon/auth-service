@@ -237,6 +237,8 @@ export const createApplicationComposition = (
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
     mfaCipher ?? undefined,
+    auditService,
+    (options.rateLimitConfig ?? getDefaultRateLimitConfig()).login,
   );
   const grantsModule = new GrantsModule(
     GrantModel,
@@ -396,7 +398,15 @@ export const createApplicationComposition = (
       HttpLoggerInterceptor.initialize(app, requestLogger, (request) =>
         isHealthProbe(request.path),
       );
-      GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
+      GlobalMiddlewares.initialize(
+        app,
+        [
+          '/auth/logout',
+          // Support actions take no input beyond the path parameter.
+          /^\/users\/[0-9a-f]{24}\/(unlock|verify)$/i,
+        ],
+        corsOrigins,
+      );
       healthModule.initialize(app);
       jwksModule.initialize(app);
       applicationsModule.initialize(app, applicationAuthorizationMiddleware);

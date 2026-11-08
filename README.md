@@ -209,6 +209,8 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
 | `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
 | `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
+| `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |
+| `POST`   | `/users/:id/verify`                           | Owner            | Marks the account as verified; audited.                         |
 | `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                  |
 | `GET`    | `/applications`                               | Owner            | Lists applications.                                             |
 | `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |

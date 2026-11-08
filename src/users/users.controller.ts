@@ -5,7 +5,7 @@ import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
 import { parseUserUpdatePayload } from './user-update-payload';
 import { User as UserInterface } from './users.interface';
-import { UsersService } from './users.service';
+import { UserSupportActionContext, UsersService } from './users.service';
 
 const pickUserProfile = (
   body: Record<string, unknown>,
@@ -27,6 +27,14 @@ const pickUserProfile = (
 
   return profile;
 };
+
+const supportContext = (req: Request): UserSupportActionContext => ({
+  ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
+  ...(req.ip === undefined ? {} : { ipAddress: req.ip }),
+  ...(req.headers['user-agent'] === undefined
+    ? {}
+    : { userAgent: req.headers['user-agent'] }),
+});
 
 export class UsersController {
   constructor(private readonly userService: UsersService) {}
@@ -79,5 +87,21 @@ export class UsersController {
     await this.userService.deleteOneById(id, req.user?.id);
 
     res.status(204).json();
+  }
+
+  @Catch()
+  async unlock(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const user = await this.userService.unlock(id, supportContext(req));
+
+    res.status(200).json(user);
+  }
+
+  @Catch()
+  async verify(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const user = await this.userService.markVerified(id, supportContext(req));
+
+    res.status(200).json(user);
   }
 }
