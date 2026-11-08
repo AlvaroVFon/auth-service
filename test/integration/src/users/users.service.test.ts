@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 
-import { AuditEvent, AuditResult } from '../../../../src/audit';
+import { AuditEvent, AuditResult, type AuditPort } from '../../../../src/audit';
 import { Roles } from '../../../../src/common/enums/roles.enum';
 import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
@@ -968,10 +968,18 @@ describe('UsersService email normalization', () => {
 });
 
 describe('UsersService support actions', () => {
-  const buildService = (record: ReturnType<typeof mock.fn>) =>
-    new UsersService(User, new CryptoService(), 5, 900000, undefined, {
-      record,
-    } as never);
+  const buildService = (record: ReturnType<typeof mock.fn>) => {
+    const audit = { record } satisfies Pick<AuditPort, 'record'>;
+
+    return new UsersService(
+      User,
+      new CryptoService(),
+      5,
+      900000,
+      undefined,
+      audit as AuditPort,
+    );
+  };
 
   const createBlockedUser = () =>
     fixture.create<UserInterface>('User', {

@@ -161,19 +161,25 @@ describe('E2E users support actions', () => {
     assert.strictEqual(stored?.verified, false);
     assert.strictEqual(stored?.loginAttempts, 4);
 
-    const events = await request(app)
-      .get('/audit-events')
-      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
-      .query({ userId: user._id.toString() })
-      .expect(200);
-    const items = Array.isArray(events.body) ? events.body : events.body.items;
-    assert.strictEqual(
-      items.some(
-        (event: { event: string }) =>
-          event.event === 'user.unlocked' || event.event === 'user.verified',
-      ),
-      false,
-    );
+    for (const event of ['user.unlocked', 'user.verified']) {
+      const response = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({ event })
+        .expect(200);
+      const items = Array.isArray(response.body)
+        ? response.body
+        : response.body.items;
+
+      // Support events carry targetUserId, not userId, so filter client-side.
+      assert.strictEqual(
+        items.some(
+          (item: { targetUserId?: string }) =>
+            item.targetUserId === user._id.toString(),
+        ),
+        false,
+      );
+    }
   });
 
   test('AC-4: the support routes share the configured budget', async () => {
