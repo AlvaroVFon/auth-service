@@ -213,19 +213,15 @@ export class UsersService implements UsersPort {
   }
 
   /**
-   * Paginated management listing. The indexes serve the ordering (including the
-   * `_id` tie break); the case-insensitive `q` prefix search intentionally
-   * scans the collection because MongoDB cannot use a b-tree index for a regex
-   * with the `i` flag.
+   * Batched profile projection for a known id set. The inclusion select never
+   * returns credentials, lockout counters or MFA material.
    */
   async findSummariesByIds(ids: string[]): Promise<UserSummary[]> {
     if (ids.length === 0) {
       return [];
     }
     for (const id of ids) {
-      if (!OBJECTID_REGEX.test(id)) {
-        throw new InvalidArgumentError('Invalid ID format');
-      }
+      this.assertValidId(id);
     }
 
     const users = await this.usersModel
@@ -254,6 +250,12 @@ export class UsersService implements UsersPort {
     }));
   }
 
+  /**
+   * Paginated management listing. The indexes serve the ordering (including the
+   * `_id` tie break); the case-insensitive `q` prefix search intentionally
+   * scans the collection because MongoDB cannot use a b-tree index for a regex
+   * with the `i` flag.
+   */
   async findAll(
     query: ListQuery<UserSortField>,
   ): Promise<PaginatedResult<UserListItem>> {

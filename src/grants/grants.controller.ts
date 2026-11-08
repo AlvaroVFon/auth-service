@@ -2,8 +2,10 @@ import { Request, Response } from 'express';
 
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
-import { EntityNotFoundError } from '../common/exceptions/base.exception';
-import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../common/exceptions/base.exception';
 import { parseListQuery } from '../common/pagination';
 import {
   GRANT_MEMBER_LIST_OPTIONS,
