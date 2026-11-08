@@ -397,21 +397,38 @@ describe('ApplicationsService', () => {
       assert.deepStrictEqual(result.items, []);
     });
 
-    test('should keep a stable order across identical requests', async () => {
+    test('should keep a stable order across pages and requests', async () => {
       await createApplication({ name: 'Same name' });
       await createApplication({ name: 'Same name' });
       await createApplication({ name: 'Same name' });
 
-      const first = await applicationsService.findAll(
-        query({ sort: { field: 'name', direction: 1 } }),
-      );
-      const second = await applicationsService.findAll(
-        query({ sort: { field: 'name', direction: 1 } }),
-      );
+      const page = (pageNumber: number) =>
+        applicationsService.findAll(
+          query({
+            page: pageNumber,
+            limit: 2,
+            sort: { field: 'name', direction: 1 },
+          }),
+        );
 
+      const firstPage = await page(1);
+      const secondPage = await page(2);
+      const repeatedFirstPage = await page(1);
+
+      const ids = [
+        ...firstPage.items.map((application) => application._id.toString()),
+        ...secondPage.items.map((application) => application._id.toString()),
+      ];
+      assert.strictEqual(new Set(ids).size, 3);
       assert.deepStrictEqual(
-        first.items.map((application) => application._id.toString()),
-        second.items.map((application) => application._id.toString()),
+        firstPage.items.map((application) => application._id.toString()),
+        repeatedFirstPage.items.map((application) =>
+          application._id.toString(),
+        ),
+      );
+      assert.strictEqual(
+        firstPage.items[0]!._id.toString() < firstPage.items[1]!._id.toString(),
+        true,
       );
     });
 

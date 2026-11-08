@@ -105,24 +105,36 @@ describe('E2E Applications catalog listing', () => {
     assert.strictEqual(invalidSort.body.code, 'INVALID_ARGUMENT');
   });
 
-  test('AC-4: keeps a stable order across identical requests', async () => {
-    await createApplications([{ name: 'Same name' }]);
-    await createApplications([{ name: 'Same name' }]);
+  test('AC-4: keeps a stable order across pages and requests', async () => {
+    await createApplications([
+      { name: 'Same name' },
+      { name: 'Same name' },
+      { name: 'Same name' },
+    ]);
 
-    const first = await request(app)
-      .get('/applications')
-      .query({ sort: 'name:asc' })
-      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
-      .expect(200);
-    const second = await request(app)
-      .get('/applications')
-      .query({ sort: 'name:asc' })
-      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
-      .expect(200);
+    const page = (pageNumber: number) =>
+      request(app)
+        .get('/applications')
+        .query({ sort: 'name:asc', page: pageNumber, limit: 1 })
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .expect(200);
 
+    const firstPage = await page(1);
+    const secondPage = await page(2);
+    const repeatedFirstPage = await page(1);
+
+    const firstId = firstPage.body.items[0]._id as string;
+    const secondId = secondPage.body.items[0]._id as string;
+
+    // The `_id` tie break keeps equal names in a deterministic order, so the
+    // same row cannot appear twice or be skipped between pages.
+    assert.notStrictEqual(firstId, secondId);
+    assert.strictEqual(firstId < secondId, true);
     assert.deepStrictEqual(
-      first.body.items.map((application: Application) => application._id),
-      second.body.items.map((application: Application) => application._id),
+      repeatedFirstPage.body.items.map(
+        (application: Application) => application._id,
+      ),
+      [firstId],
     );
   });
 
