@@ -56,6 +56,13 @@ exits with an `InvalidArgumentError`. See [Environment variables](#environment-v
 for the purpose, default value and production requirement of each one, and
 [API reference](#api-reference) for every route and its access level.
 
+Policy settings (`JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION`/`JWT_REFRESH_EXPIRES_IN`,
+`MAX_SESSIONS_PER_USER`, `INVITATION_LINK_EXPIRATION_MS` and `APP_NAME`) are copied
+into the global settings document the first time the service boots. From then on the
+stored value wins over the environment, so changing those variables requires updating
+the global settings (the settings endpoints arrive with #149/#150) or removing the
+`global` document to re-seed; they are bootstrap-only after the first run.
+
 ### Environment variables
 
 #### Application
