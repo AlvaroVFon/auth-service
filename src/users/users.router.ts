@@ -86,5 +86,17 @@ export class UsersRouter {
       supportRateLimiter,
       this.userController.verify.bind(this.userController),
     );
+
+    this.app.delete(
+      '/users/:id/sessions/:sessionId',
+      supportRateLimiter,
+      this.userController.revokeUserSession.bind(this.userController),
+    );
+
+    this.app.delete(
+      '/users/:id/sessions',
+      supportRateLimiter,
+      this.userController.revokeAllUserSessions.bind(this.userController),
+    );
   }
 }

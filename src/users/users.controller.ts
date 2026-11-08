@@ -76,6 +76,23 @@ export class UsersController {
   }
 
   @Catch()
+  async revokeUserSession(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const sessionId = req.params.sessionId as string;
+    await this.userService.revokeSession(id, sessionId, supportContext(req));
+
+    res.status(204).json();
+  }
+
+  @Catch()
+  async revokeAllUserSessions(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    await this.userService.revokeAllSessions(id, supportContext(req));
+
+    res.status(204).json();
+  }
+
+  @Catch()
   async findAll(req: Request, res: Response): Promise<void> {
     const query = parseListQuery<UserSortField>(
       req.query as Record<string, unknown>,

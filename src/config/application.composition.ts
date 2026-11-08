@@ -294,6 +294,9 @@ export const createApplicationComposition = (
   usersModule.service.setSessionRevoker(sessionService);
   usersModule.service.setSessionLister({
     listSessions: (userId) => sessionService.list(userId),
+    revokeSession: (userId, sessionId) =>
+      sessionService.revoke(userId, sessionId),
+    revokeAllSessions: (userId) => sessionService.revokeAll(userId),
   });
   const mfaService = new MfaService(
     usersModule.service,

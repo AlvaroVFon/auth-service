@@ -1097,7 +1097,11 @@ describe('UsersService session listing', () => {
     const user = await createUser();
     const listSessions = mock.fn(async () => []);
     const service = new UsersService(User, new CryptoService());
-    service.setSessionLister({ listSessions });
+    service.setSessionLister({
+      listSessions,
+      revokeSession: async () => {},
+      revokeAllSessions: async () => {},
+    });
 
     const sessions = await service.listSessions(user._id.toString());
 
@@ -1127,7 +1131,11 @@ describe('UsersService session listing', () => {
       verified: true,
     });
     const service = new UsersService(User, new CryptoService());
-    service.setSessionLister({ listSessions });
+    service.setSessionLister({
+      listSessions,
+      revokeSession: async () => {},
+      revokeAllSessions: async () => {},
+    });
 
     for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
       await assert.rejects(
@@ -1145,5 +1153,105 @@ describe('UsersService session listing', () => {
       service.listSessions('bad-id'),
       new InvalidArgumentError('Invalid ID format'),
     );
+  });
+});
+
+describe('UsersService session revocation', () => {
+  const createUser = () =>
+    fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('revoke-session+'),
+      password: 'hashedpassword123',
+    });
+
+  const buildService = (overrides: {
+    listSessions?: (userId: string) => Promise<never[]>;
+    revokeSession?: (userId: string, sessionId: string) => Promise<void>;
+    revokeAllSessions?: (userId: string) => Promise<void>;
+    record?: ReturnType<typeof mock.fn>;
+  }) => {
+    const record = overrides.record ?? mock.fn(async () => {});
+    const service = new UsersService(
+      User,
+      new CryptoService(),
+      5,
+      900000,
+      undefined,
+      { record } as never,
+    );
+    service.setSessionLister({
+      listSessions: overrides.listSessions ?? (async () => []),
+      revokeSession: overrides.revokeSession ?? (async () => {}),
+      revokeAllSessions: overrides.revokeAllSessions ?? (async () => {}),
+    });
+
+    return { service, record };
+  };
+
+  test('revokes one session and audits the session id', async () => {
+    const user = await createUser();
+    const sessionId = '550e8400-e29b-41d4-a716-446655440099';
+    const revokeSession = mock.fn(async () => {});
+    const { service, record } = buildService({ revokeSession });
+
+    await service.revokeSession(user._id.toString(), sessionId, {
+      actorId: DEFAULT_USER._id.toString(),
+    });
+
+    assert.deepStrictEqual(revokeSession.mock.calls[0]?.arguments, [
+      user._id.toString(),
+      sessionId,
+    ]);
+    assert.strictEqual(record.mock.callCount(), 1);
+    const event = record.mock.calls[0]?.arguments[0] as Record<string, unknown>;
+    assert.strictEqual(event.event, AuditEvent.SESSION_REVOKED_BY_ADMIN);
+    assert.strictEqual(event.sessionId, sessionId);
+    assert.strictEqual(event.targetUserId, user._id.toString());
+  });
+
+  test('revokes every session and audits each one', async () => {
+    const user = await createUser();
+    const sessions = [{ id: 'session-a' }, { id: 'session-b' }] as never[];
+    const revokeAllSessions = mock.fn(async () => {});
+    const { service, record } = buildService({
+      listSessions: (async () => sessions) as never,
+      revokeAllSessions,
+    });
+
+    await service.revokeAllSessions(user._id.toString());
+
+    assert.strictEqual(revokeAllSessions.mock.callCount(), 1);
+    assert.strictEqual(record.mock.callCount(), 2);
+    const calls = record.mock.calls as Array<{
+      arguments: [{ sessionId: string }];
+    }>;
+    const ids = calls.map((call) => call.arguments[0].sessionId);
+    assert.deepStrictEqual(ids.sort(), ['session-a', 'session-b']);
+  });
+
+  test('does not revoke or audit the owner, an unknown id or a malformed id', async () => {
+    const owner = await fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('revoke-owner+'),
+      role: Roles.OWNER,
+      password: 'hashedpassword123',
+      verified: true,
+    });
+    const revokeSession = mock.fn(async () => {});
+    const { service, record } = buildService({ revokeSession });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.revokeSession(id, 'any-session'),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+    await assert.rejects(
+      service.revokeSession('bad-id', 'any-session'),
+      new InvalidArgumentError('Invalid ID format'),
+    );
+
+    assert.strictEqual(revokeSession.mock.callCount(), 0);
+    assert.strictEqual(record.mock.callCount(), 0);
   });
 });

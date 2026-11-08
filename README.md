@@ -208,6 +208,8 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/users`                                      | Owner            | Lists users.                                                    |
 | `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
 | `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
+| `DELETE` | `/users/:id/sessions/:sessionId`              | Owner            | Revokes one session of the user; audited.                       |
+| `DELETE` | `/users/:id/sessions`                         | Owner            | Revokes every session of the user; audited per session.         |
 | `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
 | `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
 | `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |

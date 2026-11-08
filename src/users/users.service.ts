@@ -308,9 +308,10 @@ export class UsersService implements UsersPort {
   }
 
   private async recordSupportEvent(
-    event: AuditEvent.USER_UNLOCKED | AuditEvent.USER_VERIFIED,
+    event: AuditEvent,
     targetUserId: string,
     context: UserSupportActionContext,
+    sessionId?: string,
   ): Promise<void> {
     if (!this.auditService) {
       return;
@@ -327,6 +328,7 @@ export class UsersService implements UsersPort {
       ...(context.userAgent === undefined
         ? {}
         : { userAgent: context.userAgent }),
+      ...(sessionId === undefined ? {} : { sessionId }),
     });
   }
 
@@ -355,12 +357,51 @@ export class UsersService implements UsersPort {
    * missing, like an unknown id, so the support surface never exposes it.
    */
   async listSessions(id: string): Promise<UserSessionView[]> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
+    await this.assertSessionTarget(id);
+
+    return this.requireSessionManager().listSessions(id);
+  }
+
+  /** Revokes one session of the target and audits the session id. */
+  async revokeSession(
+    id: string,
+    sessionId: string,
+    context: UserSupportActionContext = {},
+  ): Promise<void> {
+    await this.assertSessionTarget(id);
+
+    await this.requireSessionManager().revokeSession(id, sessionId);
+    await this.recordSupportEvent(
+      AuditEvent.SESSION_REVOKED_BY_ADMIN,
+      id,
+      context,
+      sessionId,
+    );
+  }
+
+  /** Revokes every session of the target across audiences, auditing each one. */
+  async revokeAllSessions(
+    id: string,
+    context: UserSupportActionContext = {},
+  ): Promise<void> {
+    await this.assertSessionTarget(id);
+
+    const sessions = await this.requireSessionManager().listSessions(id);
+    await this.requireSessionManager().revokeAllSessions(id);
+
+    for (const session of sessions) {
+      await this.recordSupportEvent(
+        AuditEvent.SESSION_REVOKED_BY_ADMIN,
+        id,
+        context,
+        session.id,
+      );
     }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
-    }
+  }
+
+  /** Validates the id and resolves the target, excluding the owner. */
+  private async assertSessionTarget(id: string): Promise<void> {
+    this.assertValidId(id);
 
     const user = await this.usersModel
       .findOne({ _id: id, role: { $ne: Roles.OWNER } })
@@ -369,12 +410,14 @@ export class UsersService implements UsersPort {
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
+  }
 
+  private requireSessionManager(): UserSessionsPort {
     if (!this.sessionLister) {
       throw new Error('Session lister is not configured');
     }
 
-    return this.sessionLister.listSessions(id);
+    return this.sessionLister;
   }
 
   async updateOneById(

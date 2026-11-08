@@ -69,6 +69,8 @@ export interface UserSessionView {
 /** Lists the active sessions of a user, implemented by the auth domain. */
 export interface UserSessionsPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
+  revokeSession(userId: string, sessionId: string): Promise<void>;
+  revokeAllSessions(userId: string): Promise<void>;
 }
 
 export interface UsersPort {
