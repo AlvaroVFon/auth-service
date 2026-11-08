@@ -1,6 +1,7 @@
 import type { Application } from 'express';
 
 import type { AuditPort } from '../audit';
+import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { LoggerInterface } from '../libs/logger';
@@ -23,10 +24,14 @@ export class ApplicationsModule {
     this.controller = new ApplicationsController(this.service);
   }
 
-  initialize(app: Application): void {
+  initialize(
+    app: Application,
+    applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware,
+  ): void {
     new ApplicationsRouter(
       this.authenticationMiddleware,
       this.authorizationMiddleware,
+      applicationAuthorizationMiddleware,
       this.controller,
       app,
     );

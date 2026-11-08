@@ -211,7 +211,7 @@ Every route is declared in a module router and mounted by
 | `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
 | `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                  |
 | `GET`    | `/applications`                               | Owner            | Lists applications.                                             |
-| `GET`    | `/applications/:id`                           | Owner            | Reads one application.                                          |
+| `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
 | `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
 | `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
 | `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                  |
@@ -306,6 +306,14 @@ the owner token has no `aud` and is the only one accepted by `/applications` and
 while invalid credentials always return the same generic `401`.
 
 ### Application lifecycle
+
+`GET /applications/:id` is readable by the owner and by the admin of that application.
+The route accepts the global owner token and app-scoped tokens, and only the `admin`
+grant authorizes the read. An application admin asking for another application, a user
+with a `viewer` or `editor` grant and an id that does not exist all receive the same
+`404`, so the route cannot be used to enumerate applications. Because the read resolves
+the application with `findAssignableById`, an archived application answers `404` to its
+admin too; the owner keeps reading it.
 
 The owner renames an application with `PATCH /applications/:id { "name": "..." }` and
 activates or deactivates it with `PATCH /applications/:id { "active": false }`. Only
