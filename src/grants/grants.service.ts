@@ -71,8 +71,9 @@ export class GrantsService implements GrantsPort {
 
   /**
    * Grants a role by email: an existing account gets (or converges to) the
-   * grant, and an email without an account receives an invitation. The result
-   * is identical in both cases so the caller cannot probe account existence.
+   * grant, and an email without an account receives an invitation. The
+   * response body is identical in both cases; the resulting grant or pending
+   * invitation is visible to the application admins by design.
    */
   async grantMemberByEmail(input: GrantMemberInput): Promise<GrantedMember> {
     const email = normalizeEmail(input.email ?? '');
@@ -101,16 +102,40 @@ export class GrantsService implements GrantsPort {
     const user = await this.usersService.findByEmail(email);
 
     if (!user) {
-      return this.inviteMember({
-        email,
-        applicationId: input.applicationId,
-        role: input.role,
-        application,
-      });
+      try {
+        return await this.inviteMember({
+          email,
+          applicationId: input.applicationId,
+          role: input.role,
+          application,
+        });
+      } catch (error) {
+        // A signup can land between the lookup and the invitation: retry the
+        // grant path instead of failing with the generic invitation error.
+        if (error instanceof InvalidArgumentError) {
+          const created = await this.usersService.findByEmail(email);
+          if (created) {
+            return this.grantExistingUser(
+              input,
+              created._id.toString(),
+              isOwner,
+            );
+          }
+        }
+        throw error;
+      }
     }
 
+    return this.grantExistingUser(input, user._id.toString(), isOwner);
+  }
+
+  private async grantExistingUser(
+    input: GrantMemberInput,
+    userId: string,
+    isOwner: boolean,
+  ): Promise<GrantedMember> {
     const existing = await this.grantModel.findOne({
-      userId: user._id,
+      userId: new Types.ObjectId(userId),
       applicationId: new Types.ObjectId(input.applicationId),
     });
 
@@ -119,7 +144,7 @@ export class GrantsService implements GrantsPort {
     }
 
     const grant = await this.upsertGrant(
-      user._id.toString(),
+      userId,
       input.applicationId,
       input.role,
     );
@@ -129,13 +154,13 @@ export class GrantsService implements GrantsPort {
     }
 
     await this.recordGrantEvent(AuditEvent.MEMBER_GRANTED, {
-      targetUserId: user._id.toString(),
+      targetUserId: userId,
       applicationId: input.applicationId,
       role: input.role,
       ...(input.actorId === undefined ? {} : { actorId: input.actorId }),
     });
 
-    return { email, role: input.role };
+    return { email: normalizeEmail(input.email ?? ''), role: input.role };
   }
 
   setInvitationsPort(invitations: InvitationsPort): void {
