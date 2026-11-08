@@ -15,6 +15,7 @@ const bearer = (token: string) => `Bearer ${token}`;
 
 interface ApplicationSeed {
   name?: string;
+  slug?: string;
 }
 
 describe('E2E Applications catalog listing', () => {
@@ -27,8 +28,11 @@ describe('E2E Applications catalog listing', () => {
   const createApplications = (seeds: ApplicationSeed[] = [{}]) =>
     fixture.createMany<Application>(
       'Application',
-      seeds.map(({ name }) => ({
-        ...ApplicationFactory.generate(name === undefined ? {} : { name }),
+      seeds.map(({ name, slug }) => ({
+        ...ApplicationFactory.generate({
+          ...(name === undefined ? {} : { name }),
+          ...(slug === undefined ? {} : { slug }),
+        }),
         _id: new Types.ObjectId(),
       })),
     );
@@ -49,7 +53,8 @@ describe('E2E Applications catalog listing', () => {
   });
 
   test('AC-2: searches by name or slug prefix and reflects it in the total', async () => {
-    await createApplications([{ name: 'Acme portal' }, { name: 'acme labs' }]);
+    await createApplications([{ name: 'Acme portal' }]);
+    await createApplications([{ name: 'Another', slug: 'acme-slug' }]);
     await createApplications([{ name: 'Other application' }]);
 
     const response = await request(app)
@@ -59,9 +64,18 @@ describe('E2E Applications catalog listing', () => {
       .expect(200);
 
     assert.strictEqual(response.body.total, 2);
-    for (const application of response.body.items) {
-      assert.match(application.name, /^acme/i);
-    }
+    assert.ok(
+      response.body.items.some(
+        (application: Application) =>
+          application.slug === 'acme-slug' || /^acme/i.test(application.name),
+      ),
+    );
+    assert.ok(
+      response.body.items.every(
+        (application: Application) =>
+          application.slug === 'acme-slug' || /^acme/i.test(application.name),
+      ),
+    );
   });
 
   test('AC-3: clamps the limit and rejects invalid parameters and sorts', async () => {

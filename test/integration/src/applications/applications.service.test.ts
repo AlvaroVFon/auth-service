@@ -336,7 +336,9 @@ describe('ApplicationsService', () => {
       ...overrides,
     });
 
-    const createApplication = (overrides: { name?: string } = {}) => {
+    const createApplication = (
+      overrides: { name?: string; slug?: string } = {},
+    ) => {
       const application = ApplicationFactory.generate(overrides);
       return applicationsService.create({
         name: application.name,
@@ -372,15 +374,18 @@ describe('ApplicationsService', () => {
 
     test('should search by name or slug prefix and reflect it in the total', async () => {
       await createApplication({ name: 'Acme portal' });
-      await createApplication({ name: 'acme analytics' });
+      await createApplication({ name: 'Another', slug: 'acme-slug' });
       await createApplication({ name: 'Other' });
 
       const result = await applicationsService.findAll(query({ q: 'acme' }));
 
       assert.strictEqual(result.total, 2);
-      for (const application of result.items) {
-        assert.match(application.name, /^acme/i);
-      }
+      assert.ok(
+        result.items.some((application) => application.slug === 'acme-slug'),
+      );
+      assert.ok(
+        result.items.some((application) => application.name.startsWith('Acme')),
+      );
     });
 
     test('should treat the search term literally', async () => {
