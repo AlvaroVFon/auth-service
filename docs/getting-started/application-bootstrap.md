@@ -182,8 +182,26 @@ from the invitation.
 
 ### 4b. Grant an existing account
 
-If the person already has an account, the owner (or an app admin) writes the
-grant directly:
+If the person already has an account, look it up first. The listing is
+paginated, so read the identifier from `items`:
+
+```bash
+curl -s "http://localhost:3000/users?q=editor@example.com" \
+  -H "Authorization: Bearer $OWNER_TOKEN"
+```
+
+```json
+{
+  "items": [
+    { "_id": "65f1c0a2b7d4e90012a3b4c6", "email": "editor@example.com" }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20
+}
+```
+
+The owner (or an app admin) then writes the grant directly:
 
 ```bash
 curl -s -X PUT "http://localhost:3000/applications/$APP_ID/grants" \

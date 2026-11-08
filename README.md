@@ -205,7 +205,7 @@ Every route is declared in a module router and mounted by
 | Method   | Route                                         | Access           | Notes                                                           |
 | -------- | --------------------------------------------- | ---------------- | --------------------------------------------------------------- |
 | `POST`   | `/users`                                      | Owner            | Creates a verified user directly.                               |
-| `GET`    | `/users`                                      | Owner            | Lists users.                                                    |
+| `GET`    | `/users`                                      | Owner            | Lists users; paginated envelope (see below).                    |
 | `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
 | `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
 | `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
@@ -213,7 +213,7 @@ Every route is declared in a module router and mounted by
 | `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |
 | `POST`   | `/users/:id/verify`                           | Owner            | Marks the account as verified; audited.                         |
 | `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                  |
-| `GET`    | `/applications`                               | Owner            | Lists applications.                                             |
+| `GET`    | `/applications`                               | Owner            | Lists applications; paginated envelope (see below).             |
 | `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
 | `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
 | `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
@@ -243,11 +243,49 @@ returns `400 INVALID_ARGUMENT`, matching signup and password reset. Changing the
 email still does not trigger a verification flow: the account keeps its current
 `verified` flag.
 
+### Listing contract
+
+`GET /users`, `GET /applications` and `GET /audit-events` share one listing
+contract:
+
+| Parameter | Meaning                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `page`    | 1-based page number (default `1`).                                                                                             |
+| `limit`   | Page size, clamped to `1..100` (default `20`; `50` for audit events).                                                          |
+| `q`       | Case-insensitive prefix search. Users: `email`, `username`. Applications: `name`, `slug`. Audit: `email`, `event`, `audience`. |
+| `sort`    | `field`, `field:asc`, `field:desc` or `-field`; `_id` is appended as a stable tie break.                                       |
+
+Sortable fields: users `email`, `username`, `role`, `verified`, `createdAt`;
+applications `name`, `slug`, `audience`, `active`, `createdAt`; audit events
+`createdAt`.
+
+```bash
+curl -s "http://localhost:3000/users?page=1&limit=20&q=ali&sort=email:asc" \
+  -H "Authorization: Bearer $OWNER_TOKEN"
+```
+
+```json
+{
+  "items": [
+    { "_id": "65f1c0a2b7d4e90012a3b4c6", "email": "alice@example.com" }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20
+}
+```
+
+**Breaking change:** `GET /users` and `GET /applications` used to return a bare
+array and now return this envelope; read `items` instead of indexing the body
+directly. `GET /audit-events` also returns the envelope and no longer stops at a
+fixed 200 events: walk it with `page`/`limit` (the total is stable for a static
+snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
+
 ### Audit
 
-| Method | Route           | Access | Notes                                                        |
-| ------ | --------------- | ------ | ------------------------------------------------------------ |
-| `GET`  | `/audit-events` | Owner  | Filters by `userId`, `applicationId`, `event`, `from`, `to`. |
+| Method | Route           | Access | Notes                                                                                    |
+| ------ | --------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `GET`  | `/audit-events` | Owner  | Filters by `userId`, `applicationId`, `event`, `from`, `to`; paginated envelope (above). |
 
 ## Deployment
 
