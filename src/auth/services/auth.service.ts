@@ -243,8 +243,7 @@ export class AuthService {
         result: AuditResult.FAILURE,
         userId,
         email,
-        ...(applicationId === undefined ? {} : { applicationId }),
-        ...(application ? { audience: audience ?? application } : {}),
+        ...this.resolvedApplicationAudit(resolvedApplication, application),
         ...this.auditContext(ctx),
       });
       throw error;
