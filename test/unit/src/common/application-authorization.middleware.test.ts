@@ -5,6 +5,7 @@ import {
   ForbiddenError,
   UnauthorizedError,
 } from '../../../../src/common/exceptions/auth.exceptions';
+import { EntityNotFoundError } from '../../../../src/common/exceptions/base.exception';
 import { ApplicationAuthorizationMiddleware } from '../../../../src/common/middlewares/application-authorization.middleware';
 import { GrantRoles } from '../../../../src/grants/grants.interface';
 
@@ -20,6 +21,18 @@ const buildRequest = (
     ...(audience === undefined ? {} : { audience }),
   },
   params: { applicationId: APPLICATION_ID },
+});
+
+const buildReadRequest = (
+  role: Roles | GrantRoles,
+  audience?: string,
+): Partial<Request> => ({
+  user: {
+    id: '507f191e810c19729de860ea',
+    role,
+    ...(audience === undefined ? {} : { audience }),
+  },
+  params: { id: APPLICATION_ID },
 });
 
 describe('ApplicationAuthorizationMiddleware', () => {
@@ -161,5 +174,146 @@ describe('ApplicationAuthorizationMiddleware', () => {
     );
 
     assert.ok(next.mock.calls[0]?.arguments[0] instanceof ForbiddenError);
+  });
+
+  describe('allowApplicationReader', () => {
+    test('should let the owner through without a grant lookup', async () => {
+      await middleware.allowApplicationReader(
+        buildReadRequest(Roles.OWNER) as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+      assert.strictEqual(findByUserAndApplication.mock.callCount(), 0);
+    });
+
+    test('should let the admin of the application through', async () => {
+      findByUserAndApplication.mock.mockImplementation(async () => ({
+        role: GrantRoles.ADMIN,
+      }));
+
+      await middleware.allowApplicationReader(
+        buildReadRequest(Roles.USER) as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+    });
+
+    test('should accept an application token whose audience matches', async () => {
+      findByUserAndApplication.mock.mockImplementation(async () => ({
+        role: GrantRoles.ADMIN,
+      }));
+
+      await middleware.allowApplicationReader(
+        buildReadRequest(GrantRoles.ADMIN, 'app-aud') as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.strictEqual(next.mock.calls[0]?.arguments[0], undefined);
+      assert.deepStrictEqual(
+        findByUserAndApplication.mock.calls[0]?.arguments,
+        [
+          '507f191e810c19729de860ea',
+          APPLICATION_ID,
+          {
+            application: {
+              _id: APPLICATION_ID,
+              audience: 'app-aud',
+              active: true,
+            },
+          },
+        ],
+      );
+    });
+
+    test('should answer 404 for an application token of another audience', async () => {
+      findByUserAndApplication.mock.mockImplementation(async () => ({
+        role: GrantRoles.ADMIN,
+      }));
+
+      await middleware.allowApplicationReader(
+        buildReadRequest(GrantRoles.ADMIN, 'other-aud') as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.ok(
+        next.mock.calls[0]?.arguments[0] instanceof EntityNotFoundError,
+      );
+      assert.strictEqual(findByUserAndApplication.mock.callCount(), 0);
+    });
+
+    test('should answer 404 when the application does not exist or is archived', async () => {
+      findAssignableById.mock.mockImplementation(async () => null);
+
+      await middleware.allowApplicationReader(
+        buildReadRequest(Roles.USER) as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.ok(
+        next.mock.calls[0]?.arguments[0] instanceof EntityNotFoundError,
+      );
+    });
+
+    test('should answer 404 for viewer and editor grants', async () => {
+      for (const role of [GrantRoles.VIEWER, GrantRoles.EDITOR]) {
+        findByUserAndApplication.mock.mockImplementation(async () => ({
+          role,
+        }));
+        next = mock.fn();
+
+        await middleware.allowApplicationReader(
+          buildReadRequest(Roles.USER) as Request,
+          {} as Response,
+          next,
+        );
+
+        assert.ok(
+          next.mock.calls[0]?.arguments[0] instanceof EntityNotFoundError,
+        );
+      }
+    });
+
+    test('should answer 404 for a user without a grant', async () => {
+      findByUserAndApplication.mock.mockImplementation(async () => null);
+
+      await middleware.allowApplicationReader(
+        buildReadRequest(Roles.USER) as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.ok(
+        next.mock.calls[0]?.arguments[0] instanceof EntityNotFoundError,
+      );
+    });
+
+    test('should reject an unauthenticated request', async () => {
+      await middleware.allowApplicationReader(
+        { params: {} } as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.ok(next.mock.calls[0]?.arguments[0] instanceof UnauthorizedError);
+    });
+
+    test('should answer 404 without an application id', async () => {
+      await middleware.allowApplicationReader(
+        { user: { id: '1', role: Roles.USER }, params: {} } as Request,
+        {} as Response,
+        next,
+      );
+
+      assert.ok(
+        next.mock.calls[0]?.arguments[0] instanceof EntityNotFoundError,
+      );
+    });
   });
 });

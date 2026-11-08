@@ -25,6 +25,7 @@ import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
 import { SessionService } from '../auth/tokens/session.service';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
+import { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { GrantsPort } from '../grants';
@@ -393,7 +394,15 @@ export const createApplicationComposition = (
       GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
       healthModule.initialize(app);
       jwksModule.initialize(app);
-      applicationsModule.initialize(app);
+      // The catalog module is built before grants, so its authorization
+      // middleware is wired here, once both services exist.
+      applicationsModule.initialize(
+        app,
+        new ApplicationAuthorizationMiddleware(
+          grantsModule.service,
+          applicationsModule.service,
+        ),
+      );
       grantsModule.initialize(app);
       usersModule.initialize(app);
       authModule.initialize(app);
