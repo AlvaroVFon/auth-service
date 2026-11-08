@@ -880,13 +880,14 @@ describe('UsersService session listing', () => {
     ]);
   });
 
-  test('returns an empty list when no lister is wired', async () => {
+  test('fails closed when no lister is wired', async () => {
     const user = await createUser();
     const service = new UsersService(User, new CryptoService());
 
-    const sessions = await service.listSessions(user._id.toString());
-
-    assert.deepStrictEqual(sessions, []);
+    await assert.rejects(
+      service.listSessions(user._id.toString()),
+      new Error('Session lister is not configured'),
+    );
   });
 
   test('answers 404 for the owner and for an unknown id', async () => {

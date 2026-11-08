@@ -228,7 +228,11 @@ export class UsersService implements UsersPort {
       throw new EntityNotFoundError('User not found');
     }
 
-    return this.sessionLister?.listSessions(id) ?? [];
+    if (!this.sessionLister) {
+      throw new Error('Session lister is not configured');
+    }
+
+    return this.sessionLister.listSessions(id);
   }
 
   async updateOneById(
