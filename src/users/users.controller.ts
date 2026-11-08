@@ -55,6 +55,14 @@ export class UsersController {
   }
 
   @Catch()
+  async listUserSessions(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const sessions = await this.userService.listSessions(id);
+
+    res.status(200).json(sessions);
+  }
+
+  @Catch()
   async findAll(_req: Request, res: Response): Promise<void> {
     const users = await this.userService.findAll();
 

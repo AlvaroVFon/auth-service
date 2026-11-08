@@ -25,12 +25,15 @@ import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
   UserSessionRevokerPort,
+  UserSessionsPort,
+  UserSessionView,
   UsersPort,
 } from './users.port';
 
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
   private sessionRevoker?: UserSessionRevokerPort;
+  private sessionLister?: UserSessionsPort;
 
   constructor(
     private readonly usersModel: Model<UserInterface>,
@@ -199,6 +202,33 @@ export class UsersService implements UsersPort {
 
   setSessionRevoker(revoker: UserSessionRevokerPort): void {
     this.sessionRevoker = revoker;
+  }
+
+  setSessionLister(lister: UserSessionsPort): void {
+    this.sessionLister = lister;
+  }
+
+  /**
+   * Lists the active sessions of the target user. The owner is reported as
+   * missing, like an unknown id, so the support surface never exposes it.
+   */
+  async listSessions(id: string): Promise<UserSessionView[]> {
+    if (!id) {
+      throw new InvalidArgumentError('ID is required');
+    }
+    if (!OBJECTID_REGEX.test(id)) {
+      throw new InvalidArgumentError('Invalid ID format');
+    }
+
+    const user = await this.usersModel
+      .findOne({ _id: id, role: { $ne: Roles.OWNER } })
+      .select('_id');
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    return this.sessionLister?.listSessions(id) ?? [];
   }
 
   async updateOneById(

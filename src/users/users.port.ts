@@ -15,6 +15,22 @@ export interface UserSessionRevokerPort {
   revokeAll(userId: string): Promise<void>;
 }
 
+/** Active session as exposed by the owner support surface. */
+export interface UserSessionView {
+  id: string;
+  device: string | null;
+  application: string | null;
+  ipAddress: string | null;
+  createdAt: Date | null;
+  lastActivityAt: Date;
+  expiresAt: Date;
+}
+
+/** Lists the active sessions of a user, implemented by the auth domain. */
+export interface UserSessionsPort {
+  listSessions(userId: string): Promise<UserSessionView[]>;
+}
+
 export interface UsersPort {
   verifyCredentials(email: string, password: string): Promise<User>;
   createVerifiedUser(input: CreateVerifiedUserInput): Promise<User>;
@@ -35,6 +51,8 @@ export interface UsersPort {
   recordMfaStep(id: string, step: number): Promise<boolean>;
   resetMfaFailures(id: string): Promise<void>;
   consumeMfaRecoveryCode(id: string, codeHash: string): Promise<boolean>;
+  listSessions(userId: string): Promise<UserSessionView[]>;
   setGrantsCleaner(cleaner: UserGrantsCleanerPort): void;
   setSessionRevoker(revoker: UserSessionRevokerPort): void;
+  setSessionLister(lister: UserSessionsPort): void;
 }
