@@ -33,6 +33,7 @@ import { User as UserInterface } from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
+  UserSummary,
   UserListItem,
   UserSessionRevokerPort,
   UserSortField,
@@ -217,6 +218,42 @@ export class UsersService implements UsersPort {
    * scans the collection because MongoDB cannot use a b-tree index for a regex
    * with the `i` flag.
    */
+  async findSummariesByIds(ids: string[]): Promise<UserSummary[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    for (const id of ids) {
+      if (!OBJECTID_REGEX.test(id)) {
+        throw new InvalidArgumentError('Invalid ID format');
+      }
+    }
+
+    const users = await this.usersModel
+      .find({ _id: { $in: ids } })
+      .select('email username verified mfaEnabled createdAt lastLoginAt')
+      .lean<
+        Array<{
+          _id: { toString(): string };
+          email: string;
+          username?: string;
+          verified: boolean;
+          mfaEnabled?: boolean;
+          createdAt?: Date;
+          lastLoginAt?: Date | null;
+        }>
+      >();
+
+    return users.map((user) => ({
+      userId: user._id.toString(),
+      email: user.email,
+      ...(user.username === undefined ? {} : { username: user.username }),
+      verified: user.verified,
+      mfaEnabled: user.mfaEnabled ?? false,
+      ...(user.createdAt === undefined ? {} : { createdAt: user.createdAt }),
+      lastLoginAt: user.lastLoginAt ?? null,
+    }));
+  }
+
   async findAll(
     query: ListQuery<UserSortField>,
   ): Promise<PaginatedResult<UserListItem>> {

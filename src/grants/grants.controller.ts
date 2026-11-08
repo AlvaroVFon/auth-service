@@ -3,7 +3,12 @@ import { Request, Response } from 'express';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
-import type { GrantApplicationScope } from './grants.port';
+import { parseListQuery } from '../common/pagination';
+import {
+  GRANT_MEMBER_LIST_OPTIONS,
+  type GrantApplicationScope,
+  type GrantMemberSortField,
+} from './grants.port';
 import { GrantsService } from './grants.service';
 
 export class GrantsController {
@@ -24,6 +29,18 @@ export class GrantsController {
     );
 
     res.status(200).json(grant);
+  }
+
+  @Catch()
+  async listMembers(req: Request, res: Response): Promise<void> {
+    const applicationId = req.params.applicationId as string;
+    const query = parseListQuery<GrantMemberSortField>(
+      req.query as Record<string, unknown>,
+      GRANT_MEMBER_LIST_OPTIONS,
+    );
+    const members = await this.grantsService.listMembers(applicationId, query);
+
+    res.status(200).json(members);
   }
 
   @Catch()

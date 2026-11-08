@@ -224,6 +224,7 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
 | `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
 | `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
+| `GET`    | `/applications/:applicationId/members`        | Owner, app admin | Paginated member listing with readable user data.               |
 | `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                  |
 | `GET`    | `/applications/:applicationId/grants`         | Owner, app admin | Lists the application grants.                                   |
 | `GET`    | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant.                                                |

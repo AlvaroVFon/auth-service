@@ -7,7 +7,9 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
+import type { ListQuery } from '../../../../src/common/pagination';
 import { Grant, GrantRoles } from '../../../../src/grants/grants.interface';
+import type { GrantMemberSortField } from '../../../../src/grants/grants.port';
 import { GrantModel } from '../../../../src/grants/grants.schema';
 import { GrantsService } from '../../../../src/grants/grants.service';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
@@ -657,5 +659,126 @@ describe('GrantsService', () => {
         1,
       );
     });
+  });
+});
+
+describe('GrantsService.listMembers', () => {
+  let applicationsService: ApplicationsService;
+  let usersService: UsersService;
+  let grantsService: GrantsService;
+
+  before(() => {
+    applicationsService = new ApplicationsService(ApplicationModel);
+    usersService = new UsersService(User, new CryptoService());
+    grantsService = new GrantsService(
+      GrantModel,
+      applicationsService,
+      usersService,
+    );
+  });
+
+  const createApplication = async () => {
+    const application = ApplicationFactory.generate();
+
+    return applicationsService.create({
+      name: application.name,
+      slug: application.slug,
+      audience: application.audience,
+    });
+  };
+
+  const createMember = async (
+    applicationId: Types.ObjectId,
+    role: GrantRoles,
+    overrides: Partial<UserInterface> = {},
+  ) => {
+    const user = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate({ ...overrides }),
+    );
+    await fixture.create<Grant>(GrantModel.modelName, {
+      _id: new Types.ObjectId(),
+      userId: user._id,
+      applicationId,
+      role,
+    });
+
+    return user;
+  };
+
+  const query = (
+    overrides: Partial<ListQuery<GrantMemberSortField>> = {},
+  ): ListQuery<GrantMemberSortField> => ({
+    page: 1,
+    limit: 20,
+    sort: { field: 'createdAt', direction: -1 },
+    ...overrides,
+  });
+
+  test('paginates stably and hydrates the readable member fields', async () => {
+    const application = await createApplication();
+    const first = await createMember(application._id, GrantRoles.ADMIN, {
+      username: 'first-member',
+      verified: true,
+      mfaEnabled: true,
+      lastLoginAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    const second = await createMember(application._id, GrantRoles.VIEWER, {
+      username: 'second-member',
+    });
+
+    const pageOne = await grantsService.listMembers(
+      application._id.toString(),
+      query({ limit: 1 }),
+    );
+    const pageTwo = await grantsService.listMembers(
+      application._id.toString(),
+      query({ page: 2, limit: 1 }),
+    );
+
+    assert.strictEqual(pageOne.total, 2);
+    assert.strictEqual(pageTwo.total, 2);
+    const ids = [pageOne.items[0]!.userId, pageTwo.items[0]!.userId];
+    assert.deepStrictEqual(
+      ids.sort(),
+      [first._id.toString(), second._id.toString()].sort(),
+    );
+    assert.strictEqual(new Set(ids).size, 2);
+
+    const admin = [pageOne, pageTwo]
+      .flatMap((page) => page.items)
+      .find((member) => member.userId === first._id.toString());
+    assert.ok(admin);
+    assert.strictEqual(admin?.email, first.email);
+    assert.strictEqual(admin?.username, 'first-member');
+    assert.strictEqual(admin?.verified, true);
+    assert.strictEqual(admin?.mfaEnabled, true);
+    assert.strictEqual(admin?.role, GrantRoles.ADMIN);
+    assert.ok(admin?.createdAt instanceof Date);
+    assert.strictEqual(
+      admin?.lastLoginAt?.toISOString(),
+      '2026-01-01T00:00:00.000Z',
+    );
+    assert.strictEqual('password' in admin!, false);
+    assert.strictEqual('mfaSecret' in admin!, false);
+  });
+
+  test('drops orphan grants whose user no longer exists', async () => {
+    const application = await createApplication();
+    await createMember(application._id, GrantRoles.VIEWER);
+    await fixture.create<Grant>(GrantModel.modelName, {
+      _id: new Types.ObjectId(),
+      userId: new Types.ObjectId(),
+      applicationId: application._id,
+      role: GrantRoles.EDITOR,
+    });
+
+    const result = await grantsService.listMembers(
+      application._id.toString(),
+      query(),
+    );
+
+    assert.strictEqual(result.total, 2);
+    assert.strictEqual(result.items.length, 1);
   });
 });

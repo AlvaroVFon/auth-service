@@ -7,6 +7,12 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
+import {
+  buildPaginatedResult,
+  buildSortObject,
+  type ListQuery,
+  type PaginatedResult,
+} from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
 import type { UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
@@ -14,6 +20,8 @@ import type {
   AssignRoleInput,
   GrantApplicationScope,
   GrantedApplication,
+  GrantMember,
+  GrantMemberSortField,
   GrantsPort,
 } from './grants.port';
 
@@ -94,6 +102,40 @@ export class GrantsService implements GrantsPort {
     return (await this.loadActiveGrants(userId)).map(
       ({ grant, application }) => ({ application, role: grant.role }),
     );
+  }
+
+  async listMembers(
+    applicationId: string,
+    query: ListQuery<GrantMemberSortField>,
+  ): Promise<PaginatedResult<GrantMember>> {
+    assertObjectId(applicationId, 'applicationId');
+    await this.resolveApplication(applicationId);
+
+    const filter = { applicationId: new Types.ObjectId(applicationId) };
+    const [grants, total] = await Promise.all([
+      this.grantModel
+        .find(filter)
+        .sort(buildSortObject(query.sort))
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit),
+      this.grantModel.countDocuments(filter),
+    ]);
+
+    const summaries = await this.usersService.findSummariesByIds(
+      grants.map((grant) => grant.userId.toString()),
+    );
+    const summariesById = new Map(
+      summaries.map((summary) => [summary.userId, summary]),
+    );
+
+    // A grant whose user was deleted is not a member any more.
+    const items = grants.flatMap((grant) => {
+      const summary = summariesById.get(grant.userId.toString());
+
+      return summary ? [{ ...summary, role: grant.role }] : [];
+    });
+
+    return buildPaginatedResult(items, total, query);
   }
 
   async listByApplication(

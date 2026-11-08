@@ -71,7 +71,19 @@ export interface UserSessionsPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
 }
 
+/** Readable member projection; never includes credentials or MFA secrets. */
+export interface UserSummary {
+  userId: string;
+  email: string;
+  username?: string;
+  verified: boolean;
+  mfaEnabled: boolean;
+  createdAt?: Date;
+  lastLoginAt?: Date | null;
+}
+
 export interface UsersPort {
+  findSummariesByIds(ids: string[]): Promise<UserSummary[]>;
   findAll(
     query: ListQuery<UserSortField>,
   ): Promise<PaginatedResult<UserListItem>>;

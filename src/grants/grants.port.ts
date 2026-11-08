@@ -1,5 +1,27 @@
 import type { Application } from '../applications';
+import type {
+  ListQuery,
+  ListQueryOptions,
+  PaginatedResult,
+} from '../common/pagination';
+import type { UserSummary } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
+
+/** Fields the member listing may be ordered by. */
+export const GRANT_MEMBER_SORTABLE_FIELDS = ['createdAt', 'role'] as const;
+
+export type GrantMemberSortField =
+  (typeof GRANT_MEMBER_SORTABLE_FIELDS)[number];
+
+export const GRANT_MEMBER_LIST_OPTIONS: ListQueryOptions<GrantMemberSortField> =
+  {
+    sortableFields: GRANT_MEMBER_SORTABLE_FIELDS,
+    defaultSort: { field: 'createdAt', direction: -1 },
+  };
+
+export interface GrantMember extends UserSummary {
+  role: GrantRoles;
+}
 
 export interface AssignRoleInput {
   userId: string;
@@ -43,6 +65,10 @@ export interface GrantsPort {
     applicationId: string,
     scope?: GrantApplicationScope,
   ): Promise<Grant[]>;
+  listMembers(
+    applicationId: string,
+    query: ListQuery<GrantMemberSortField>,
+  ): Promise<PaginatedResult<GrantMember>>;
   revokeRole(
     userId: string,
     applicationId: string,
