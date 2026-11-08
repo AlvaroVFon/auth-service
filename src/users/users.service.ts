@@ -205,6 +205,12 @@ export class UsersService implements UsersPort {
     return user;
   }
 
+  /**
+   * Paginated management listing. The indexes serve the ordering (including the
+   * `_id` tie break); the case-insensitive `q` prefix search intentionally
+   * scans the collection because MongoDB cannot use a b-tree index for a regex
+   * with the `i` flag.
+   */
   async findAll(
     query: ListQuery<UserSortField>,
   ): Promise<PaginatedResult<UserListItem>> {

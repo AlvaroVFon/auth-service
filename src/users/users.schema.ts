@@ -82,7 +82,8 @@ userSchema.index(
 
 // Every listing order ends in `_id` (stable pagination), so each sortable
 // field needs the compound index; MongoDB can scan it in reverse for the
-// descending direction.
+// descending direction. The case-insensitive `q` prefix search cannot use a
+// b-tree index by design and scans the collection.
 userSchema.index({ email: 1, _id: 1 });
 userSchema.index({ username: 1, _id: 1 });
 userSchema.index({ role: 1, _id: 1 });
