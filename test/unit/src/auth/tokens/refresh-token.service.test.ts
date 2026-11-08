@@ -6,7 +6,7 @@ import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-toke
 const token = (index: number) => ({
   _id: new Types.ObjectId(),
   userId: new Types.ObjectId(),
-  sessionId: `session-${index}`,
+  sessionId: index % 5 === 0 ? undefined : `session-${index}`,
   jti: `jti-${index}`,
 });
 
@@ -56,7 +56,10 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
 
     assert.strictEqual(result.complete, false);
     assert.strictEqual(result.sessions.length, 2_500);
-    assert.deepStrictEqual(calls.limits, [500, 500, 500, 500, 500]);
+    for (const session of result.sessions) {
+      assert.strictEqual(typeof session.sessionId, 'string');
+    }
+    assert.deepStrictEqual(calls.limits, [500, 500, 500, 500, 500, 1]);
     assert.strictEqual(calls.filters.length, 5);
     for (const filter of calls.filters) {
       const parsed = filter as {
@@ -67,6 +70,18 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
       // A concurrently revoked token must not be overwritten.
       assert.strictEqual(parsed.revokedAt, null);
     }
+  });
+
+  test('confirms completion when the last allowed pass drains the audience', async () => {
+    const calls = newCalls();
+    const service = new RefreshTokenService(
+      buildModel([500, 500, 500, 500, 10, 0], calls),
+    );
+
+    const result = await service.revokeAllByAudience('app-aud');
+
+    assert.strictEqual(result.complete, true);
+    assert.strictEqual(result.sessions.length, 2_010);
   });
 
   test('reports completion when the last pass is below the batch size', async () => {

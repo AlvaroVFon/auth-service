@@ -231,7 +231,8 @@ export class RefreshTokenService {
       for (const token of active) {
         sessions.push({
           userId: token.userId.toString(),
-          sessionId: token.sessionId,
+          // Legacy tokens may predate `sessionId`; the jti identifies them.
+          sessionId: token.sessionId ?? token.jti,
           jti: token.jti,
         });
       }
@@ -248,6 +249,18 @@ export class RefreshTokenService {
       // Keep looping until a pass finds nothing: a token created between this
       // listing and the update is caught by the next pass.
       complete = pass < MAX_REVOCATION_PASSES - 1;
+    }
+
+    if (!complete) {
+      // A full last pass may have drained the remaining batch; confirm with a
+      // cheap existence query instead of reporting a retry that would be a no-op.
+      const remaining = await this.refreshTokenModel
+        .find(filter)
+        .select('_id')
+        .limit(1)
+        .lean<ActiveAudienceToken[]>();
+
+      complete = remaining.length === 0;
     }
 
     return { sessions, revoked, complete };
