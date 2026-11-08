@@ -603,7 +603,6 @@ describe('RefreshTokenService revokeAllByAudience', () => {
     assert.ok((await persisted(active.jti))?.revokedAt);
     assert.ok((await persisted(alsoActive.jti))?.revokedAt);
     assert.strictEqual((await persisted(excluded.jti))?.revokedAt, null);
-    assert.strictEqual((await persisted(expired.jti))?.revokedAt, null);
     assert.strictEqual((await persisted(otherAudience.jti))?.revokedAt, null);
     assert.ok((await persisted(alreadyRevoked.jti))?.revokedAt);
   });

@@ -24,8 +24,9 @@ export interface RevokedAudienceSession {
 export interface RevokeAllByAudienceResult {
   /**
    * Tokens observed before each update. A token issued between a listing and
-   * its update is picked up (and listed) by the next pass; `revoked` is the
-   * authoritative count.
+   * its update is picked up (and listed) by the next pass while passes remain;
+   * once the pass cap is reached, `complete` is false and the caller must
+   * retry. `revoked` is the authoritative count.
    */
   sessions: RevokedAudienceSession[];
   revoked: number;
