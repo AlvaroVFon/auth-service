@@ -32,6 +32,8 @@ export class UsersModule {
         authenticationMiddleware,
         authorizationMiddleware,
         logger,
+        auditService,
+        supportRateLimit,
       },
       this.constructor.name,
     );

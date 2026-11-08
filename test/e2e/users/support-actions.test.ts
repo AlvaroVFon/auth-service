@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import request from 'supertest';
 
 import { Roles } from '../../../src/common/enums/roles.enum';
+import { GrantRoles } from '../../../src/grants/grants.interface';
 import type { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import {
@@ -126,6 +127,53 @@ describe('E2E users support actions', () => {
         .post(`/users/${user._id.toString()}/${action}`)
         .expect(401);
     }
+  });
+
+  test('AC-4: an application token cannot run the support actions', async () => {
+    const user = await createUser();
+    const { application } = await createApplicationAccess(
+      user._id.toString(),
+      GrantRoles.ADMIN,
+    );
+    const appSession = await login(user.email, application.slug).expect(200);
+    const token = appSession.body.accessToken as string;
+
+    // Freeze the state the support actions would change, then try them with
+    // the application token.
+    await fixture.updateOne<User>(
+      'User',
+      { _id: user._id },
+      {
+        verified: false,
+        loginAttempts: 4,
+        lockoutUntil: new Date(Date.now() + 60_000),
+      },
+    );
+
+    for (const action of ['unlock', 'verify']) {
+      await request(app)
+        .post(`/users/${user._id.toString()}/${action}`)
+        .set('Authorization', bearer(token))
+        .expect(401);
+    }
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.verified, false);
+    assert.strictEqual(stored?.loginAttempts, 4);
+
+    const events = await request(app)
+      .get('/audit-events')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .query({ userId: user._id.toString() })
+      .expect(200);
+    const items = Array.isArray(events.body) ? events.body : events.body.items;
+    assert.strictEqual(
+      items.some(
+        (event: { event: string }) =>
+          event.event === 'user.unlocked' || event.event === 'user.verified',
+      ),
+      false,
+    );
   });
 
   test('AC-4: the support routes share the configured budget', async () => {
