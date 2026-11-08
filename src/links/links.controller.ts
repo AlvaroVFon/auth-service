@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
-import { ForbiddenError } from '../common/exceptions/auth.exceptions';
 import { GrantRoles } from '../grants';
 import { InvitationsService } from './invitations.service';
 import { PasswordResetLinksService } from './password-reset-links.service';
@@ -20,16 +19,20 @@ export class LinksController {
       role: GrantRoles;
       telegramChatId?: string;
     };
-    // An application admin may invite viewers and editors, never admins: the
-    // accepted invitation would otherwise grant a role only the owner can give.
-    if (role === GrantRoles.ADMIN && req.user?.role !== Roles.OWNER) {
-      throw new ForbiddenError('Only the owner can invite an admin');
-    }
+    // Application-scoped tokens carry a grant role, never a global owner.
+    const user = req.user;
+    const actorRole =
+      user !== undefined &&
+      user.audience === undefined &&
+      (Object.values(Roles) as string[]).includes(user.role)
+        ? (user.role as Roles)
+        : undefined;
 
     const result = await this.invitationsService.create({
       email,
       applicationId: req.params.applicationId as string,
       role,
+      ...(actorRole === undefined ? {} : { actorRole }),
       ...(telegramChatId === undefined ? {} : { telegramChatId }),
     });
 

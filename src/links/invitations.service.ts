@@ -1,6 +1,8 @@
 import type { ApplicationsPort } from '../applications';
 import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
+import { Roles } from '../common/enums/roles.enum';
+import { ForbiddenError } from '../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -30,6 +32,8 @@ export interface CreateInvitationInput {
   applicationId: string;
   role: GrantRoles;
   telegramChatId?: string;
+  /** Global role of the caller; only the owner may invite an admin. */
+  actorRole?: Roles;
 }
 
 export interface CreatedInvitation {
@@ -62,6 +66,10 @@ export class InvitationsService {
   ) {}
 
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
+    if (input.role === GrantRoles.ADMIN && input.actorRole !== Roles.OWNER) {
+      throw new ForbiddenError('Only the owner can invite an admin');
+    }
+
     const email = normalizeEmail(input.email ?? '');
     const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
     const application = await this.findApplication(input.applicationId);
@@ -106,7 +114,18 @@ export class InvitationsService {
       allowHolder: true,
     });
 
-    await this.invitationMailer?.sendInvitationEmail(email, created.link);
+    if (this.invitationMailer) {
+      try {
+        await this.invitationMailer.sendInvitationEmail(email, created.link);
+      } catch (error) {
+        // Delivery is best effort: the link exists and the caller already has a
+        // successful response shape, so a mailer outage must not fail the grant.
+        this.logger.warn(
+          `Failed to email invitation link ${created.created.link._id.toString()}`,
+          error,
+        );
+      }
+    }
   }
 
   private async findApplication(applicationId: string) {
@@ -178,7 +197,8 @@ export class InvitationsService {
 
     // The invitee may have verified their own signup after the invitation was
     // created: attach the grant to that account instead of failing to create a
-    // duplicate user, and no new password is needed.
+    // duplicate user, and no new password is needed. Acceptance keeps the
+    // lower-level grant.assigned event, unlike grantMemberByEmail.
     const existingUser = await this.usersService.findByEmail(link.email);
     if (existingUser) {
       try {

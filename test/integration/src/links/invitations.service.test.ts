@@ -2,6 +2,8 @@ import { Types } from 'mongoose';
 
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
+import { Roles } from '../../../../src/common/enums/roles.enum';
+import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -268,12 +270,27 @@ describe('InvitationsService', () => {
     );
   });
 
+  test('should reject an admin invitation from a non-owner', async () => {
+    const application = await createApplication();
+
+    await assert.rejects(
+      invitations.create({
+        email: 'guest@example.com',
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+        actorRole: Roles.ADMIN,
+      }),
+      new ForbiddenError('Only the owner can invite an admin'),
+    );
+  });
+
   test('should accept an invitation once and grant the role', async () => {
     const application = await createApplication();
     const created = await invitations.create({
       email: 'guest@example.com',
       applicationId: application._id.toString(),
       role: GrantRoles.ADMIN,
+      actorRole: Roles.OWNER,
     });
     const token = new URL(created.link).searchParams.get('token') as string;
 

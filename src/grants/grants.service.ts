@@ -143,11 +143,34 @@ export class GrantsService implements GrantsPort {
       throw new ForbiddenError('Only the owner can manage an admin member');
     }
 
-    const grant = await this.upsertGrant(
-      userId,
-      input.applicationId,
-      input.role,
-    );
+    let grant: Grant | null;
+
+    if (isOwner) {
+      grant = await this.upsertGrant(userId, input.applicationId, input.role);
+    } else {
+      // Apply the admin guard in the write itself: a concurrent promotion to
+      // admin must not be overwritten by a non-owner caller.
+      try {
+        grant = await this.grantModel.findOneAndUpdate(
+          {
+            userId: new Types.ObjectId(userId),
+            applicationId: new Types.ObjectId(input.applicationId),
+            role: { $ne: GrantRoles.ADMIN },
+          },
+          { $set: { role: input.role } },
+          {
+            upsert: true,
+            returnDocument: 'after',
+            setDefaultsOnInsert: true,
+          },
+        );
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          throw new ForbiddenError('Only the owner can manage an admin member');
+        }
+        throw error;
+      }
+    }
 
     if (!grant) {
       throw new EntityNotFoundError('Grant not found');
