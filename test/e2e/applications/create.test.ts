@@ -47,7 +47,7 @@ describe('E2E Applications administration', () => {
       .expect(200);
 
     assert.ok(
-      (list.body as { slug: string }[]).some(
+      (list.body.items as { slug: string }[]).some(
         (item) => item.slug === application.slug,
       ),
     );

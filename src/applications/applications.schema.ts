@@ -75,6 +75,9 @@ const applicationSchema = new Schema<Application>(
   { timestamps: true },
 );
 
+// Supports the prefix search of the catalog listing without a collection scan.
+applicationSchema.index({ name: 1 });
+
 export const ApplicationModel = model<Application>(
   'Application',
   applicationSchema,
