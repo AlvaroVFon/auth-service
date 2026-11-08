@@ -257,7 +257,8 @@ contract:
 
 Sortable fields: users `email`, `username`, `role`, `verified`, `createdAt`;
 applications `name`, `slug`, `audience`, `active`, `createdAt`; audit events
-`createdAt`.
+`createdAt`. Without `sort`, users and audit events order by `createdAt` descending
+while applications order by `name` ascending.
 
 ```bash
 curl -s "http://localhost:3000/users?page=1&limit=20&q=ali&sort=email:asc" \
@@ -283,9 +284,9 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 
 ### Audit
 
-| Method | Route           | Access | Notes                                                                                    |
-| ------ | --------------- | ------ | ---------------------------------------------------------------------------------------- |
-| `GET`  | `/audit-events` | Owner  | Filters by `userId`, `applicationId`, `event`, `from`, `to`; paginated envelope (above). |
+| Method | Route           | Access | Notes                                                                                             |
+| ------ | --------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| `GET`  | `/audit-events` | Owner  | Filters by `userId`, `email`, `applicationId`, `event`, `from`, `to`; paginated envelope (above). |
 
 ## Deployment
 

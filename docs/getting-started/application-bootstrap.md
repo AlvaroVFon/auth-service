@@ -201,7 +201,8 @@ curl -s "http://localhost:3000/users?q=editor@example.com" \
 }
 ```
 
-The owner (or an app admin) then writes the grant directly:
+`q` is a prefix search, so pick the item whose `email` matches exactly before
+reading `_id`. The owner (or an app admin) then writes the grant directly:
 
 ```bash
 curl -s -X PUT "http://localhost:3000/applications/$APP_ID/grants" \
