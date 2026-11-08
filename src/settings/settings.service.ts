@@ -26,7 +26,7 @@ import {
 const GLOBAL_CACHE_KEY = 'global';
 
 const applicationCacheKey = (applicationId: string): string =>
-  `application:${applicationId}`;
+  `application:${applicationId.toLowerCase()}`;
 
 /**
  * `ApplicationsPort.findById` returns a hydrated document, so `settings` is a
@@ -82,8 +82,8 @@ const parseSettingsPatch = (
 };
 
 export class SettingsService implements SettingsPort {
-  private readonly generations = new Map<string, number>();
-  private globalGeneration = 0;
+  /** Incremented on every write; a read only fills the cache if it did not move. */
+  private writeGeneration = 0;
 
   constructor(
     private readonly applicationsService: ApplicationsPort,
@@ -103,8 +103,7 @@ export class SettingsService implements SettingsPort {
 
     // Capture the versions before the reads: a write that finishes while this
     // resolution is in flight must not be overwritten by the older value.
-    const generation = this.generationOf(key);
-    const globalGeneration = this.globalGeneration;
+    const generation = this.writeGeneration;
 
     const [application, global] = await Promise.all([
       this.findApplication(applicationId),
@@ -115,11 +114,7 @@ export class SettingsService implements SettingsPort {
 
     // Unknown and malformed ids are not cached: they must not evict real
     // application entries or pin a policy for an id that cannot exist.
-    if (
-      application !== null &&
-      this.generationOf(key) === generation &&
-      this.globalGeneration === globalGeneration
-    ) {
+    if (application !== null && this.writeGeneration === generation) {
       this.cache.set(key, resolved);
     }
 
@@ -132,10 +127,10 @@ export class SettingsService implements SettingsPort {
       return cached;
     }
 
-    const generation = this.generationOf(GLOBAL_CACHE_KEY);
+    const generation = this.writeGeneration;
     const resolved = this.resolve(undefined, await this.globalSettings.get());
 
-    if (this.generationOf(GLOBAL_CACHE_KEY) === generation) {
+    if (this.writeGeneration === generation) {
       this.cache.set(GLOBAL_CACHE_KEY, resolved);
     }
 
@@ -153,7 +148,8 @@ export class SettingsService implements SettingsPort {
     }
 
     await this.applicationSettingsWriter.updateSettings(applicationId, changes);
-    this.bumpGeneration(applicationCacheKey(applicationId));
+    this.writeGeneration += 1;
+    this.cache.invalidate(applicationCacheKey(applicationId));
 
     return this.resolveForApplication(applicationId);
   }
@@ -170,19 +166,10 @@ export class SettingsService implements SettingsPort {
     await this.globalSettings.update(changes);
     // Every cached application embeds the global layer, so a global write
     // invalidates the whole cache, not only the global entry.
-    this.globalGeneration += 1;
+    this.writeGeneration += 1;
     this.cache.clear();
 
     return this.resolveGlobal();
-  }
-
-  private generationOf(key: string): number {
-    return this.generations.get(key) ?? 0;
-  }
-
-  private bumpGeneration(key: string): void {
-    this.generations.set(key, this.generationOf(key) + 1);
-    this.cache.invalidate(key);
   }
 
   /**

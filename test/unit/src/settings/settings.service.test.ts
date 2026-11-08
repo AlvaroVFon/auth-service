@@ -472,6 +472,27 @@ describe('SettingsService writes and cache', () => {
     assert.strictEqual(cache.size, 0);
   });
 
+  test('normalizes the application id in the cache key', async () => {
+    const { service } = createMutableService();
+    const upperCaseId = APP_ID.toUpperCase();
+
+    const before = await service.resolveForApplication(upperCaseId);
+    assert.deepStrictEqual(before.appName, {
+      value: 'Old',
+      source: 'application',
+    });
+
+    await service.updateApplicationSettings(APP_ID, { appName: 'New' });
+
+    // The uppercase spelling must hit the same entry, so the write invalidates
+    // it instead of leaving a second stale key behind.
+    const after = await service.resolveForApplication(upperCaseId);
+    assert.deepStrictEqual(after.appName, {
+      value: 'New',
+      source: 'application',
+    });
+  });
+
   test('a global write invalidates every cached application policy', async () => {
     const store: { global: Partial<ApplicationSettings> } = {
       global: { appName: 'Old global' },
