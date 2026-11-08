@@ -2,8 +2,13 @@ import { Request, Response } from 'express';
 
 import { Catch } from '../common/decorators/catch.decorator';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
-import { AuditEventRecord } from './audit.interface';
-import { AuditEventFilter, AuditPort } from './audit.port';
+import { parseListQuery } from '../common/pagination';
+import {
+  AUDIT_LIST_OPTIONS,
+  AuditEventFilter,
+  AuditPort,
+  type AuditSortField,
+} from './audit.port';
 
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -44,9 +49,13 @@ export class AuditController {
     const applicationId = parseString(req.query.applicationId);
     const from = parseDate(req.query.from, 'from');
     const to = parseDate(req.query.to, 'to', true);
-    const limitParam = parseString(req.query.limit);
 
-    const filter: AuditEventFilter = {};
+    const filter: AuditEventFilter = {
+      ...parseListQuery<AuditSortField>(
+        req.query as Record<string, unknown>,
+        AUDIT_LIST_OPTIONS,
+      ),
+    };
 
     if (userId !== undefined) {
       filter.userId = userId;
@@ -66,14 +75,8 @@ export class AuditController {
     if (to !== undefined) {
       filter.to = to;
     }
-    if (limitParam !== undefined) {
-      if (Number.isNaN(Number(limitParam))) {
-        throw new InvalidArgumentError('limit must be a number');
-      }
-      filter.limit = Number(limitParam);
-    }
 
-    const events: AuditEventRecord[] = await this.auditService.list(filter);
+    const events = await this.auditService.list(filter);
 
     res.status(200).json(events);
   }

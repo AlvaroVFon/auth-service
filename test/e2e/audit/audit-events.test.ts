@@ -3,7 +3,11 @@ import { Types } from 'mongoose';
 import request from 'supertest';
 
 import type { Application as ApplicationInterface } from '../../../src/applications/applications.interface';
-import { AuditEvent, AuditResult } from '../../../src/audit';
+import {
+  AuditEvent,
+  AuditResult,
+  createAuditEventModel,
+} from '../../../src/audit';
 import { GrantRoles } from '../../../src/grants/grants.interface';
 import type { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
@@ -86,7 +90,7 @@ describe('E2E audit events', () => {
       .query({ userId: user._id.toString(), event: AuditEvent.LOGIN_SUCCEEDED })
       .expect(200);
 
-    const [login] = success.body as AuditResponse[];
+    const [login] = success.body.items as AuditResponse[];
     assert.ok(login);
     assert.strictEqual(login?.event, AuditEvent.LOGIN_SUCCEEDED);
     assert.strictEqual(login?.result, AuditResult.SUCCESS);
@@ -102,10 +106,13 @@ describe('E2E audit events', () => {
       .query({ event: AuditEvent.LOGIN_FAILED })
       .expect(200);
 
-    assert.strictEqual((failed.body as AuditResponse[]).length, 1);
-    assert.strictEqual((failed.body as AuditResponse[])[0]?.email, user.email);
+    assert.strictEqual((failed.body.items as AuditResponse[]).length, 1);
     assert.strictEqual(
-      (failed.body as AuditResponse[])[0]?.userId,
+      (failed.body.items as AuditResponse[])[0]?.email,
+      user.email,
+    );
+    assert.strictEqual(
+      (failed.body.items as AuditResponse[])[0]?.userId,
       user._id.toString(),
     );
   });
@@ -154,7 +161,7 @@ describe('E2E audit events', () => {
         })
         .expect(200);
 
-      const [event] = response.body as AuditResponse[];
+      const [event] = response.body.items as AuditResponse[];
       assert.ok(event);
       assert.strictEqual(event?.userId, user._id.toString());
       assert.strictEqual(event?.result, AuditResult.FAILURE);
@@ -188,7 +195,7 @@ describe('E2E audit events', () => {
       })
       .expect(200);
 
-    const [event] = response.body as AuditResponse[];
+    const [event] = response.body.items as AuditResponse[];
     assert.ok(event);
     assert.strictEqual(event?.email, user.email);
     assert.strictEqual(event?.applicationId, application._id.toString());
@@ -232,7 +239,7 @@ describe('E2E audit events', () => {
       .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
       .query({ event: AuditEvent.SESSION_REVOKED })
       .expect(200);
-    const [single] = revoked.body as AuditResponse[];
+    const [single] = revoked.body.items as AuditResponse[];
     assert.strictEqual(single?.sessionId, session!.id);
     assert.strictEqual(single?.ipAddress, '203.0.113.10');
     assert.strictEqual(single?.userAgent, 'Revoke Browser');
@@ -242,7 +249,7 @@ describe('E2E audit events', () => {
       .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
       .query({ event: AuditEvent.SESSIONS_REVOKED })
       .expect(200);
-    const [all] = revokedAll.body as AuditResponse[];
+    const [all] = revokedAll.body.items as AuditResponse[];
     assert.strictEqual(all?.ipAddress, '203.0.113.11');
     assert.strictEqual(all?.userAgent, 'Revoke All Browser');
   });
@@ -266,7 +273,7 @@ describe('E2E audit events', () => {
       })
       .expect(200);
 
-    const event = (response.body as AuditResponse[]).find(
+    const event = (response.body.items as AuditResponse[]).find(
       (item) => item.targetUserId === target._id.toString(),
     );
     assert.ok(event);
@@ -296,7 +303,7 @@ describe('E2E audit events', () => {
       .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
       .query({ event: AuditEvent.GRANT_ASSIGNED })
       .expect(200);
-    const [grant] = assigned.body as AuditResponse[];
+    const [grant] = assigned.body.items as AuditResponse[];
 
     assert.ok(grant);
     assert.strictEqual(grant?.result, AuditResult.SUCCESS);
@@ -311,7 +318,7 @@ describe('E2E audit events', () => {
       .query({ event: AuditEvent.GRANT_REVOKED })
       .expect(200);
 
-    assert.strictEqual((revoked.body as AuditResponse[]).length, 1);
+    assert.strictEqual((revoked.body.items as AuditResponse[]).length, 1);
   });
 
   test('AC-3: never exposes credentials or tokens', async () => {
@@ -363,7 +370,7 @@ describe('E2E audit events', () => {
       })
       .expect(200);
 
-    const events = response.body as AuditResponse[];
+    const events = response.body.items as AuditResponse[];
     assert.ok(events.length >= 1);
     assert.ok(
       events.every(
@@ -396,7 +403,7 @@ describe('E2E audit events', () => {
       .query({ from: today, to: today, event: AuditEvent.LOGIN_SUCCEEDED })
       .expect(200);
 
-    assert.ok((response.body as AuditResponse[]).length >= 1);
+    assert.ok((response.body.items as AuditResponse[]).length >= 1);
   });
 
   test('restricts the audit log to the owner', async () => {
@@ -442,5 +449,167 @@ describe('E2E audit events', () => {
       .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
       .query({ from: 'not-a-date' })
       .expect(400);
+  });
+
+  describe('listing contract', () => {
+    const seedEvents = (
+      count: number,
+      overrides: Record<string, unknown> = {},
+    ) =>
+      createAuditEventModel().insertMany(
+        Array.from({ length: count }, (_, index) => ({
+          event: AuditEvent.LOGIN_SUCCEEDED,
+          result: AuditResult.SUCCESS,
+          email: `seed-${index}@example.com`,
+          ...overrides,
+        })),
+      );
+
+    test('AC-1: walks a history larger than the old fixed cap without gaps', async () => {
+      await seedEvents(205, { audience: 'bulk-aud' });
+
+      const seen = new Set<string>();
+      let total = 0;
+
+      for (const page of [1, 2, 3]) {
+        const response = await request(app)
+          .get('/audit-events')
+          .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+          .query({ page, limit: 100 })
+          .expect(200);
+
+        assert.strictEqual(response.body.total, 205);
+        assert.strictEqual(response.body.page, page);
+        assert.strictEqual(response.body.limit, 100);
+        total += response.body.items.length;
+        for (const event of response.body.items as AuditResponse[]) {
+          assert.strictEqual(seen.has(event._id), false);
+          seen.add(event._id);
+        }
+      }
+
+      assert.strictEqual(total, 205);
+      assert.strictEqual(seen.size, 205);
+    });
+
+    test('AC-2: searches by prefix on email, event and audience', async () => {
+      await seedEvents(1, { email: 'login-user@example.com' });
+      await seedEvents(1, {
+        event: AuditEvent.LOGIN_FAILED,
+        email: 'other@example.com',
+      });
+      await seedEvents(1, {
+        email: 'other@example.com',
+        audience: 'login-aud',
+      });
+      await seedEvents(1, {
+        event: AuditEvent.GRANT_ASSIGNED,
+        email: 'other@example.com',
+        audience: 'unrelated-aud',
+      });
+
+      const response = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({ q: 'login' })
+        .expect(200);
+
+      assert.strictEqual(response.body.total, 3);
+      assert.strictEqual(response.body.items.length, 3);
+    });
+
+    test('AC-3: clamps the limit, rejects invalid pages and escapes metacharacters', async () => {
+      await seedEvents(1);
+
+      const clamped = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({ limit: 1000 })
+        .expect(200);
+      assert.strictEqual(clamped.body.limit, 100);
+
+      for (const query of [{ page: 0 }, { page: -1 }, { limit: 'abc' }]) {
+        const response = await request(app)
+          .get('/audit-events')
+          .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+          .query(query)
+          .expect(400);
+        assert.strictEqual(response.body.code, 'INVALID_ARGUMENT');
+      }
+
+      const literal = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({ q: '.*' })
+        .expect(200);
+      assert.strictEqual(literal.body.total, 0);
+    });
+
+    test('AC-4: repeats the same page with a stable order', async () => {
+      await seedEvents(10, { audience: 'stable-aud' });
+
+      const first = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({ page: 1, limit: 5 })
+        .expect(200);
+      const second = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({ page: 1, limit: 5 })
+        .expect(200);
+
+      assert.deepStrictEqual(
+        (first.body.items as AuditResponse[]).map((event) => event._id),
+        (second.body.items as AuditResponse[]).map((event) => event._id),
+      );
+    });
+
+    test('AC-5: combines the existing filters with pagination', async () => {
+      const user = await createUser();
+      const { application } = await createApplicationAccess(
+        user._id.toString(),
+      );
+
+      await request(app)
+        .post('/auth/login')
+        .send({
+          email: user.email,
+          password: DEFAULT_USER_PLAIN_PASSWORD,
+          application: application.slug,
+        })
+        .expect(200);
+
+      const response = await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+        .query({
+          applicationId: application._id.toString(),
+          event: AuditEvent.LOGIN_SUCCEEDED,
+          page: 1,
+          limit: 1,
+        })
+        .expect(200);
+
+      assert.strictEqual(response.body.total, 1);
+      assert.strictEqual(response.body.items.length, 1);
+      assert.strictEqual(
+        (response.body.items as AuditResponse[])[0]?.applicationId,
+        application._id.toString(),
+      );
+    });
+
+    test('AC-6: keeps the audit log owner-only', async () => {
+      await request(app)
+        .get('/audit-events')
+        .query({ page: 1, limit: 1 })
+        .expect(401);
+
+      await request(app)
+        .get('/audit-events')
+        .set('Authorization', bearer(DEFAULT_USER_TOKEN))
+        .query({ page: 1, limit: 1 })
+        .expect(403);
+    });
   });
 });

@@ -53,6 +53,7 @@ export const createAuditSchema = (
   auditSchema.index({ event: 1, createdAt: -1 });
   auditSchema.index({ email: 1, createdAt: -1 });
   auditSchema.index({ actorId: 1, createdAt: -1 });
+  auditSchema.index({ audience: 1, createdAt: -1 });
   auditSchema.index(
     { createdAt: 1 },
     {

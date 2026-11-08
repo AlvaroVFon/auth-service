@@ -83,7 +83,7 @@ describe('E2E Applications lifecycle', () => {
       .query({ applicationId, event })
       .expect(200);
 
-    return response.body as AuditResponse[];
+    return response.body.items as AuditResponse[];
   };
 
   test('AC-1: the owner renames an application and the change is persisted', async () => {
