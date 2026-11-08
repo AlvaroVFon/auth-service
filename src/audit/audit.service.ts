@@ -114,7 +114,10 @@ export class AuditService implements AuditPort {
         .find(query)
         .sort(buildSortObject(filter.sort))
         .skip((filter.page - 1) * filter.limit)
-        .limit(filter.limit),
+        .limit(filter.limit)
+        // The audit collection is the highest-volume one; a sort over a field
+        // without a matching `_id` tie-break index must not fail at 32 MB.
+        .allowDiskUse(true),
       this.auditModel.countDocuments(query),
     ]);
 

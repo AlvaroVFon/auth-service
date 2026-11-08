@@ -37,13 +37,14 @@ describe('createAuditSchema', () => {
     assert.ok(keys.includes('event,createdAt'));
     assert.ok(keys.includes('email,createdAt'));
     assert.ok(keys.includes('actorId,createdAt'));
-    assert.ok(keys.includes('audience,createdAt'));
+    assert.ok(keys.includes('createdAt,_id'));
   });
 });
 
 describe('AuditService', () => {
   let create: ReturnType<typeof mock.fn>;
   let find: ReturnType<typeof mock.fn>;
+  let allowDiskUse: ReturnType<typeof mock.fn>;
   let limit: ReturnType<typeof mock.fn>;
   let skip: ReturnType<typeof mock.fn>;
   let sort: ReturnType<typeof mock.fn>;
@@ -53,7 +54,8 @@ describe('AuditService', () => {
 
   beforeEach(() => {
     create = mock.fn(() => Promise.resolve({}));
-    limit = mock.fn(() => Promise.resolve([]));
+    allowDiskUse = mock.fn(() => Promise.resolve([]));
+    limit = mock.fn(() => ({ allowDiskUse }));
     skip = mock.fn(() => ({ limit }));
     sort = mock.fn(() => ({ skip }));
     find = mock.fn(() => ({ sort }));
@@ -153,6 +155,7 @@ describe('AuditService', () => {
       });
       assert.strictEqual(skip.mock.calls[0]?.arguments[0], 0);
       assert.strictEqual(limit.mock.calls[0]?.arguments[0], 10);
+      assert.strictEqual(allowDiskUse.mock.calls[0]?.arguments[0], true);
       assert.strictEqual(countDocuments.mock.calls[0]?.arguments[0], query);
     });
 
