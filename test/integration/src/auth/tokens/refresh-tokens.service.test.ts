@@ -525,3 +525,91 @@ describe('RefreshToken TTL', () => {
     await assertTtlIndex(RefreshTokenModel, 'expiresAt');
   });
 });
+
+describe('RefreshTokenService revokeAllByAudience', () => {
+  let refreshTokenService: RefreshTokenService;
+
+  before(() => {
+    refreshTokenService = new RefreshTokenService(RefreshTokenModel);
+  });
+
+  test('rejects an empty audience', async () => {
+    await assert.rejects(
+      () => refreshTokenService.revokeAllByAudience('   '),
+      new InvalidArgumentError('audience is required'),
+    );
+  });
+
+  test('rejects an invalid excluded user id', async () => {
+    await assert.rejects(
+      () => refreshTokenService.revokeAllByAudience('app-aud', ['bad-id']),
+      new InvalidArgumentError('excluded userId is not a valid ObjectId'),
+    );
+  });
+
+  test('revokes only the active sessions of the audience, excluding users', async () => {
+    const audience = 'app-aud';
+    const excludedUserId = new Types.ObjectId();
+    const expiresAt = new Date(Date.now() + 60_000);
+
+    const active = RefreshTokenFactory.generate({ audience, expiresAt });
+    const alsoActive = RefreshTokenFactory.generate({ audience, expiresAt });
+    const excluded = RefreshTokenFactory.generate({
+      audience,
+      expiresAt,
+      userId: excludedUserId,
+    });
+    const expired = RefreshTokenFactory.generate({
+      audience,
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+    const alreadyRevoked = RefreshTokenFactory.generate({
+      audience,
+      expiresAt,
+      revokedAt: new Date(),
+    });
+    const otherAudience = RefreshTokenFactory.generate({
+      audience: 'other-aud',
+      expiresAt,
+    });
+
+    await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
+      active,
+      alsoActive,
+      excluded,
+      expired,
+      alreadyRevoked,
+      otherAudience,
+    ]);
+
+    const result = await refreshTokenService.revokeAllByAudience(audience, [
+      excludedUserId.toString(),
+    ]);
+
+    assert.strictEqual(result.revoked, 2);
+    assert.deepStrictEqual(
+      result.sessions.map((session) => session.jti).sort(),
+      [active.jti, alsoActive.jti].sort(),
+    );
+    for (const session of result.sessions) {
+      assert.ok(session.sessionId);
+      assert.match(session.userId, /^[0-9a-f]{24}$/);
+    }
+
+    const persisted = async (jti: string) =>
+      fixture.findOne<RefreshToken>(RefreshTokenModel.modelName, { jti });
+
+    assert.ok((await persisted(active.jti))?.revokedAt);
+    assert.ok((await persisted(alsoActive.jti))?.revokedAt);
+    assert.strictEqual((await persisted(excluded.jti))?.revokedAt, null);
+    assert.strictEqual((await persisted(expired.jti))?.revokedAt, null);
+    assert.strictEqual((await persisted(otherAudience.jti))?.revokedAt, null);
+    assert.ok((await persisted(alreadyRevoked.jti))?.revokedAt);
+  });
+
+  test('returns an empty result for an audience without active sessions', async () => {
+    const result = await refreshTokenService.revokeAllByAudience('empty-aud');
+
+    assert.deepStrictEqual(result, { sessions: [], revoked: 0 });
+  });
+});

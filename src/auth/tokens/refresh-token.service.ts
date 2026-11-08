@@ -1,4 +1,4 @@
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 
 import { OBJECTID_REGEX, UUID_REGEX } from '../../common/constants/regex';
 import {
@@ -12,6 +12,25 @@ export interface SessionOptions {
   sessionId?: string;
   sessionStartedAt?: Date;
   audience?: string;
+}
+
+/** Session revoked by a bulk audience operation, returned for auditing. */
+export interface RevokedAudienceSession {
+  userId: string;
+  sessionId: string;
+  jti: string;
+}
+
+export interface RevokeAllByAudienceResult {
+  sessions: RevokedAudienceSession[];
+  revoked: number;
+}
+
+interface ActiveAudienceToken {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  sessionId: string;
+  jti: string;
 }
 
 export class RefreshTokenService {
@@ -146,6 +165,62 @@ export class RefreshTokenService {
       { _id: { $in: stale.map((token) => token._id) } },
       { revokedAt: new Date() },
     );
+  }
+
+  /**
+   * Revokes every active refresh token of an audience, listing them first so the
+   * caller can audit session by session and exclude users (the owner) upstream.
+   * Tokens without an audience are left untouched.
+   */
+  async revokeAllByAudience(
+    audience: string,
+    excludedUserIds: string[] = [],
+  ): Promise<RevokeAllByAudienceResult> {
+    const normalizedAudience = audience?.trim();
+
+    if (!normalizedAudience) {
+      throw new InvalidArgumentError('audience is required');
+    }
+
+    for (const userId of excludedUserIds) {
+      if (!OBJECTID_REGEX.test(userId)) {
+        throw new InvalidArgumentError(
+          'excluded userId is not a valid ObjectId',
+        );
+      }
+    }
+
+    const filter = {
+      audience: normalizedAudience,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+      ...(excludedUserIds.length === 0
+        ? {}
+        : { userId: { $nin: excludedUserIds } }),
+    };
+
+    const active = await this.refreshTokenModel
+      .find(filter)
+      .select('_id userId sessionId jti')
+      .lean<ActiveAudienceToken[]>();
+
+    if (active.length === 0) {
+      return { sessions: [], revoked: 0 };
+    }
+
+    await this.refreshTokenModel.updateMany(
+      { _id: { $in: active.map((token) => token._id) } },
+      { revokedAt: new Date() },
+    );
+
+    return {
+      sessions: active.map((token) => ({
+        userId: token.userId.toString(),
+        sessionId: token.sessionId,
+        jti: token.jti,
+      })),
+      revoked: active.length,
+    };
   }
 
   async revokeAllByUserId(userId: string, audience?: string): Promise<void> {
