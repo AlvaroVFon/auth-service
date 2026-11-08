@@ -55,11 +55,6 @@ export class ApplicationTokenService {
   }
 
   /**
-   * Resolves an application by slug or audience without a user. Unknown and
-   * inactive applications both resolve to `null`, so the caller can collapse
-   * both into the generic credential error of the login flow.
-   */
-  /**
    * Resolves an application by slug or audience without a user. An inactive
    * document is returned with `active: false` so the audit trail can keep its
    * identity; `null` means the identifier does not exist.

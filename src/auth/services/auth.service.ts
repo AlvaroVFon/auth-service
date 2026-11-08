@@ -123,13 +123,6 @@ export class AuthService {
         ? credentials.application.trim()
         : '';
 
-    // Identify the application before checking the password. The lookup is
-    // safe because an unknown or inactive application is collapsed into the
-    // generic credential error below, after the password is verified.
-    const resolvedApplication = application
-      ? await this.applicationTokens.resolveApplication(application)
-      : null;
-
     let user: User;
     try {
       user = await this.usersService.verifyCredentials(
@@ -146,10 +139,7 @@ export class AuthService {
             ? AuditEvent.ACCOUNT_LOCKED
             : AuditEvent.LOGIN_FAILED,
           email,
-          this.resolvedApplicationAudit(
-            resolvedApplication?.application ?? null,
-            application,
-          ),
+          application ? { audience: application } : {},
           ctx,
         );
       } else {
@@ -165,6 +155,18 @@ export class AuthService {
     let audience: string | undefined;
 
     try {
+      // Resolve after the credential check: keeping the document across the
+      // bcrypt compare would let an application deactivated in that window
+      // still pass the active gate.
+      const resolvedApplication = application
+        ? await this.applicationTokens.resolveApplication(application)
+        : null;
+
+      if (application) {
+        applicationId = resolvedApplication?.application._id.toString();
+        audience = resolvedApplication?.application.audience ?? application;
+      }
+
       // Invalid and inactive applications are indistinguishable from wrong
       // credentials. The password was verified already, so the timing matches.
       if (application && !resolvedApplication?.active) {
@@ -174,9 +176,6 @@ export class AuthService {
       this.assertVerified(user);
 
       if (application && resolvedApplication) {
-        applicationId = resolvedApplication.application._id.toString();
-        audience = resolvedApplication.application.audience;
-
         const access = await this.applicationTokens.authorizeResolved(
           userId,
           resolvedApplication.application,
@@ -202,8 +201,8 @@ export class AuthService {
           result: AuditResult.SUCCESS,
           userId,
           email,
-          applicationId,
-          audience,
+          applicationId: access.application._id.toString(),
+          audience: access.application.audience,
           role: access.role,
           ...this.auditContext(ctx),
         });
@@ -246,10 +245,8 @@ export class AuthService {
         result: AuditResult.FAILURE,
         userId,
         email,
-        ...this.resolvedApplicationAudit(
-          resolvedApplication?.application ?? null,
-          application,
-        ),
+        ...(applicationId === undefined ? {} : { applicationId }),
+        ...(audience === undefined ? {} : { audience }),
         ...this.auditContext(ctx),
       });
       throw error;
@@ -284,26 +281,6 @@ export class AuthService {
         : { audience: application.audience }),
       ...this.auditContext(ctx),
     });
-  }
-
-  /**
-   * Keeps the attempted identifier in the trail even when it did not resolve,
-   * so credential attacks against a decommissioned slug are still visible.
-   */
-  private resolvedApplicationAudit(
-    application: { _id: { toString(): string }; audience: string } | null,
-    attemptedIdentifier: string,
-  ): { applicationId?: string; audience?: string } {
-    if (!attemptedIdentifier) {
-      return {};
-    }
-
-    return {
-      ...(application === null
-        ? {}
-        : { applicationId: application._id.toString() }),
-      audience: application?.audience ?? attemptedIdentifier,
-    };
   }
 
   private auditContext(ctx?: RequestContext): {
