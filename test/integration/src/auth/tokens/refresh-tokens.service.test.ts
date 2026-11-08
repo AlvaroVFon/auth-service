@@ -608,6 +608,28 @@ describe('RefreshTokenService revokeAllByAudience', () => {
     assert.ok((await persisted(alreadyRevoked.jti))?.revokedAt);
   });
 
+  test('revokes an audience that spans more than one batch', async () => {
+    const audience = 'big-aud';
+    const expiresAt = new Date(Date.now() + 60_000);
+    const tokens = Array.from({ length: 501 }, () =>
+      RefreshTokenFactory.generate({ audience, expiresAt }),
+    );
+
+    await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, tokens);
+
+    const result = await refreshTokenService.revokeAllByAudience(audience);
+
+    assert.strictEqual(result.revoked, 501);
+    assert.strictEqual(result.sessions.length, 501);
+    assert.strictEqual(result.complete, true);
+
+    const active = await fixture.find<RefreshToken>(
+      RefreshTokenModel.modelName,
+      { audience, revokedAt: null },
+    );
+    assert.strictEqual(active.length, 0);
+  });
+
   test('returns an empty result for an audience without active sessions', async () => {
     const result = await refreshTokenService.revokeAllByAudience('empty-aud');
 
