@@ -24,13 +24,16 @@ describe('ensureGlobalSettings', () => {
     ];
 
     assert.deepStrictEqual(filter, { _id: 'global' });
-    assert.deepStrictEqual(update, {
-      $setOnInsert: { appName: 'Seeded', accessTokenTtlSeconds: 120 },
-    });
+    const setOnInsert = update.$setOnInsert as Record<string, unknown>;
+    assert.strictEqual(setOnInsert.appName, 'Seeded');
+    assert.strictEqual(setOnInsert.accessTokenTtlSeconds, 120);
+    assert.ok(setOnInsert.createdAt instanceof Date);
+    assert.ok(setOnInsert.updatedAt instanceof Date);
     assert.strictEqual('$set' in update, false);
     assert.deepStrictEqual(options, {
       upsert: true,
       setDefaultsOnInsert: true,
+      timestamps: false,
     });
   });
 

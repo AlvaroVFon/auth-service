@@ -19,10 +19,13 @@ export const ensureGlobalSettings = async (
   environment: Partial<ApplicationSettings> = resolveEnvironmentSettings(),
 ): Promise<void> => {
   const settings = validateApplicationSettings(environment) ?? {};
+  const now = new Date();
 
   await model.updateOne(
     { _id: GLOBAL_SETTINGS_KEY },
-    { $setOnInsert: { ...settings } },
-    { upsert: true, setDefaultsOnInsert: true },
+    { $setOnInsert: { ...settings, createdAt: now, updatedAt: now } },
+    // Mongoose would otherwise inject `$set: { updatedAt }` on every restart,
+    // turning a no-op seed into a real write.
+    { upsert: true, setDefaultsOnInsert: true, timestamps: false },
   );
 };
