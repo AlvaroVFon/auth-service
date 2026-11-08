@@ -30,6 +30,7 @@ const userSchema = new Schema<UserInterface>(
       type: Boolean,
       default: false,
     },
+    lastLoginAt: { type: Date, default: null },
     loginAttempts: {
       type: Number,
       default: 0,
