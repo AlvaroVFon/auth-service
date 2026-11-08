@@ -18,6 +18,12 @@ export interface ApplicationAccess {
   role: GrantRoles;
 }
 
+/** Result of resolving an identifier, keeping inactive documents for auditing. */
+export interface ResolvedApplication {
+  application: Application;
+  active: boolean;
+}
+
 export class ApplicationTokenService {
   constructor(
     private readonly jwtService: JwtService,
@@ -53,9 +59,14 @@ export class ApplicationTokenService {
    * inactive applications both resolve to `null`, so the caller can collapse
    * both into the generic credential error of the login flow.
    */
+  /**
+   * Resolves an application by slug or audience without a user. An inactive
+   * document is returned with `active: false` so the audit trail can keep its
+   * identity; `null` means the identifier does not exist.
+   */
   async resolveApplication(
     applicationIdentifier: string,
-  ): Promise<Application | null> {
+  ): Promise<ResolvedApplication | null> {
     if (!applicationIdentifier || !applicationIdentifier.trim()) {
       throw new InvalidArgumentError('Application identifier is required');
     }
@@ -64,7 +75,9 @@ export class ApplicationTokenService {
       applicationIdentifier,
     );
 
-    return application?.active ? application : null;
+    return application === null
+      ? null
+      : { application, active: application.active };
   }
 
   async resolveAccess(
@@ -74,9 +87,9 @@ export class ApplicationTokenService {
   ): Promise<ApplicationAccess> {
     assertObjectId(userId, 'userId');
 
-    const application = await this.resolveApplication(applicationIdentifier);
+    const resolved = await this.resolveApplication(applicationIdentifier);
 
-    return this.authorize(userId, application, loadedUser);
+    return this.authorize(userId, resolved?.application ?? null, loadedUser);
   }
 
   /** Authorizes against an application the caller already resolved. */

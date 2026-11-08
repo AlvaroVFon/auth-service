@@ -334,6 +334,46 @@ describe('Auth Service', () => {
       assert.strictEqual(lastEvent?.audience, otherApplication.audience);
     });
 
+    test('audits the resolved identity of an inactive application (AC-3)', async () => {
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: false },
+      );
+
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'password123',
+          application: DEFAULT_APPLICATION.slug,
+        }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+        },
+      );
+
+      const record = mockAuditService.record as unknown as {
+        mock: {
+          calls: Array<{ arguments: [Record<string, unknown>] }>;
+        };
+      };
+      const lastEvent = record.mock.calls.at(-1)?.arguments[0];
+
+      assert.strictEqual(lastEvent?.event, AuditEvent.LOGIN_FAILED);
+      assert.strictEqual(
+        lastEvent?.applicationId,
+        DEFAULT_APPLICATION._id.toString(),
+      );
+      assert.strictEqual(lastEvent?.audience, DEFAULT_APPLICATION.audience);
+
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: true },
+      );
+    });
+
     test('should issue the role of each application (AC-3)', async () => {
       const appA = await createApplication({
         slug: 'app-a',

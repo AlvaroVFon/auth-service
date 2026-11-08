@@ -146,7 +146,10 @@ export class AuthService {
             ? AuditEvent.ACCOUNT_LOCKED
             : AuditEvent.LOGIN_FAILED,
           email,
-          this.resolvedApplicationAudit(resolvedApplication, application),
+          this.resolvedApplicationAudit(
+            resolvedApplication?.application ?? null,
+            application,
+          ),
           ctx,
         );
       } else {
@@ -164,19 +167,19 @@ export class AuthService {
     try {
       // Invalid and inactive applications are indistinguishable from wrong
       // credentials. The password was verified already, so the timing matches.
-      if (application && !resolvedApplication) {
+      if (application && !resolvedApplication?.active) {
         throw new InvalidCredentialsError('Invalid email or password');
       }
 
       this.assertVerified(user);
 
       if (application && resolvedApplication) {
-        applicationId = resolvedApplication._id.toString();
-        audience = resolvedApplication.audience;
+        applicationId = resolvedApplication.application._id.toString();
+        audience = resolvedApplication.application.audience;
 
         const access = await this.applicationTokens.authorizeResolved(
           userId,
-          resolvedApplication,
+          resolvedApplication.application,
           user,
         );
 
@@ -243,7 +246,10 @@ export class AuthService {
         result: AuditResult.FAILURE,
         userId,
         email,
-        ...this.resolvedApplicationAudit(resolvedApplication, application),
+        ...this.resolvedApplicationAudit(
+          resolvedApplication?.application ?? null,
+          application,
+        ),
         ...this.auditContext(ctx),
       });
       throw error;
