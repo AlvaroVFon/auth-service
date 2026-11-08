@@ -18,6 +18,24 @@ export const SETTINGS_CODE_DEFAULTS: Readonly<Required<ApplicationSettings>> =
     appName: 'Auth Service',
   });
 
+const readInteger = (name: string): number | undefined => {
+  const raw = getStringEnvVariable(name, '').trim();
+
+  if (raw === '') {
+    return undefined;
+  }
+
+  // Mirrors the composition's `parseInt(..., 10)` so a value such as `3600s`
+  // resolves to the same TTL the token service already uses.
+  const value = parseInt(raw, 10);
+
+  if (!Number.isFinite(value)) {
+    throw new InvalidArgumentError(`${name} must be a number`);
+  }
+
+  return value;
+};
+
 const readNumber = (name: string): number | undefined => {
   const raw = getStringEnvVariable(name, '').trim();
 
@@ -49,14 +67,14 @@ const readString = (name: string): string | undefined => {
 export const resolveEnvironmentSettings = (): Partial<ApplicationSettings> => {
   const settings: Partial<ApplicationSettings> = {};
 
-  const accessTokenTtlSeconds = readNumber('JWT_EXPIRATION');
+  const accessTokenTtlSeconds = readInteger('JWT_EXPIRATION');
   if (accessTokenTtlSeconds !== undefined) {
     settings.accessTokenTtlSeconds = accessTokenTtlSeconds;
   }
 
   const refreshTokenTtlSeconds =
-    readNumber('JWT_REFRESH_EXPIRATION') ??
-    readNumber('JWT_REFRESH_EXPIRES_IN');
+    readInteger('JWT_REFRESH_EXPIRATION') ??
+    readInteger('JWT_REFRESH_EXPIRES_IN');
   if (refreshTokenTtlSeconds !== undefined) {
     settings.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
   }

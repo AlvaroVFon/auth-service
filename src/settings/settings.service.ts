@@ -1,5 +1,5 @@
 import type { ApplicationsPort } from '../applications';
-import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import { OBJECTID_REGEX } from '../common/constants/regex';
 import {
   resolveEnvironmentSettings,
   SETTINGS_CODE_DEFAULTS,
@@ -16,6 +16,25 @@ import {
   type SettingsField,
   validateApplicationSettings,
 } from './settings.validation';
+
+/**
+ * `ApplicationsPort.findById` returns a hydrated document, so `settings` is a
+ * Mongoose `SingleNested` subdocument with internal keys that the settings
+ * validator would reject. `toObject` flattens it; plain objects pass through.
+ */
+const toPlainSettings = (
+  settings: unknown,
+): ApplicationSettings | undefined => {
+  if (settings === undefined || settings === null) {
+    return undefined;
+  }
+
+  const document = settings as { toObject?: () => unknown };
+  const plain =
+    typeof document.toObject === 'function' ? document.toObject() : settings;
+
+  return plain as ApplicationSettings;
+};
 
 export class SettingsService implements SettingsPort {
   constructor(
@@ -40,25 +59,26 @@ export class SettingsService implements SettingsPort {
 
   /**
    * An unknown or malformed id is not an internal error: the caller asked for
-   * a policy that does not exist, so it inherits the global configuration.
+   * a policy that does not exist, so it inherits the global configuration. The
+   * format is checked before the lookup so no other validation error is ever
+   * downgraded.
    */
   private async findApplication(applicationId: string) {
-    try {
-      return await this.applicationsService.findById(applicationId);
-    } catch (error) {
-      if (error instanceof InvalidArgumentError) {
-        return null;
-      }
-      throw error;
+    if (!OBJECTID_REGEX.test(applicationId)) {
+      return null;
     }
+
+    return this.applicationsService.findById(applicationId);
   }
 
   private resolve(
     application: ApplicationSettings | undefined,
     global: Partial<ApplicationSettings>,
   ): ResolvedSettings {
-    const applicationSettings = validateApplicationSettings(application);
-    const globalSettings = validateApplicationSettings(global);
+    const applicationSettings = validateApplicationSettings(
+      toPlainSettings(application),
+    );
+    const globalSettings = validateApplicationSettings(toPlainSettings(global));
     const environment = validateApplicationSettings(
       resolveEnvironmentSettings(),
     );
