@@ -242,7 +242,8 @@ token belongs to that application and carries its role:
 | Symptom                                                                                   | Cause                                                                                             |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Startup fails with `Password does not meet complexity requirements`                       | `OWNER_PASSWORD` lacks an uppercase letter, a lowercase letter, a digit, a symbol or 8 characters |
-| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`             | The account exists but has no grant on that application, or the application is inactive           |
+| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`             | The account exists but has no grant on that active application                                    |
+| `401 {"message":"Invalid email or password","code":"INVALID_CREDENTIALS"}`                | The application is unknown or inactive: the password is verified first and the response collapses |
 | `401 {"message":"Invalid token payload","code":"INVALID_CREDENTIALS"}` on `/applications` | You sent an application token: those routes need the owner token                                  |
 | `429` on `/auth/login`                                                                    | `RATE_LIMIT_LOGIN_MAX` attempts per window; restart the stack or wait out the window              |
 | `400 {"message":"The link is invalid, used or expired","code":"INVALID_LINK"}`            | The link was already used, expired or the token was altered; create a new invitation              |

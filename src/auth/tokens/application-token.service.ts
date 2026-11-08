@@ -18,6 +18,12 @@ export interface ApplicationAccess {
   role: GrantRoles;
 }
 
+/** Result of resolving an identifier, keeping inactive documents for auditing. */
+export interface ResolvedApplication {
+  application: Application;
+  active: boolean;
+}
+
 export class ApplicationTokenService {
   constructor(
     private readonly jwtService: JwtService,
@@ -48,13 +54,14 @@ export class ApplicationTokenService {
     };
   }
 
-  async resolveAccess(
-    userId: string,
+  /**
+   * Resolves an application by slug or audience without a user. An inactive
+   * document is returned with `active: false` so the audit trail can keep its
+   * identity; `null` means the identifier does not exist.
+   */
+  async resolveApplication(
     applicationIdentifier: string,
-    loadedUser?: User,
-  ): Promise<ApplicationAccess> {
-    assertObjectId(userId, 'userId');
-
+  ): Promise<ResolvedApplication | null> {
     if (!applicationIdentifier || !applicationIdentifier.trim()) {
       throw new InvalidArgumentError('Application identifier is required');
     }
@@ -62,6 +69,31 @@ export class ApplicationTokenService {
     const application = await this.applicationsService.findBySlugOrAudience(
       applicationIdentifier,
     );
+
+    return application === null
+      ? null
+      : { application, active: application.active };
+  }
+
+  async resolveAccess(
+    userId: string,
+    applicationIdentifier: string,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    assertObjectId(userId, 'userId');
+
+    const resolved = await this.resolveApplication(applicationIdentifier);
+
+    return this.authorize(userId, resolved?.application ?? null, loadedUser);
+  }
+
+  /** Authorizes against an application the caller already resolved. */
+  async authorizeResolved(
+    userId: string,
+    application: Application,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    assertObjectId(userId, 'userId');
 
     return this.authorize(userId, application, loadedUser);
   }

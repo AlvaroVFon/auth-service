@@ -139,7 +139,7 @@ export class AuthService {
             ? AuditEvent.ACCOUNT_LOCKED
             : AuditEvent.LOGIN_FAILED,
           email,
-          application,
+          application ? { audience: application } : {},
           ctx,
         );
       } else {
@@ -155,16 +155,32 @@ export class AuthService {
     let audience: string | undefined;
 
     try {
-      this.assertVerified(user);
+      // Resolve after the credential check: keeping the document across the
+      // bcrypt compare would let an application deactivated in that window
+      // still pass the active gate.
+      const resolvedApplication = application
+        ? await this.applicationTokens.resolveApplication(application)
+        : null;
 
       if (application) {
-        const access = await this.applicationTokens.resolveAccess(
+        applicationId = resolvedApplication?.application._id.toString();
+        audience = resolvedApplication?.application.audience ?? application;
+      }
+
+      // Invalid and inactive applications are indistinguishable from wrong
+      // credentials. The password was verified already, so the timing matches.
+      if (application && !resolvedApplication?.active) {
+        throw new InvalidCredentialsError('Invalid email or password');
+      }
+
+      this.assertVerified(user);
+
+      if (application && resolvedApplication) {
+        const access = await this.applicationTokens.authorizeResolved(
           userId,
-          application,
+          resolvedApplication.application,
           user,
         );
-        applicationId = access.application._id.toString();
-        audience = access.application.audience;
 
         if (user.mfaEnabled) {
           return this.buildMfaChallenge(
@@ -185,8 +201,8 @@ export class AuthService {
           result: AuditResult.SUCCESS,
           userId,
           email,
-          applicationId,
-          audience,
+          applicationId: access.application._id.toString(),
+          audience: access.application.audience,
           role: access.role,
           ...this.auditContext(ctx),
         });
@@ -230,7 +246,7 @@ export class AuthService {
         userId,
         email,
         ...(applicationId === undefined ? {} : { applicationId }),
-        ...(application ? { audience: audience ?? application } : {}),
+        ...(audience === undefined ? {} : { audience }),
         ...this.auditContext(ctx),
       });
       throw error;
@@ -240,7 +256,7 @@ export class AuthService {
   private async recordLoginFailure(
     event: AuditEvent,
     email: string,
-    application: string,
+    application: { applicationId?: string; audience?: string },
     ctx?: RequestContext,
   ): Promise<void> {
     let userId: string | undefined;
@@ -257,7 +273,12 @@ export class AuthService {
       result: AuditResult.FAILURE,
       ...(userId === undefined ? {} : { userId }),
       email,
-      ...(application ? { audience: application } : {}),
+      ...(application.applicationId === undefined
+        ? {}
+        : { applicationId: application.applicationId }),
+      ...(application.audience === undefined
+        ? {}
+        : { audience: application.audience }),
       ...this.auditContext(ctx),
     });
   }

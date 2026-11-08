@@ -108,6 +108,37 @@ describe('ApplicationTokenService', () => {
     assert.strictEqual(byAudience.application.audience, application.audience);
   });
 
+  test('should resolve an application without a user', async () => {
+    const { application } = await createUserAndApplication();
+
+    const bySlug = await service.resolveApplication(application.slug);
+    const byAudience = await service.resolveApplication(application.audience);
+
+    assert.strictEqual(
+      bySlug?.application._id.toString(),
+      application._id.toString(),
+    );
+    assert.strictEqual(bySlug?.active, true);
+    assert.strictEqual(byAudience?.application.audience, application.audience);
+  });
+
+  test('should resolve unknown applications to null and keep inactive ones', async () => {
+    const { application } = await createUserAndApplication();
+    await ApplicationModel.updateOne(
+      { _id: application._id },
+      { active: false },
+    );
+
+    assert.strictEqual(await service.resolveApplication('unknown-app'), null);
+
+    const inactive = await service.resolveApplication(application.slug);
+    assert.strictEqual(
+      inactive?.application._id.toString(),
+      application._id.toString(),
+    );
+    assert.strictEqual(inactive?.active, false);
+  });
+
   test('should reject an inactive application on resolveAccess', async () => {
     const { userId, application } = await createUserAndApplication();
     await grantsService.assignRole({

@@ -303,8 +303,9 @@ audience). With an application, the account needs an active grant on it and rece
 access and refresh tokens carrying that app's `aud` and the grant role
 (`viewer`/`editor`/`admin`). Without an application, only the global owner can log in;
 the owner token has no `aud` and is the only one accepted by `/applications` and
-`/users`. A missing grant, unknown app or inactive app returns `403` without tokens,
-while invalid credentials always return the same generic `401`.
+`/users`. An unknown or inactive app returns the same generic `401` as wrong
+credentials (the password is verified first), a missing grant returns `403` without
+tokens, and invalid credentials always return that same generic `401`.
 
 ### Application lifecycle
 

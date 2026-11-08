@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import { Application } from '../../../../../src/applications/applications.interface';
 import { ApplicationModel } from '../../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../../src/applications/applications.service';
-import type { AuditPort } from '../../../../../src/audit';
+import { AuditEvent, type AuditPort } from '../../../../../src/audit';
 import {
   LoginResult,
   TokenPairResponse,
@@ -257,6 +257,120 @@ describe('Auth Service', () => {
           message: 'User has no access to this application',
           code: 'FORBIDDEN',
         },
+      );
+    });
+
+    test('collapses an unknown application into invalid credentials (AC-1)', async () => {
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'password123',
+          application: 'unknown-application',
+        }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS',
+        },
+      );
+    });
+
+    test('collapses an inactive application into invalid credentials (AC-2)', async () => {
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: false },
+      );
+
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'password123',
+          application: DEFAULT_APPLICATION.slug,
+        }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+        },
+      );
+
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: true },
+      );
+    });
+
+    test('audits the resolved application when the grant is missing (AC-3)', async () => {
+      const otherApplication = await createApplication({
+        slug: 'audit-app',
+        audience: 'audit-audience',
+      });
+
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'password123',
+          application: otherApplication.slug,
+        }),
+        {
+          name: 'ForbiddenError',
+          message: 'User has no access to this application',
+        },
+      );
+
+      const record = mockAuditService.record as unknown as {
+        mock: {
+          calls: Array<{ arguments: [Record<string, unknown>] }>;
+        };
+      };
+      const lastEvent = record.mock.calls.at(-1)?.arguments[0];
+
+      assert.strictEqual(lastEvent?.event, AuditEvent.LOGIN_FAILED);
+      assert.strictEqual(
+        lastEvent?.applicationId,
+        otherApplication._id.toString(),
+      );
+      assert.strictEqual(lastEvent?.audience, otherApplication.audience);
+    });
+
+    test('audits the resolved identity of an inactive application (AC-3)', async () => {
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: false },
+      );
+
+      await assert.rejects(
+        authService.login({
+          email: DEFAULT_USER.email,
+          password: 'password123',
+          application: DEFAULT_APPLICATION.slug,
+        }),
+        {
+          name: 'InvalidCredentialsError',
+          message: 'Invalid email or password',
+        },
+      );
+
+      const record = mockAuditService.record as unknown as {
+        mock: {
+          calls: Array<{ arguments: [Record<string, unknown>] }>;
+        };
+      };
+      const lastEvent = record.mock.calls.at(-1)?.arguments[0];
+
+      assert.strictEqual(lastEvent?.event, AuditEvent.LOGIN_FAILED);
+      assert.strictEqual(
+        lastEvent?.applicationId,
+        DEFAULT_APPLICATION._id.toString(),
+      );
+      assert.strictEqual(lastEvent?.audience, DEFAULT_APPLICATION.audience);
+
+      await fixture.updateOne<Application>(
+        'Application',
+        { _id: DEFAULT_APPLICATION._id },
+        { active: true },
       );
     });
 

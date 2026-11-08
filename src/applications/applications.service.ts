@@ -226,13 +226,20 @@ export class ApplicationsService implements ApplicationsPort {
     }
 
     const value = identifier.trim();
+    const slug = value.toLowerCase();
 
+    // One query for both hit and miss so the unauthenticated login path does
+    // not reveal whether an identifier exists through the number of roundtrips.
     // Slug wins when it collides with another application's audience.
-    const bySlug = await this.applicationModel.findOne({
-      slug: value.toLowerCase(),
+    const applications = await this.applicationModel.find({
+      $or: [{ slug }, { audience: value }],
     });
 
-    return bySlug ?? (await this.findByAudience(value));
+    return (
+      applications.find((application) => application.slug === slug) ??
+      applications.find((application) => application.audience === value) ??
+      null
+    );
   }
 
   async findAll(
