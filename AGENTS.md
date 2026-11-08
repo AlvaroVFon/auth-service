@@ -104,6 +104,8 @@
 | `RATE_LIMIT_REFRESH_MAX`               | Refresh requests per window                         | `60`                        | No                     |
 | `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification window (ms)                        | `900000`                    | No                     |
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window                | `10`                        | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation window (ms)                | `900000`                    | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window        | `60`                        | No                     |
 | `INVITATION_LINK_EXPIRATION_MS`        | Invitation link TTL (ms)                            | `604800000`                 | No                     |
 | `PASSWORD_RESET_LINK_EXPIRATION_MS`    | Password-reset link TTL (ms)                        | `3600000`                   | No                     |
 | `AUDIT_RETENTION_DAYS`                 | Audit event retention (TTL index)                   | `90`                        | No                     |

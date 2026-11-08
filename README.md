@@ -136,6 +136,8 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `RATE_LIMIT_REFRESH_MAX`               | Refresh requests allowed per window.            | `60`      | No                     |
 | `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification rate-limit window.             | `900000`  | No                     |
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window.           | `10`      | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation rate-limit window.     | `900000`  | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window.   | `60`      | No                     |
 
 #### Links, audit, MFA and Telegram
 

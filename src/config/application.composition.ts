@@ -251,6 +251,13 @@ export const createApplicationComposition = (
     mfaCipher ?? undefined,
     auditService,
     (options.rateLimitConfig ?? getDefaultRateLimitConfig()).login,
+    {
+      windowMs: getNumberEnvVariable(
+        'RATE_LIMIT_SESSION_REVOKE_WINDOW_MS',
+        900000,
+      ),
+      max: getNumberEnvVariable('RATE_LIMIT_SESSION_REVOKE_MAX', 60),
+    },
   );
   const grantsModule = new GrantsModule(
     GrantModel,

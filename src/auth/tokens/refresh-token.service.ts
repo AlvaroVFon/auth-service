@@ -310,10 +310,11 @@ export class RefreshTokenService {
     // Re-list until no active token remains (bounded), so a token issued while
     // the revocation runs is revoked and reported too. The timestamp marks the
     // tokens this call actually revoked, not ones a concurrent action closed.
-    for (let pass = 0; pass < 3; pass += 1) {
+    for (let pass = 0; pass < MAX_REVOCATION_PASSES; pass += 1) {
       const active = await this.refreshTokenModel
         .find(filter)
         .select('_id')
+        .limit(REVOCATION_BATCH_SIZE)
         .lean<Array<{ _id: Types.ObjectId }>>();
 
       if (active.length === 0) {
