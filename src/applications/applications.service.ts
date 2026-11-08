@@ -295,6 +295,12 @@ export class ApplicationsService implements ApplicationsPort {
     }
 
     if (Object.keys($set).length === 0 && Object.keys($unset).length === 0) {
+      // An empty patch is a no-op, but it must still distinguish a missing
+      // application from an existing one so the HTTP layer can answer 404.
+      const exists = await this.applicationModel.exists({ _id: id });
+      if (!exists) {
+        throw new EntityNotFoundError('Application not found');
+      }
       return;
     }
 

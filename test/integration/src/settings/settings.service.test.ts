@@ -1,3 +1,5 @@
+import { Types } from 'mongoose';
+
 import type { Application } from '../../../../src/applications/applications.interface';
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
@@ -143,5 +145,44 @@ describe('SettingsService persistence of writes', () => {
     const persisted = await ApplicationModel.findById(application._id);
     assert.strictEqual(persisted?.settings?.appName, undefined);
     assert.strictEqual(persisted?.settings?.maxSessionsPerUser, undefined);
+  });
+});
+
+describe('SettingsService empty patches', () => {
+  test('an empty patch still reports a missing application', async () => {
+    const applications = new ApplicationsService(ApplicationModel);
+    const service = new SettingsService(
+      applications,
+      { get: async () => ({}) },
+      applications,
+    );
+
+    await assert.rejects(
+      service.updateApplicationSettings(new Types.ObjectId().toString(), {}),
+      { name: 'EntityNotFoundError' },
+    );
+  });
+
+  test('an empty patch on an existing application is a no-op', async () => {
+    const application = await fixture.create<Application>(
+      'Application',
+      ApplicationFactory.generate({ settings: { appName: 'Kept' } }),
+    );
+    const applications = new ApplicationsService(ApplicationModel);
+    const service = new SettingsService(
+      applications,
+      { get: async () => ({}) },
+      applications,
+    );
+
+    const resolved = await service.updateApplicationSettings(
+      application._id.toString(),
+      {},
+    );
+
+    assert.deepStrictEqual(resolved.appName, {
+      value: 'Kept',
+      source: 'application',
+    });
   });
 });

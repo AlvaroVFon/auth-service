@@ -45,7 +45,7 @@ const buildService = ({
   global?: Partial<ApplicationSettings>;
   findById?: (id: string) => Promise<Application | null>;
   writer?: ApplicationSettingsWriterPort;
-  cache?: SettingsCache<unknown> & never;
+  cache?: SettingsCache<unknown>;
 }) =>
   new SettingsService(
     {
@@ -461,6 +461,53 @@ describe('SettingsService writes and cache', () => {
       source: 'global',
     });
     assert.strictEqual('appName' in store.settings, false);
+  });
+
+  test('does not cache unknown or malformed application ids', async () => {
+    const cache = new SettingsCache(60_000);
+    const service = buildService({ findById: async () => null, cache });
+
+    await service.resolveForApplication('not-an-id');
+
+    assert.strictEqual(cache.size, 0);
+  });
+
+  test('a global write invalidates every cached application policy', async () => {
+    const store: { global: Partial<ApplicationSettings> } = {
+      global: { appName: 'Old global' },
+    };
+    const application = buildApplication();
+    const service = new SettingsService(
+      {
+        findById: async () => application,
+      } as unknown as ApplicationsPort,
+      {
+        get: async () => store.global,
+        update: async (changes: SettingsChanges) => {
+          for (const [field, value] of Object.entries(changes.set)) {
+            (store.global as Record<string, unknown>)[field] = value;
+          }
+        },
+      } as GlobalSettingsPort,
+      undefined,
+      new SettingsCache(60_000),
+    );
+
+    const before = await service.resolveForApplication(APP_ID);
+    assert.deepStrictEqual(before.appName, {
+      value: 'Old global',
+      source: 'global',
+    });
+
+    await service.updateGlobalSettings({ appName: 'New global' });
+
+    // The application does not override appName, so its cached policy embedded
+    // the previous global value.
+    const after = await service.resolveForApplication(APP_ID);
+    assert.deepStrictEqual(after.appName, {
+      value: 'New global',
+      source: 'global',
+    });
   });
 
   test('updates and invalidates the global settings', async () => {
