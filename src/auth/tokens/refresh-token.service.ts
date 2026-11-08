@@ -26,6 +26,8 @@ export interface RevokeAllByAudienceResult {
   revoked: number;
 }
 
+const MAX_REVOCATION_PASSES = 5;
+
 interface ActiveAudienceToken {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
@@ -199,28 +201,40 @@ export class RefreshTokenService {
         : { userId: { $nin: excludedUserIds } }),
     };
 
-    const active = await this.refreshTokenModel
-      .find(filter)
-      .select('_id userId sessionId jti')
-      .lean<ActiveAudienceToken[]>();
+    const sessions: RevokedAudienceSession[] = [];
+    let revoked = 0;
 
-    if (active.length === 0) {
-      return { sessions: [], revoked: 0 };
+    // Re-evaluate the filter on every pass so a token issued while the call is
+    // running is revoked too. The `_id` list is never sent to the server: the
+    // update uses the audience filter directly, so its size is unbounded only
+    // in the documents Mongo touches, not in the command payload.
+    for (let pass = 0; pass < MAX_REVOCATION_PASSES; pass += 1) {
+      const active = await this.refreshTokenModel
+        .find(filter)
+        .select('_id userId sessionId jti')
+        .lean<ActiveAudienceToken[]>();
+
+      if (active.length > 0) {
+        sessions.push(
+          ...active.map((token) => ({
+            userId: token.userId.toString(),
+            sessionId: token.sessionId,
+            jti: token.jti,
+          })),
+        );
+      }
+
+      const result = await this.refreshTokenModel.updateMany(filter, {
+        revokedAt: new Date(),
+      });
+      revoked += result.modifiedCount ?? 0;
+
+      if (active.length === 0) {
+        break;
+      }
     }
 
-    await this.refreshTokenModel.updateMany(
-      { _id: { $in: active.map((token) => token._id) } },
-      { revokedAt: new Date() },
-    );
-
-    return {
-      sessions: active.map((token) => ({
-        userId: token.userId.toString(),
-        sessionId: token.sessionId,
-        jti: token.jti,
-      })),
-      revoked: active.length,
-    };
+    return { sessions, revoked };
   }
 
   async revokeAllByUserId(userId: string, audience?: string): Promise<void> {
