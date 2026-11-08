@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 
+import { AuditEvent, AuditResult, type AuditPort } from '../../../../src/audit';
 import { Roles } from '../../../../src/common/enums/roles.enum';
 import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
@@ -963,6 +964,124 @@ describe('UsersService email normalization', () => {
       }),
       new EntityAlreadyExistsError('Email already exists'),
     );
+  });
+});
+
+describe('UsersService support actions', () => {
+  const buildService = (record: ReturnType<typeof mock.fn>) => {
+    const audit = { record } satisfies Pick<AuditPort, 'record'>;
+
+    return new UsersService(
+      User,
+      new CryptoService(),
+      5,
+      900000,
+      undefined,
+      audit as AuditPort,
+    );
+  };
+
+  const createBlockedUser = () =>
+    fixture.create<UserInterface>('User', {
+      email: generateRandomEmail('support+'),
+      password: 'hashedpassword123',
+      verified: false,
+      loginAttempts: 5,
+      lockoutUntil: new Date(Date.now() + 60_000),
+      mfaFailedAttempts: 3,
+      mfaLockoutUntil: new Date(Date.now() + 60_000),
+    });
+
+  test('unlock clears every lockout counter and audits the action', async () => {
+    const record = mock.fn(async () => {});
+    const user = await createBlockedUser();
+    const service = buildService(record);
+
+    const unlocked = await service.unlock(user._id.toString(), {
+      actorId: DEFAULT_USER._id.toString(),
+      ipAddress: '127.0.0.1',
+      userAgent: 'integration-test',
+    });
+
+    assert.strictEqual(unlocked.loginAttempts, 0);
+    assert.strictEqual(unlocked.lockoutUntil, null);
+    assert.strictEqual(unlocked.mfaFailedAttempts, 0);
+    assert.strictEqual(unlocked.mfaLockoutUntil, null);
+    assert.strictEqual(record.mock.callCount(), 1);
+    assert.deepStrictEqual(record.mock.calls[0]?.arguments[0], {
+      event: AuditEvent.USER_UNLOCKED,
+      result: AuditResult.SUCCESS,
+      targetUserId: user._id.toString(),
+      actorId: DEFAULT_USER._id.toString(),
+      ipAddress: '127.0.0.1',
+      userAgent: 'integration-test',
+    });
+  });
+
+  test('unlock answers 404 for the owner and for an unknown id', async () => {
+    const record = mock.fn(async () => {});
+    const service = buildService(record);
+    const owner = await fixture.create<UserInterface>('User', {
+      email: generateRandomEmail('owner+'),
+      role: Roles.OWNER,
+      password: 'hashedpassword123',
+      verified: true,
+    });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.unlock(id),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('markVerified sets the flag and audits the action', async () => {
+    const record = mock.fn(async () => {});
+    const user = await createBlockedUser();
+    const service = buildService(record);
+
+    const verified = await service.markVerified(user._id.toString(), {
+      actorId: DEFAULT_USER._id.toString(),
+    });
+
+    assert.strictEqual(verified.verified, true);
+    assert.strictEqual(record.mock.callCount(), 1);
+    const args = record.mock.calls[0]?.arguments[0] as
+      | { event: AuditEvent }
+      | undefined;
+    assert.strictEqual(args?.event, AuditEvent.USER_VERIFIED);
+  });
+
+  test('markVerified answers 404 for the owner and for an unknown id', async () => {
+    const record = mock.fn(async () => {});
+    const service = buildService(record);
+    const owner = await fixture.create<UserInterface>('User', {
+      email: generateRandomEmail('owner+'),
+      role: Roles.OWNER,
+      password: 'hashedpassword123',
+      verified: true,
+    });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.markVerified(id),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('works without an audit port', async () => {
+    const user = await createBlockedUser();
+    const service = new UsersService(User, new CryptoService());
+
+    const unlocked = await service.unlock(user._id.toString());
+    const verified = await service.markVerified(user._id.toString());
+
+    assert.strictEqual(unlocked.loginAttempts, 0);
+    assert.strictEqual(verified.verified, true);
   });
 });
 

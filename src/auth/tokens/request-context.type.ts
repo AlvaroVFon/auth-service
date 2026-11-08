@@ -1,4 +1,1 @@
-export interface RequestContext {
-  ipAddress: string | undefined;
-  userAgent: string | undefined;
-}
+export type { RequestContext } from '../../common/request-context';

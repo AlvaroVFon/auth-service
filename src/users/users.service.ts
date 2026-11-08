@@ -1,5 +1,6 @@
 import { Model, UpdateQuery } from 'mongoose';
 
+import { AuditEvent, AuditPort, AuditResult } from '../audit';
 import {
   EMAIL_REGEX,
   OBJECTID_REGEX,
@@ -25,6 +26,7 @@ import {
   type ListQuery,
   type PaginatedResult,
 } from '../common/pagination';
+import type { RequestAuditContext } from '../common/request-context';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
@@ -38,6 +40,11 @@ import type {
   UserSessionView,
   UsersPort,
 } from './users.port';
+
+/** Request context attached to an owner support action in the audit trail. */
+export interface UserSupportActionContext extends RequestAuditContext {
+  actorId?: string;
+}
 
 /**
  * Inclusion projection: a path added to the schema later is not shipped until
@@ -65,6 +72,7 @@ export class UsersService implements UsersPort {
     private readonly maxLoginAttempts: number = 5,
     private readonly lockoutDurationMs: number = 900000,
     private readonly mfaCipher?: SecretCipher,
+    private readonly auditService?: AuditPort,
   ) {}
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
@@ -192,12 +200,7 @@ export class UsersService implements UsersPort {
   }
 
   async findById(id: string): Promise<UserInterface | null> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
-    }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
-    }
+    this.assertValidId(id);
 
     const user = await this.usersModel.findById(id);
 
@@ -238,6 +241,93 @@ export class UsersService implements UsersPort {
     ]);
 
     return buildPaginatedResult(items, total, query);
+  }
+
+  /**
+   * Clears every lockout counter of the account. The owner is never a valid
+   * target: it is reported as missing, exactly like an unknown id, so the
+   * support surface cannot be used to discover or lock the owner.
+   */
+  async unlock(
+    id: string,
+    context: UserSupportActionContext = {},
+  ): Promise<UserInterface> {
+    this.assertValidId(id);
+
+    const user = await this.usersModel.findOneAndUpdate(
+      { _id: id, role: { $ne: Roles.OWNER } },
+      {
+        $set: {
+          loginAttempts: 0,
+          lockoutUntil: null,
+          mfaFailedAttempts: 0,
+          mfaLockoutUntil: null,
+        },
+      },
+      { returnDocument: 'after' },
+    );
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    await this.recordSupportEvent(AuditEvent.USER_UNLOCKED, id, context);
+
+    return user;
+  }
+
+  /** Marks a manually created account as verified without touching anything else. */
+  async markVerified(
+    id: string,
+    context: UserSupportActionContext = {},
+  ): Promise<UserInterface> {
+    this.assertValidId(id);
+
+    const user = await this.usersModel.findOneAndUpdate(
+      { _id: id, role: { $ne: Roles.OWNER } },
+      { $set: { verified: true } },
+      { returnDocument: 'after' },
+    );
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    await this.recordSupportEvent(AuditEvent.USER_VERIFIED, id, context);
+
+    return user;
+  }
+
+  private assertValidId(id: string): void {
+    if (!id) {
+      throw new InvalidArgumentError('ID is required');
+    }
+    if (!OBJECTID_REGEX.test(id)) {
+      throw new InvalidArgumentError('Invalid ID format');
+    }
+  }
+
+  private async recordSupportEvent(
+    event: AuditEvent.USER_UNLOCKED | AuditEvent.USER_VERIFIED,
+    targetUserId: string,
+    context: UserSupportActionContext,
+  ): Promise<void> {
+    if (!this.auditService) {
+      return;
+    }
+
+    await this.auditService.record({
+      event,
+      result: AuditResult.SUCCESS,
+      targetUserId,
+      ...(context.actorId === undefined ? {} : { actorId: context.actorId }),
+      ...(context.ipAddress === undefined
+        ? {}
+        : { ipAddress: context.ipAddress }),
+      ...(context.userAgent === undefined
+        ? {}
+        : { userAgent: context.userAgent }),
+    });
   }
 
   async findByRole(role: Roles): Promise<UserInterface | null> {
@@ -291,12 +381,7 @@ export class UsersService implements UsersPort {
     id: string,
     updateData: UserUpdatePayload,
   ): Promise<UserInterface | null> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
-    }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
-    }
+    this.assertValidId(id);
 
     let passwordRevoker: UserSessionRevokerPort | undefined;
 
@@ -540,12 +625,7 @@ export class UsersService implements UsersPort {
     id: string,
     actorId?: string,
   ): Promise<UserInterface | null> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
-    }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
-    }
+    this.assertValidId(id);
 
     const user = await this.usersModel.findById(id);
     if (!user) {
