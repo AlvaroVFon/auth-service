@@ -23,6 +23,7 @@ import { User } from '../../../../src/users/users.schema';
 import { UsersService } from '../../../../src/users/users.service';
 import fixture from '../../../fixtures';
 import { ApplicationFactory } from '../../../helpers/factories/application.factory';
+import { GrantFactory } from '../../../helpers/factories/grant.factory';
 import { UserFactory } from '../../../helpers/factories/user.factory';
 import { silentLogger } from '../../../mocks/logger.mock';
 
@@ -608,6 +609,42 @@ describe('InvitationsService.inviteMember', () => {
     );
     const usersWithEmail = await fixture.find('User', { email });
     assert.strictEqual(usersWithEmail.length, 1);
+  });
+
+  test('does not demote an existing admin when a stale invitation is accepted', async () => {
+    const service = buildService();
+    const application = await createApplication();
+    const email = `admin-member-${Date.now()}@example.com`;
+    const created = await service.create({
+      email,
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+    });
+    const user = await fixture.create(
+      'User',
+      UserFactory.generate({ email, verified: true }),
+    );
+    await fixture.create(
+      'Grant',
+      GrantFactory.generate({
+        userId: user._id,
+        applicationId: application._id,
+        role: GrantRoles.ADMIN,
+      }),
+    );
+    const token = new URL(created.link).searchParams.get('token') as string;
+
+    await service.accept({
+      token,
+      password: PASSWORD,
+      passwordConfirmation: PASSWORD,
+    });
+
+    const grant = await fixture.findOne(GrantModel.modelName, {
+      userId: user._id,
+      applicationId: application._id,
+    });
+    assert.strictEqual((grant as { role: GrantRoles }).role, GrantRoles.ADMIN);
   });
 
   test('rejects an inactive application without sending an email', async () => {

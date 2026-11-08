@@ -69,6 +69,39 @@ export class GrantsService implements GrantsPort {
     return grant;
   }
 
+  async assignRoleIfAbsent(input: AssignRoleInput): Promise<boolean> {
+    const { userId, applicationId, role, actorId } = input;
+    assertObjectId(userId, 'userId');
+    assertObjectId(applicationId, 'applicationId');
+    if (!Object.values(GrantRoles).includes(role)) {
+      throw new InvalidArgumentError('Invalid role');
+    }
+
+    await this.resolveApplication(applicationId);
+
+    try {
+      await this.grantModel.create({
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+        role,
+      });
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        return false;
+      }
+      throw error;
+    }
+
+    await this.recordGrantEvent(AuditEvent.GRANT_ASSIGNED, {
+      targetUserId: userId,
+      applicationId,
+      role,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+
+    return true;
+  }
+
   /**
    * Grants a role by email: an existing account gets (or converges to) the
    * grant, and an email without an account receives an invitation. The

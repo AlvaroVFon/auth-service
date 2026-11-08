@@ -201,24 +201,12 @@ export class InvitationsService {
     // lower-level grant.assigned event, unlike grantMemberByEmail.
     const existingUser = await this.usersService.findByEmail(link.email);
     if (existingUser) {
-      const userId = existingUser._id.toString();
-      const applicationId = link.applicationId.toString();
-      const currentGrant = await this.grantsService.findByUserAndApplication(
-        userId,
-        applicationId,
-        { includeArchived: true },
-      );
-
-      // A stale invitation must not overwrite a newer grant (for example an
-      // admin promoted after the link was issued).
-      if (currentGrant) {
-        return;
-      }
-
+      // Atomic insert-only: a stale invitation must not overwrite a newer grant
+      // (for example an admin promoted after the link was issued).
       try {
-        await this.grantsService.assignRole({
-          userId,
-          applicationId,
+        await this.grantsService.assignRoleIfAbsent({
+          userId: existingUser._id.toString(),
+          applicationId: link.applicationId.toString(),
           role: link.role,
         });
       } catch (error) {

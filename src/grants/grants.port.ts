@@ -48,6 +48,12 @@ export interface GrantsPort {
     scope?: GrantApplicationScope,
   ): Promise<Grant>;
   grantMemberByEmail(input: GrantMemberInput): Promise<GrantedMember>;
+  /**
+   * Creates the grant only when the pair has none; returns false when it
+   * already existed. Never overwrites an existing role (for example an admin
+   * promoted after an invitation was issued).
+   */
+  assignRoleIfAbsent(input: AssignRoleInput): Promise<boolean>;
   findByUserAndApplication(
     userId: string,
     applicationId: string,
