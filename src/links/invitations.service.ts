@@ -163,8 +163,6 @@ export class InvitationsService {
   }
 
   async accept(input: AcceptInvitationInput): Promise<void> {
-    this.validatePassword(input.password, input.passwordConfirmation);
-
     if (!input.token) {
       throw new InvalidLinkError();
     }
@@ -180,15 +178,28 @@ export class InvitationsService {
 
     // The invitee may have verified their own signup after the invitation was
     // created: attach the grant to that account instead of failing to create a
-    // duplicate user.
+    // duplicate user, and no new password is needed.
     const existingUser = await this.usersService.findByEmail(link.email);
     if (existingUser) {
-      await this.grantsService.assignRole({
-        userId: existingUser._id.toString(),
-        applicationId: link.applicationId.toString(),
-        role: link.role,
-      });
+      try {
+        await this.grantsService.assignRole({
+          userId: existingUser._id.toString(),
+          applicationId: link.applicationId.toString(),
+          role: link.role,
+        });
+      } catch (error) {
+        await this.release(link._id.toString());
+        throw error;
+      }
       return;
+    }
+
+    try {
+      this.validatePassword(input.password, input.passwordConfirmation);
+    } catch (error) {
+      // A malformed password must not burn the single-use link.
+      await this.release(link._id.toString());
+      throw error;
     }
 
     const passwordHash = await this.cryptoService.hashString(input.password);
