@@ -18,17 +18,41 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
+import {
+  buildPaginatedResult,
+  buildSearchRegex,
+  buildSortObject,
+  type ListQuery,
+  type PaginatedResult,
+} from '../common/pagination';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
+  UserListItem,
   UserSessionRevokerPort,
+  UserSortField,
   UserSessionsPort,
   UserSessionView,
   UsersPort,
 } from './users.port';
+
+/**
+ * Inclusion projection: a path added to the schema later is not shipped until
+ * it is listed here, so the listing fails closed instead of leaking a secret.
+ */
+const USER_LIST_PROJECTION = [
+  'username',
+  'email',
+  'role',
+  'verified',
+  'telegramChatId',
+  'mfaEnabled',
+  'createdAt',
+  'updatedAt',
+].join(' ');
 
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
@@ -184,8 +208,36 @@ export class UsersService implements UsersPort {
     return user;
   }
 
-  async findAll(): Promise<UserInterface[]> {
-    return this.usersModel.find();
+  /**
+   * Paginated management listing. The indexes serve the ordering (including the
+   * `_id` tie break); the case-insensitive `q` prefix search intentionally
+   * scans the collection because MongoDB cannot use a b-tree index for a regex
+   * with the `i` flag.
+   */
+  async findAll(
+    query: ListQuery<UserSortField>,
+  ): Promise<PaginatedResult<UserListItem>> {
+    const filter = query.q
+      ? {
+          $or: [
+            { email: buildSearchRegex(query.q) },
+            { username: buildSearchRegex(query.q) },
+          ],
+        }
+      : {};
+
+    const [items, total] = await Promise.all([
+      this.usersModel
+        .find(filter)
+        .select(USER_LIST_PROJECTION)
+        .sort(buildSortObject(query.sort))
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit)
+        .lean<UserListItem[]>(),
+      this.usersModel.countDocuments(filter),
+    ]);
+
+    return buildPaginatedResult(items, total, query);
   }
 
   async findByRole(role: Roles): Promise<UserInterface | null> {
