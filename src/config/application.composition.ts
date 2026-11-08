@@ -247,6 +247,13 @@ export const createApplicationComposition = (
     logger,
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
+  // Single authorization policy shared by the applications, grants and links
+  // surfaces; it can only be built once both services exist.
+  const applicationAuthorizationMiddleware =
+    new ApplicationAuthorizationMiddleware(
+      grantsModule.service,
+      applicationsModule.service,
+    );
   const ownerBootstrap = new OwnerBootstrapService(usersModule.service);
   const telegramConfig =
     options.telegram === undefined ? resolveTelegramConfig() : null;
@@ -339,8 +346,6 @@ export const createApplicationComposition = (
     ),
     authenticationMiddleware,
     authorizationMiddleware,
-    grantsService: grantsModule.service,
-    applicationsService: applicationsModule.service,
     logger,
   });
   const authModule = new AuthModule({
@@ -394,19 +399,11 @@ export const createApplicationComposition = (
       GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
       healthModule.initialize(app);
       jwksModule.initialize(app);
-      // The catalog module is built before grants, so its authorization
-      // middleware is wired here, once both services exist.
-      applicationsModule.initialize(
-        app,
-        new ApplicationAuthorizationMiddleware(
-          grantsModule.service,
-          applicationsModule.service,
-        ),
-      );
-      grantsModule.initialize(app);
+      applicationsModule.initialize(app, applicationAuthorizationMiddleware);
+      grantsModule.initialize(app, applicationAuthorizationMiddleware);
       usersModule.initialize(app);
       authModule.initialize(app);
-      linksModule.initialize(app);
+      linksModule.initialize(app, applicationAuthorizationMiddleware);
       auditModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },

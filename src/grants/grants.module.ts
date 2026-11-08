@@ -3,7 +3,7 @@ import type { Model } from 'mongoose';
 
 import type { ApplicationsPort } from '../applications';
 import type { AuditPort } from '../audit';
-import { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
+import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { LoggerInterface } from '../libs/logger';
 import type { UsersPort } from '../users';
@@ -18,7 +18,7 @@ export class GrantsModule {
 
   constructor(
     grantModel: Model<Grant>,
-    private readonly applicationsService: ApplicationsPort,
+    applicationsService: ApplicationsPort,
     usersService: UsersPort,
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     auditService: AuditPort,
@@ -33,13 +33,10 @@ export class GrantsModule {
     this.controller = new GrantsController(this.service);
   }
 
-  initialize(app: Application): void {
-    const applicationAuthorizationMiddleware =
-      new ApplicationAuthorizationMiddleware(
-        this.service,
-        this.applicationsService,
-      );
-
+  initialize(
+    app: Application,
+    applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware,
+  ): void {
     new GrantsRouter(
       this.authenticationMiddleware,
       applicationAuthorizationMiddleware,
