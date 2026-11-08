@@ -70,7 +70,8 @@ export interface UserSessionView {
 export interface UserSessionsPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
   revokeSession(userId: string, sessionId: string): Promise<void>;
-  revokeAllSessions(userId: string): Promise<void>;
+  /** Revokes every session and returns the identifiers it actually revoked. */
+  revokeAllSessions(userId: string): Promise<string[]>;
 }
 
 export interface UsersPort {

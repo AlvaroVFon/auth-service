@@ -103,8 +103,17 @@ export class SessionService {
     return session;
   }
 
+  async revokeAllWithIds(userId: string, audience?: string): Promise<string[]> {
+    const revoked = await this.refreshTokenService.revokeAllByUserId(
+      userId,
+      audience,
+    );
+
+    return revoked.map((token) => token.sessionId);
+  }
+
   async revokeAll(userId: string, audience?: string): Promise<void> {
-    await this.refreshTokenService.revokeAllByUserId(userId, audience);
+    await this.revokeAllWithIds(userId, audience);
   }
 
   async revokeByRefreshToken(

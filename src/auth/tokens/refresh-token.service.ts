@@ -148,18 +148,49 @@ export class RefreshTokenService {
     );
   }
 
-  async revokeAllByUserId(userId: string, audience?: string): Promise<void> {
+  /**
+   * Revokes every active token of a user and returns the session identifiers it
+   * listed, so the caller can audit exactly what this call revoked.
+   */
+  async revokeAllByUserId(
+    userId: string,
+    audience?: string,
+  ): Promise<Array<{ sessionId: string; jti: string }>> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
     }
 
-    await this.refreshTokenModel.updateMany(
-      {
-        userId,
-        revokedAt: null,
-        ...(audience === undefined ? {} : { audience }),
-      },
-      { revokedAt: new Date() },
-    );
+    const filter = {
+      userId,
+      revokedAt: null,
+      ...(audience === undefined ? {} : { audience }),
+    };
+    const revoked: Array<{ sessionId: string; jti: string }> = [];
+
+    // Re-list until no active token remains (bounded), so a token issued while
+    // the revocation runs is revoked and reported too.
+    for (let pass = 0; pass < 3; pass += 1) {
+      const active = await this.refreshTokenModel
+        .find(filter)
+        .select('sessionId jti')
+        .lean<Array<{ sessionId?: string; jti: string }>>();
+
+      if (active.length === 0) {
+        break;
+      }
+
+      for (const token of active) {
+        revoked.push({
+          sessionId: token.sessionId ?? token.jti,
+          jti: token.jti,
+        });
+      }
+
+      await this.refreshTokenModel.updateMany(filter, {
+        revokedAt: new Date(),
+      });
+    }
+
+    return revoked;
   }
 }

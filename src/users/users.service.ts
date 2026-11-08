@@ -386,15 +386,16 @@ export class UsersService implements UsersPort {
   ): Promise<void> {
     await this.assertSessionTarget(id);
 
-    const sessions = await this.requireSessionManager().listSessions(id);
-    await this.requireSessionManager().revokeAllSessions(id);
+    // Audit exactly the sessions the revocation reported, not a pre-list
+    // snapshot that concurrent logins could make stale.
+    const sessionIds = await this.requireSessionManager().revokeAllSessions(id);
 
-    for (const session of sessions) {
+    for (const sessionId of sessionIds) {
       await this.recordSupportEvent(
         AuditEvent.SESSION_REVOKED_BY_ADMIN,
         id,
         context,
-        session.id,
+        sessionId,
       );
     }
   }
