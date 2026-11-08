@@ -248,12 +248,12 @@ email still does not trigger a verification flow: the account keeps its current
 `GET /users`, `GET /applications` and `GET /audit-events` share one listing
 contract:
 
-| Parameter | Meaning                                                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `page`    | 1-based page number (default `1`).                                                                                             |
-| `limit`   | Page size, clamped to `1..100` (default `20`; `50` for audit events).                                                          |
-| `q`       | Case-insensitive prefix search. Users: `email`, `username`. Applications: `name`, `slug`. Audit: `email`, `event`, `audience`. |
-| `sort`    | `field`, `field:asc`, `field:desc` or `-field`; `_id` is appended as a stable tie break.                                       |
+| Parameter | Meaning                                                                                                                                              |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `page`    | 1-based page number (default `1`).                                                                                                                   |
+| `limit`   | Accepted range `1..100` (default `20`; `50` for audit events). Larger values are clamped to `100`; `0`, negative or non-numeric values return `400`. |
+| `q`       | Case-insensitive prefix search. Users: `email`, `username`. Applications: `name`, `slug`. Audit: `email`, `event`, `audience`.                       |
+| `sort`    | `field`, `field:asc`, `field:desc` or `-field`; `_id` is appended as a stable tie break.                                                             |
 
 Sortable fields: users `email`, `username`, `role`, `verified`, `createdAt`;
 applications `name`, `slug`, `audience`, `active`, `createdAt`; audit events
