@@ -531,6 +531,90 @@ describe('SettingsService writes and cache', () => {
     });
   });
 
+  test('an in-flight read does not repopulate the cache after an application write', async () => {
+    const application = buildApplication({ appName: 'Old' });
+    const staleSnapshot = buildApplication({ appName: 'Old' });
+    let release: (() => void) | undefined;
+    let first = true;
+
+    const service = new SettingsService(
+      {
+        findById: async () => {
+          if (first) {
+            first = false;
+            await new Promise<void>((resolve) => {
+              release = resolve;
+            });
+            return staleSnapshot;
+          }
+          return application;
+        },
+      } as unknown as ApplicationsPort,
+      { get: async () => ({}) } as GlobalSettingsPort,
+      {
+        updateSettings: async (_id, changes) => {
+          (application.settings as Record<string, unknown>).appName =
+            changes.set.appName;
+        },
+      },
+      new SettingsCache(60_000),
+    );
+
+    const inFlight = service.resolveForApplication(APP_ID);
+    await service.updateApplicationSettings(APP_ID, { appName: 'New' });
+    release?.();
+    await inFlight;
+
+    // The stale read must have skipped cache.set; the next read is fresh.
+    const resolved = await service.resolveForApplication(APP_ID);
+    assert.deepStrictEqual(resolved.appName, {
+      value: 'New',
+      source: 'application',
+    });
+  });
+
+  test('an in-flight global read does not repopulate the cache after a global write', async () => {
+    const store: { global: Partial<ApplicationSettings> } = {
+      global: { appName: 'Old' },
+    };
+    let release: (() => void) | undefined;
+    let first = true;
+
+    const service = new SettingsService(
+      { findById: async () => null } as unknown as ApplicationsPort,
+      {
+        get: async () => {
+          if (first) {
+            first = false;
+            const stale = { ...store.global };
+            await new Promise<void>((resolve) => {
+              release = resolve;
+            });
+            return stale;
+          }
+          return store.global;
+        },
+        update: async (changes: SettingsChanges) => {
+          (store.global as Record<string, unknown>).appName =
+            changes.set.appName;
+        },
+      } as GlobalSettingsPort,
+      undefined,
+      new SettingsCache(60_000),
+    );
+
+    const inFlight = service.resolveGlobal();
+    await service.updateGlobalSettings({ appName: 'New' });
+    release?.();
+    await inFlight;
+
+    const resolved = await service.resolveGlobal();
+    assert.deepStrictEqual(resolved.appName, {
+      value: 'New',
+      source: 'global',
+    });
+  });
+
   test('updates and invalidates the global settings', async () => {
     const { service, update } = createMutableService();
     await service.resolveGlobal();
