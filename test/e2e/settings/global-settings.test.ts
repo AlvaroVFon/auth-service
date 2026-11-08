@@ -100,6 +100,26 @@ describe('E2E global settings', () => {
     assert.strictEqual(read.body.settings.appName, 'Panel');
   });
 
+  test('limits PATCH /settings without limiting GET', async () => {
+    let status = 0;
+
+    for (let attempt = 0; attempt < 30 && status !== 429; attempt += 1) {
+      status = (
+        await request(app)
+          .patch('/settings')
+          .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+          .send({ appName: 'Panel' })
+      ).status;
+    }
+
+    assert.strictEqual(status, 429);
+
+    await request(app)
+      .get('/settings')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(200);
+  });
+
   test('AC-4: only the owner can read or write the policy', async () => {
     await request(app)
       .get('/settings')
