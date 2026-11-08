@@ -33,7 +33,8 @@ export class SettingsAdminService {
     // A repeated value is a no-op; only real transitions are audited.
     const fields = SETTINGS_FIELDS.filter(
       (field) =>
-        JSON.stringify(before[field]) !== JSON.stringify(resolved[field]),
+        before[field].value !== resolved[field].value ||
+        before[field].source !== resolved[field].source,
     );
 
     if (fields.length > 0 && this.auditService) {
