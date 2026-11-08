@@ -20,14 +20,12 @@ export interface RecordAuditEventInput {
   userAgent?: string;
 }
 
-/** Fields the owner may order the audit history by. */
-export const AUDIT_SORTABLE_FIELDS = [
-  'createdAt',
-  'event',
-  'email',
-  'audience',
-  'result',
-] as const;
+/**
+ * Fields the owner may order the audit history by. Only the append-only
+ * timestamp is allowed: the other columns are searched with `q` and a sort by
+ * them would force a blocking sort over the whole collection.
+ */
+export const AUDIT_SORTABLE_FIELDS = ['createdAt'] as const;
 
 export type AuditSortField = (typeof AUDIT_SORTABLE_FIELDS)[number];
 

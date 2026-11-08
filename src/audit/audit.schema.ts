@@ -47,12 +47,14 @@ export const createAuditSchema = (
     },
   );
 
-  auditSchema.index({ userId: 1, createdAt: -1 });
-  auditSchema.index({ targetUserId: 1, createdAt: -1 });
-  auditSchema.index({ applicationId: 1, createdAt: -1 });
-  auditSchema.index({ event: 1, createdAt: -1 });
-  auditSchema.index({ email: 1, createdAt: -1 });
-  auditSchema.index({ actorId: 1, createdAt: -1 });
+  // Every listing order ends in `_id` (stable pagination), so the filtered
+  // indexes carry the same second key as the sort.
+  auditSchema.index({ userId: 1, createdAt: -1, _id: -1 });
+  auditSchema.index({ targetUserId: 1, createdAt: -1, _id: -1 });
+  auditSchema.index({ applicationId: 1, createdAt: -1, _id: -1 });
+  auditSchema.index({ event: 1, createdAt: -1, _id: -1 });
+  auditSchema.index({ email: 1, createdAt: -1, _id: -1 });
+  auditSchema.index({ actorId: 1, createdAt: -1, _id: -1 });
   // Serves the default listing order, whose stable tie break is `_id`; the TTL
   // index cannot carry the second key.
   auditSchema.index({ createdAt: 1, _id: 1 });

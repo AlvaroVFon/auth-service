@@ -34,9 +34,9 @@ describe('createAuditSchema', () => {
       .indexes()
       .map(([fields]) => Object.keys(fields).join(','));
 
-    assert.ok(keys.includes('event,createdAt'));
-    assert.ok(keys.includes('email,createdAt'));
-    assert.ok(keys.includes('actorId,createdAt'));
+    assert.ok(keys.includes('event,createdAt,_id'));
+    assert.ok(keys.includes('email,createdAt,_id'));
+    assert.ok(keys.includes('actorId,createdAt,_id'));
     assert.ok(keys.includes('createdAt,_id'));
   });
 });

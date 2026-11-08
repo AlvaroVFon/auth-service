@@ -61,6 +61,11 @@ export class AuditService implements AuditPort {
     }
   }
 
+  /**
+   * Offset pagination over an append-only log. The order is stable for a given
+   * snapshot; an event written or pruned between two page requests can shift
+   * the window, so a de-duplicated walk is only guaranteed on a static view.
+   */
   async list(
     filter: AuditEventFilter,
   ): Promise<PaginatedResult<AuditEventRecord>> {
