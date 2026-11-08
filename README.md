@@ -231,8 +231,8 @@ payload that mixes an allowed field with a rejected one writes nothing.
 This is a contract change: before, unknown fields were forwarded to the service and
 `role` was silently dropped, which allowed writing verification, lockout and MFA
 state without validation or an audit event. Security state now has dedicated support
-endpoints; until they exist, `verified`, `loginAttempts`, `lockoutUntil` or MFA
-fields cannot be changed through the API.
+routes: `POST /users/:id/unlock` and `POST /users/:id/verify`. `verified`,
+`loginAttempts`, `lockoutUntil` and the MFA fields stay rejected by `PATCH`.
 
 `email` and `password` are validated before they reach the service: the address is
 trimmed and lower-cased, then checked against `EMAIL_REGEX`, so an invalid value

@@ -16,7 +16,7 @@ export interface UsersSupportRateLimitConfig {
  * routes so the global body guard cannot drift from the route shapes.
  */
 export const USER_SUPPORT_BODYLESS_PATHS: readonly RegExp[] = [
-  /^\/users\/[^/]+\/(unlock|verify)$/i,
+  /^\/users\/[^/]+\/(unlock|verify)\/?$/i,
 ];
 
 export class UsersRouter {
