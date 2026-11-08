@@ -77,7 +77,7 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
 
     assert.strictEqual(result.complete, true);
     assert.strictEqual(result.sessions.length, 2);
-    assert.deepStrictEqual(calls.limits, [500]);
+    assert.deepStrictEqual(calls.limits, [500, 500]);
     assert.strictEqual(calls.filters.length, 1);
     assert.strictEqual(
       (calls.filters[0] as { _id: { $in: unknown[] } })._id.$in.length,

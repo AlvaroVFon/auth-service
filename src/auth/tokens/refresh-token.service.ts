@@ -23,8 +23,9 @@ export interface RevokedAudienceSession {
 
 export interface RevokeAllByAudienceResult {
   /**
-   * Tokens observed before each update. A token created between the listing and
-   * the update is revoked but not listed; `revoked` is the authoritative count.
+   * Tokens observed before each update. A token issued between a listing and
+   * its update is picked up (and listed) by the next pass; `revoked` is the
+   * authoritative count.
    */
   sessions: RevokedAudienceSession[];
   revoked: number;
@@ -244,13 +245,8 @@ export class RefreshTokenService {
       );
       revoked += result.modifiedCount ?? 0;
 
-      if (active.length < REVOCATION_BATCH_SIZE) {
-        complete = true;
-        break;
-      }
-
-      // The loop is bounded; if the last pass still found a full batch the
-      // caller must know the revocation may not be exhaustive.
+      // Keep looping until a pass finds nothing: a token created between this
+      // listing and the update is caught by the next pass.
       complete = pass < MAX_REVOCATION_PASSES - 1;
     }
 
