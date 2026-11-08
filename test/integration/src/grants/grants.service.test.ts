@@ -841,6 +841,56 @@ describe('GrantsService.grantMemberByEmail', () => {
     });
   });
 
+  test('retries the grant path when a signup lands during the invitation', async () => {
+    const application = await createApplication();
+    const email = MotherFactory.email();
+    const user = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate({ email, verified: true }),
+    );
+    let lookups = 0;
+    const record = mock.fn(async () => {});
+    const service = new GrantsService(
+      GrantModel,
+      applicationsService,
+      {
+        findByEmail: async () => {
+          lookups += 1;
+          return lookups === 1 ? null : user;
+        },
+      } as never,
+      { record } as never,
+    );
+    service.setInvitationsPort({
+      inviteMember: async () => {
+        throw new InvalidArgumentError('Invitation could not be created');
+      },
+    });
+
+    const result = await service.grantMemberByEmail({
+      email,
+      applicationId: application._id.toString(),
+      role: GrantRoles.EDITOR,
+      actorRole: Roles.OWNER,
+    });
+
+    assert.deepStrictEqual(result, { email, role: GrantRoles.EDITOR });
+    const grants = await fixture.find<Grant>(GrantModel.modelName, {
+      userId: user._id,
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 1);
+    const calls = record.mock.calls as Array<{
+      arguments: [{ event: AuditEvent }];
+    }>;
+    assert.strictEqual(
+      calls.filter(
+        (call) => call.arguments[0].event === AuditEvent.MEMBER_GRANTED,
+      ).length,
+      1,
+    );
+  });
+
   test('AC-4: repeating the grant converges the role without duplicates', async () => {
     const service = createService();
     const application = await createApplication();

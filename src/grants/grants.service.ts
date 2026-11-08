@@ -165,10 +165,34 @@ export class GrantsService implements GrantsPort {
           },
         );
       } catch (error) {
-        if (isDuplicateKeyError(error)) {
+        if (!isDuplicateKeyError(error)) {
+          throw error;
+        }
+
+        // Two causes: the target already holds an admin grant, or a concurrent
+        // non-owner insert won the unique index. Re-read to tell them apart.
+        const current = await this.grantModel.findOne({
+          userId: new Types.ObjectId(userId),
+          applicationId: new Types.ObjectId(input.applicationId),
+        });
+
+        if (current?.role === GrantRoles.ADMIN) {
           throw new ForbiddenError('Only the owner can manage an admin member');
         }
-        throw error;
+
+        grant = await this.grantModel.findOneAndUpdate(
+          {
+            userId: new Types.ObjectId(userId),
+            applicationId: new Types.ObjectId(input.applicationId),
+            role: { $ne: GrantRoles.ADMIN },
+          },
+          { $set: { role: input.role } },
+          { returnDocument: 'after' },
+        );
+
+        if (!grant) {
+          throw new ForbiddenError('Only the owner can manage an admin member');
+        }
       }
     }
 
