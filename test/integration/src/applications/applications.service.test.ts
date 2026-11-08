@@ -416,12 +416,20 @@ describe('ApplicationsService', () => {
     });
 
     test('should keep returning every application for the auth context', async () => {
-      await createApplication();
-      await createApplication();
+      for (let index = 0; index < 21; index += 1) {
+        await createApplication();
+      }
+      await fixture.create<Application>(
+        'Application',
+        ApplicationFactory.generate({ active: false }),
+      );
 
       const applications = await applicationsService.findAllForContext();
 
-      assert.strictEqual(applications.length, 2);
+      assert.strictEqual(applications.length, 22);
+      assert.ok(
+        applications.some((application) => application.active === false),
+      );
     });
   });
 
