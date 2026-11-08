@@ -79,11 +79,11 @@ curl -s -X POST http://localhost:3000/auth/login \
 - `200` with exactly two fields: the access token is short-lived
   (`JWT_EXPIRATION`, one hour with `.env.example`), the refresh token lasts
   `JWT_REFRESH_EXPIRATION` (24 hours).
-- The application is resolved before the password is checked, and an unknown
-  or inactive application returns the same `401 Invalid email or password` as
-  wrong credentials, so the route cannot be used to enumerate applications.
-- The account also needs an active grant on that application. A missing or
-  revoked grant returns `403 User has no access to this application`.
+- The application is resolved before the password is checked. Unknown and
+  inactive applications collapse into the same `401 Invalid email or password`
+  as wrong credentials, while a grant-less account on an active application
+  keeps its own `403 User has no access to this application`; the split only
+  distinguishes application state, never whether an account exists.
 - Without `application`, only the global owner can log in. Any other account
   gets `403 An application is required`.
 - Invalid credentials return the same `401 Invalid email or password` on every

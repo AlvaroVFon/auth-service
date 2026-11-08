@@ -146,7 +146,7 @@ export class AuthService {
             ? AuditEvent.ACCOUNT_LOCKED
             : AuditEvent.LOGIN_FAILED,
           email,
-          this.resolvedApplicationAudit(resolvedApplication),
+          this.resolvedApplicationAudit(resolvedApplication, application),
           ctx,
         );
       } else {
@@ -281,15 +281,24 @@ export class AuthService {
     });
   }
 
+  /**
+   * Keeps the attempted identifier in the trail even when it did not resolve,
+   * so credential attacks against a decommissioned slug are still visible.
+   */
   private resolvedApplicationAudit(
     application: { _id: { toString(): string }; audience: string } | null,
+    attemptedIdentifier: string,
   ): { applicationId?: string; audience?: string } {
-    return application === null
-      ? {}
-      : {
-          applicationId: application._id.toString(),
-          audience: application.audience,
-        };
+    if (!attemptedIdentifier) {
+      return {};
+    }
+
+    return {
+      ...(application === null
+        ? {}
+        : { applicationId: application._id.toString() }),
+      audience: application?.audience ?? attemptedIdentifier,
+    };
   }
 
   private auditContext(ctx?: RequestContext): {
