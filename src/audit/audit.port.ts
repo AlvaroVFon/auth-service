@@ -33,6 +33,8 @@ export type AuditSortField = (typeof AUDIT_SORTABLE_FIELDS)[number];
 export const AUDIT_LIST_OPTIONS: ListQueryOptions<AuditSortField> = {
   sortableFields: AUDIT_SORTABLE_FIELDS,
   defaultSort: { field: 'createdAt', direction: -1 },
+  // Preserves the page size the endpoint used before the listing contract.
+  defaultLimit: 50,
 };
 
 /**
