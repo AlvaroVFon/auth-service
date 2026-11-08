@@ -181,6 +181,23 @@ export class RefreshTokenService {
     );
   }
 
+  /** Fast path for callers that do not need the revoked session ids. */
+  async revokeAllBulk(userId: string, audience?: string): Promise<void> {
+    if (!OBJECTID_REGEX.test(userId)) {
+      throw new InvalidArgumentError('userId is not a valid ObjectId');
+    }
+
+    await this.refreshTokenModel.updateMany(
+      {
+        userId,
+        revokedAt: null,
+        expiresAt: { $gt: new Date() },
+        ...(audience === undefined ? {} : { audience }),
+      },
+      { revokedAt: new Date() },
+    );
+  }
+
   /**
    * Revokes every active refresh token of an audience, listing them first so the
    * caller can audit session by session and exclude users (the owner) upstream.
@@ -322,6 +339,17 @@ export class RefreshTokenService {
           jti: token.jti,
         });
       }
+    }
+
+    const remaining = await this.refreshTokenModel
+      .find(filter)
+      .select('_id')
+      .limit(1)
+      .lean<Array<{ _id: Types.ObjectId }>>();
+
+    if (remaining.length > 0) {
+      // Never report a complete revocation while a session can still refresh.
+      throw new Error('Session revocation incomplete');
     }
 
     return revoked;

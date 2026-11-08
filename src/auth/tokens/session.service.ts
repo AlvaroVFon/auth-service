@@ -113,7 +113,7 @@ export class SessionService {
   }
 
   async revokeAll(userId: string, audience?: string): Promise<void> {
-    await this.revokeAllWithIds(userId, audience);
+    await this.refreshTokenService.revokeAllBulk(userId, audience);
   }
 
   async revokeByRefreshToken(

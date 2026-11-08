@@ -1117,7 +1117,7 @@ describe('UsersService session listing', () => {
 
     await assert.rejects(
       service.listSessions(user._id.toString()),
-      new Error('Session lister is not configured'),
+      new Error('Session manager is not configured'),
     );
   });
 

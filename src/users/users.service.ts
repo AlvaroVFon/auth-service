@@ -308,7 +308,10 @@ export class UsersService implements UsersPort {
   }
 
   private async recordSupportEvent(
-    event: AuditEvent,
+    event:
+      | AuditEvent.USER_UNLOCKED
+      | AuditEvent.USER_VERIFIED
+      | AuditEvent.SESSION_REVOKED_BY_ADMIN,
     targetUserId: string,
     context: UserSupportActionContext,
     sessionId?: string,
@@ -359,7 +362,7 @@ export class UsersService implements UsersPort {
   async listSessions(id: string): Promise<UserSessionView[]> {
     await this.assertSessionTarget(id);
 
-    return this.requireSessionManager().listSessions(id);
+    return this.requireSessionPort().listSessions(id);
   }
 
   /** Revokes one session of the target and audits the session id. */
@@ -370,7 +373,7 @@ export class UsersService implements UsersPort {
   ): Promise<void> {
     await this.assertSessionTarget(id);
 
-    const revoked = await this.requireSessionManager().revokeSession(
+    const revoked = await this.requireSessionPort().revokeSession(
       id,
       sessionId,
     );
@@ -394,7 +397,7 @@ export class UsersService implements UsersPort {
 
     // Audit exactly the sessions the revocation reported, not a pre-list
     // snapshot that concurrent logins could make stale.
-    const sessionIds = await this.requireSessionManager().revokeAllSessions(id);
+    const sessionIds = await this.requireSessionPort().revokeAllSessions(id);
 
     for (const sessionId of sessionIds) {
       await this.recordSupportEvent(
@@ -419,9 +422,9 @@ export class UsersService implements UsersPort {
     }
   }
 
-  private requireSessionManager(): UserSessionsPort {
+  private requireSessionPort(): UserSessionsPort {
     if (!this.sessionLister) {
-      throw new Error('Session lister is not configured');
+      throw new Error('Session manager is not configured');
     }
 
     return this.sessionLister;

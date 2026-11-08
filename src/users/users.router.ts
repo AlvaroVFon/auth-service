@@ -11,6 +11,10 @@ export interface UsersSupportRateLimitConfig {
   max: number;
 }
 
+/** Session revocation has its own budget: operators may close many sessions. */
+export const SESSION_REVOKE_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+export const SESSION_REVOKE_RATE_LIMIT_MAX = 60;
+
 /**
  * Support actions take no input beyond the path parameter. Exported next to the
  * routes so the global body guard cannot drift from the route shapes.
@@ -87,15 +91,20 @@ export class UsersRouter {
       this.userController.verify.bind(this.userController),
     );
 
+    const sessionRateLimiter = createRateLimiter(
+      SESSION_REVOKE_RATE_LIMIT_WINDOW_MS,
+      SESSION_REVOKE_RATE_LIMIT_MAX,
+    );
+
     this.app.delete(
       '/users/:id/sessions/:sessionId',
-      supportRateLimiter,
+      sessionRateLimiter,
       this.userController.revokeUserSession.bind(this.userController),
     );
 
     this.app.delete(
       '/users/:id/sessions',
-      supportRateLimiter,
+      sessionRateLimiter,
       this.userController.revokeAllUserSessions.bind(this.userController),
     );
   }
