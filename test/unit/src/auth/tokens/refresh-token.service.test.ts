@@ -59,8 +59,13 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
     assert.deepStrictEqual(calls.limits, [500, 500, 500, 500, 500]);
     assert.strictEqual(calls.filters.length, 5);
     for (const filter of calls.filters) {
-      const ids = (filter as { _id: { $in: unknown[] } })._id.$in;
-      assert.strictEqual(ids.length, 500);
+      const parsed = filter as {
+        _id: { $in: unknown[] };
+        revokedAt: null;
+      };
+      assert.strictEqual(parsed._id.$in.length, 500);
+      // A concurrently revoked token must not be overwritten.
+      assert.strictEqual(parsed.revokedAt, null);
     }
   });
 

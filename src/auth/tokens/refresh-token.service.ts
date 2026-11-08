@@ -238,6 +238,7 @@ export class RefreshTokenService {
       const result = await this.refreshTokenModel.updateMany(
         {
           _id: { $in: active.map((token) => token._id) },
+          revokedAt: null,
         },
         { revokedAt: new Date() },
       );
