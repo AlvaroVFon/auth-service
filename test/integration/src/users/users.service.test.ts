@@ -562,9 +562,10 @@ describe('UsersService', () => {
           ['alpha-user', 'zeta-user'],
         );
         for (const user of result.items) {
-          assert.strictEqual(user.password, undefined);
-          assert.strictEqual(user.loginAttempts, undefined);
-          assert.strictEqual(user.lockoutUntil, undefined);
+          assert.strictEqual('password' in user, false);
+          assert.strictEqual('loginAttempts' in user, false);
+          assert.strictEqual('lockoutUntil' in user, false);
+          assert.strictEqual('mfaSecret' in user, false);
         }
       });
     });

@@ -17,6 +17,24 @@ export const USER_SORTABLE_FIELDS = [
 
 export type UserSortField = (typeof USER_SORTABLE_FIELDS)[number];
 
+/**
+ * Profile projection returned by the management listing: every credential,
+ * lockout counter and MFA path is excluded from the type itself, so a consumer
+ * can never read a secret the query did not select.
+ */
+export type UserListItem = Omit<
+  User,
+  | 'password'
+  | 'loginAttempts'
+  | 'lockoutUntil'
+  | 'mfaSecret'
+  | 'mfaPendingSecret'
+  | 'mfaRecoveryCodes'
+  | 'mfaFailedAttempts'
+  | 'mfaLockoutUntil'
+  | 'mfaLastUsedStep'
+>;
+
 /** Default query contract of `GET /users`. */
 export const USER_LIST_OPTIONS: ListQueryOptions<UserSortField> = {
   sortableFields: USER_SORTABLE_FIELDS,
@@ -38,7 +56,9 @@ export interface UserSessionRevokerPort {
 }
 
 export interface UsersPort {
-  findAll(query: ListQuery<UserSortField>): Promise<PaginatedResult<User>>;
+  findAll(
+    query: ListQuery<UserSortField>,
+  ): Promise<PaginatedResult<UserListItem>>;
   verifyCredentials(email: string, password: string): Promise<User>;
   createVerifiedUser(input: CreateVerifiedUserInput): Promise<User>;
   createOwner(email: string, password: string): Promise<User>;

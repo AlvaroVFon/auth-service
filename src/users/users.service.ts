@@ -31,26 +31,25 @@ import { User as UserInterface } from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
+  UserListItem,
   UserSessionRevokerPort,
   UserSortField,
   UsersPort,
 } from './users.port';
 
 /**
- * Never ships credentials, lockout counters or MFA material in the listing,
- * even if the schema's serialization ever changes.
+ * Inclusion projection: a path added to the schema later is not shipped until
+ * it is listed here, so the listing fails closed instead of leaking a secret.
  */
 const USER_LIST_PROJECTION = [
-  '-password',
-  '-loginAttempts',
-  '-lockoutUntil',
-  '-mfaSecret',
-  '-mfaPendingSecret',
-  '-mfaRecoveryCodes',
-  '-mfaFailedAttempts',
-  '-mfaLockoutUntil',
-  '-mfaLastUsedStep',
-  '-__v',
+  'username',
+  'email',
+  'role',
+  'verified',
+  'telegramChatId',
+  'mfaEnabled',
+  'createdAt',
+  'updatedAt',
 ].join(' ');
 
 export class UsersService implements UsersPort {
@@ -208,7 +207,7 @@ export class UsersService implements UsersPort {
 
   async findAll(
     query: ListQuery<UserSortField>,
-  ): Promise<PaginatedResult<UserInterface>> {
+  ): Promise<PaginatedResult<UserListItem>> {
     const filter = query.q
       ? {
           $or: [
@@ -224,7 +223,8 @@ export class UsersService implements UsersPort {
         .select(USER_LIST_PROJECTION)
         .sort(buildSortObject(query.sort))
         .skip((query.page - 1) * query.limit)
-        .limit(query.limit),
+        .limit(query.limit)
+        .lean<UserListItem[]>(),
       this.usersModel.countDocuments(filter),
     ]);
 

@@ -80,8 +80,13 @@ userSchema.index(
   },
 );
 
-// Supports the prefix search of the management listing without a collection
-// scan when the term matches a username.
-userSchema.index({ username: 1 });
+// Every listing order ends in `_id` (stable pagination), so each sortable
+// field needs the compound index; MongoDB can scan it in reverse for the
+// descending direction.
+userSchema.index({ email: 1, _id: 1 });
+userSchema.index({ username: 1, _id: 1 });
+userSchema.index({ role: 1, _id: 1 });
+userSchema.index({ verified: 1, _id: 1 });
+userSchema.index({ createdAt: 1, _id: 1 });
 
 export const User = model<UserInterface>('User', userSchema);
