@@ -3,6 +3,7 @@ import type {
   ListQueryOptions,
   PaginatedResult,
 } from '../common/pagination';
+import type { SettingsChanges } from '../settings';
 import { Application } from './applications.interface';
 
 /** Fields the owner may order the application catalog by. */
@@ -55,6 +56,7 @@ export interface ApplicationsPort {
   ): Promise<PaginatedResult<Application>>;
   /** Every application, used to build the owner's auth context. */
   findAllForContext(): Promise<Application[]>;
+  updateSettings(id: string, changes: SettingsChanges): Promise<void>;
   findActiveByIds(ids: string[]): Promise<Application[]>;
   findAssignableById(id: string): Promise<Application | null>;
 }

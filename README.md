@@ -210,6 +210,8 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
 | `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
 | `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
+| `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |
+| `POST`   | `/users/:id/verify`                           | Owner            | Marks the account as verified; audited.                         |
 | `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                  |
 | `GET`    | `/applications`                               | Owner            | Lists applications.                                             |
 | `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
@@ -229,8 +231,8 @@ payload that mixes an allowed field with a rejected one writes nothing.
 This is a contract change: before, unknown fields were forwarded to the service and
 `role` was silently dropped, which allowed writing verification, lockout and MFA
 state without validation or an audit event. Security state now has dedicated support
-endpoints; until they exist, `verified`, `loginAttempts`, `lockoutUntil` or MFA
-fields cannot be changed through the API.
+routes: `POST /users/:id/unlock` and `POST /users/:id/verify`. `verified`,
+`loginAttempts`, `lockoutUntil` and the MFA fields stay rejected by `PATCH`.
 
 `email` and `password` are validated before they reach the service: the address is
 trimmed and lower-cased, then checked against `EMAIL_REGEX`, so an invalid value
@@ -303,8 +305,9 @@ audience). With an application, the account needs an active grant on it and rece
 access and refresh tokens carrying that app's `aud` and the grant role
 (`viewer`/`editor`/`admin`). Without an application, only the global owner can log in;
 the owner token has no `aud` and is the only one accepted by `/applications` and
-`/users`. A missing grant, unknown app or inactive app returns `403` without tokens,
-while invalid credentials always return the same generic `401`.
+`/users`. An unknown or inactive app returns the same generic `401` as wrong
+credentials (the password is verified first), a missing grant returns `403` without
+tokens, and invalid credentials always return that same generic `401`.
 
 ### Application lifecycle
 

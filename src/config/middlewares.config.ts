@@ -7,14 +7,17 @@ import {
   GLOBAL_RATE_LIMIT_MAX,
   GLOBAL_RATE_LIMIT_WINDOW_MS,
 } from '../common/middlewares/rate-limiter.middleware';
-import { RequiredBodyMiddleware } from '../common/middlewares/required-body.middleware';
+import {
+  RequiredBodyMiddleware,
+  type BodylessPath,
+} from '../common/middlewares/required-body.middleware';
 import { isHealthProbe } from '../health';
 import { createCorsMiddleware } from './cors.config';
 
 export class GlobalMiddlewares {
   static initialize(
     app: Application,
-    excludedBodyPaths: string[] = [],
+    excludedBodyPaths: BodylessPath[] = [],
     corsOrigins: string[] = [],
   ) {
     app.use(helmet());

@@ -15,6 +15,8 @@ export enum AuditEvent {
   APPLICATION_DEACTIVATED = 'application.deactivated',
   APPLICATION_ARCHIVED = 'application.archived',
   MEMBER_GRANTED = 'member.granted',
+  USER_UNLOCKED = 'user.unlocked',
+  USER_VERIFIED = 'user.verified',
 }
 
 export enum AuditResult {

@@ -20,6 +20,7 @@ import {
   type PaginatedResult,
 } from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
+import type { SettingsChanges } from '../settings';
 import { Application } from './applications.interface';
 import {
   type ApplicationSortField,
@@ -226,13 +227,20 @@ export class ApplicationsService implements ApplicationsPort {
     }
 
     const value = identifier.trim();
+    const slug = value.toLowerCase();
 
+    // One query for both hit and miss so the unauthenticated login path does
+    // not reveal whether an identifier exists through the number of roundtrips.
     // Slug wins when it collides with another application's audience.
-    const bySlug = await this.applicationModel.findOne({
-      slug: value.toLowerCase(),
+    const applications = await this.applicationModel.find({
+      $or: [{ slug }, { audience: value }],
     });
 
-    return bySlug ?? (await this.findByAudience(value));
+    return (
+      applications.find((application) => application.slug === slug) ??
+      applications.find((application) => application.audience === value) ??
+      null
+    );
   }
 
   async findAll(
@@ -277,6 +285,44 @@ export class ApplicationsService implements ApplicationsPort {
       _id: { $in: ids },
       active: true,
     });
+  }
+
+  /** Applies validated settings changes to the application subdocument. */
+  async updateSettings(id: string, changes: SettingsChanges): Promise<void> {
+    assertObjectId(id);
+
+    const $set: Record<string, unknown> = {};
+    const $unset: Record<string, 1> = {};
+
+    for (const [field, value] of Object.entries(changes.set)) {
+      $set[`settings.${field}`] = value;
+    }
+    for (const field of changes.unset) {
+      $unset[`settings.${field}`] = 1;
+    }
+
+    if (Object.keys($set).length === 0 && Object.keys($unset).length === 0) {
+      // An empty patch is a no-op, but it must still distinguish a missing
+      // application from an existing one so the HTTP layer can answer 404.
+      const exists = await this.applicationModel.exists({ _id: id });
+      if (!exists) {
+        throw new EntityNotFoundError('Application not found');
+      }
+      return;
+    }
+
+    const updated = await this.applicationModel.findByIdAndUpdate(
+      id,
+      {
+        ...(Object.keys($set).length === 0 ? {} : { $set }),
+        ...(Object.keys($unset).length === 0 ? {} : { $unset }),
+      },
+      { returnDocument: 'after' },
+    );
+
+    if (!updated) {
+      throw new EntityNotFoundError('Application not found');
+    }
   }
 
   async findAssignableById(id: string): Promise<Application | null> {

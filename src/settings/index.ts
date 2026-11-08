@@ -4,14 +4,21 @@ export {
   type ApplicationSettingsInput,
 } from './settings.interface';
 export {
+  SETTINGS_CACHE_MAX_ENTRIES,
+  SETTINGS_CACHE_TTL_MS,
+  SettingsCache,
+} from './settings.cache';
+export {
   SETTINGS_CODE_DEFAULTS,
   resolveEnvironmentSettings,
 } from './settings.defaults';
 export {
+  type ApplicationSettingsWriterPort,
   type GlobalSettingsPort,
   type ResolvedSetting,
   type ResolvedSettings,
   type SettingSource,
+  type SettingsChanges,
   type SettingsPort,
 } from './settings.port';
 export { SettingsService } from './settings.service';
@@ -21,6 +28,7 @@ export {
   SETTINGS_FIELD_DESCRIPTORS,
   SETTINGS_VALIDATION_MESSAGES,
   isBoolean,
+  isSettingsField,
   isMfaPolicy,
   isNonEmptyString,
   isPositiveInteger,

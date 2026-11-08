@@ -1,12 +1,13 @@
 import { Application } from 'express';
 
+import type { AuditPort } from '../audit';
 import { assertDependencies } from '../common/depencencies-validator';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
 import { UsersController } from './users.controller';
-import { UsersRouter } from './users.router';
+import { UsersRouter, type UsersSupportRateLimitConfig } from './users.router';
 import { User } from './users.schema';
 import { UsersService } from './users.service';
 
@@ -21,7 +22,9 @@ export class UsersModule {
     private readonly logger: LoggerInterface,
     private readonly maxLoginAttempts: number = 5,
     private readonly lockoutDurationMs: number = 900000,
-    private readonly mfaCipher?: SecretCipher,
+    private readonly mfaCipher: SecretCipher | undefined,
+    private readonly auditService: AuditPort,
+    private readonly supportRateLimit: UsersSupportRateLimitConfig,
   ) {
     assertDependencies(
       {
@@ -29,6 +32,8 @@ export class UsersModule {
         authenticationMiddleware,
         authorizationMiddleware,
         logger,
+        auditService,
+        supportRateLimit,
       },
       this.constructor.name,
     );
@@ -39,6 +44,7 @@ export class UsersModule {
       this.maxLoginAttempts,
       this.lockoutDurationMs,
       this.mfaCipher,
+      this.auditService,
     );
     this.controller = new UsersController(this.service);
   }
@@ -48,6 +54,7 @@ export class UsersModule {
       this.authenticationMiddleware,
       this.authorizationMiddleware,
       this.controller,
+      this.supportRateLimit,
       app,
     );
     this.logger.info('Init Module - Users - OK');

@@ -55,6 +55,7 @@ import {
 } from '../links';
 import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
+import { USER_SUPPORT_BODYLESS_PATHS } from '../users/users.router';
 import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import {
@@ -237,6 +238,8 @@ export const createApplicationComposition = (
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
     mfaCipher ?? undefined,
+    auditService,
+    (options.rateLimitConfig ?? getDefaultRateLimitConfig()).login,
   );
   const grantsModule = new GrantsModule(
     GrantModel,
@@ -401,7 +404,11 @@ export const createApplicationComposition = (
       HttpLoggerInterceptor.initialize(app, requestLogger, (request) =>
         isHealthProbe(request.path),
       );
-      GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
+      GlobalMiddlewares.initialize(
+        app,
+        ['/auth/logout', ...USER_SUPPORT_BODYLESS_PATHS],
+        corsOrigins,
+      );
       healthModule.initialize(app);
       jwksModule.initialize(app);
       applicationsModule.initialize(app, applicationAuthorizationMiddleware);
