@@ -80,4 +80,8 @@ userSchema.index(
   },
 );
 
+// Supports the prefix search of the management listing without a collection
+// scan when the term matches a username.
+userSchema.index({ username: 1 });
+
 export const User = model<UserInterface>('User', userSchema);

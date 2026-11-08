@@ -18,6 +18,13 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
+import {
+  buildPaginatedResult,
+  buildSearchRegex,
+  buildSortObject,
+  type ListQuery,
+  type PaginatedResult,
+} from '../common/pagination';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
@@ -25,8 +32,26 @@ import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
   UserSessionRevokerPort,
+  UserSortField,
   UsersPort,
 } from './users.port';
+
+/**
+ * Never ships credentials, lockout counters or MFA material in the listing,
+ * even if the schema's serialization ever changes.
+ */
+const USER_LIST_PROJECTION = [
+  '-password',
+  '-loginAttempts',
+  '-lockoutUntil',
+  '-mfaSecret',
+  '-mfaPendingSecret',
+  '-mfaRecoveryCodes',
+  '-mfaFailedAttempts',
+  '-mfaLockoutUntil',
+  '-mfaLastUsedStep',
+  '-__v',
+].join(' ');
 
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
@@ -181,8 +206,29 @@ export class UsersService implements UsersPort {
     return user;
   }
 
-  async findAll(): Promise<UserInterface[]> {
-    return this.usersModel.find();
+  async findAll(
+    query: ListQuery<UserSortField>,
+  ): Promise<PaginatedResult<UserInterface>> {
+    const filter = query.q
+      ? {
+          $or: [
+            { email: buildSearchRegex(query.q) },
+            { username: buildSearchRegex(query.q) },
+          ],
+        }
+      : {};
+
+    const [items, total] = await Promise.all([
+      this.usersModel
+        .find(filter)
+        .select(USER_LIST_PROJECTION)
+        .sort(buildSortObject(query.sort))
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit),
+      this.usersModel.countDocuments(filter),
+    ]);
+
+    return buildPaginatedResult(items, total, query);
   }
 
   async findByRole(role: Roles): Promise<UserInterface | null> {
