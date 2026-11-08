@@ -112,41 +112,50 @@ export class GrantsService implements GrantsPort {
     assertObjectId(applicationId, 'applicationId');
     await this.resolveApplication(applicationId, scope);
 
-    const filter = { applicationId: new Types.ObjectId(applicationId) };
-    const [grants, total] = await Promise.all([
-      this.grantModel
-        .find(filter)
-        .sort(buildSortObject(query.sort))
-        .skip((query.page - 1) * query.limit)
-        .limit(query.limit),
-      this.grantModel.countDocuments(filter),
+    // Join the users in the same pipeline so `total` and the page describe the
+    // same set: a grant whose user was deleted is not a member any more and
+    // must not inflate the count.
+    const [facet] = await this.grantModel.aggregate<{
+      items: GrantMember[];
+      total: Array<{ value: number }>;
+    }>([
+      { $match: { applicationId: new Types.ObjectId(applicationId) } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      {
+        $facet: {
+          items: [
+            { $sort: buildSortObject(query.sort) },
+            { $skip: (query.page - 1) * query.limit },
+            { $limit: query.limit },
+            {
+              $project: {
+                _id: 0,
+                userId: { $toString: '$userId' },
+                role: 1,
+                createdAt: 1,
+                email: '$user.email',
+                username: '$user.username',
+                verified: '$user.verified',
+                mfaEnabled: { $ifNull: ['$user.mfaEnabled', false] },
+                lastLoginAt: '$user.lastLoginAt',
+              },
+            },
+          ],
+          total: [{ $count: 'value' }],
+        },
+      },
     ]);
 
-    const summaries = await this.usersService.findSummariesByIds(
-      grants.map((grant) => grant.userId.toString()),
-    );
-    const summariesById = new Map(
-      summaries.map((summary) => [summary.userId, summary]),
-    );
-
-    // A grant whose user was deleted is not a member any more.
-    const items = grants.flatMap((grant) => {
-      const summary = summariesById.get(grant.userId.toString());
-
-      return summary
-        ? [
-            {
-              ...summary,
-              role: grant.role,
-              // `createdAt` is the membership date so the exposed value matches
-              // the `createdAt` ordering.
-              ...(grant.createdAt === undefined
-                ? {}
-                : { createdAt: grant.createdAt }),
-            },
-          ]
-        : [];
-    });
+    const items = facet?.items ?? [];
+    const total = facet?.total[0]?.value ?? 0;
 
     return buildPaginatedResult(items, total, query);
   }

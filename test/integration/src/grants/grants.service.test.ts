@@ -778,7 +778,7 @@ describe('GrantsService.listMembers', () => {
       query(),
     );
 
-    assert.strictEqual(result.total, 2);
+    assert.strictEqual(result.total, 1);
     assert.strictEqual(result.items.length, 1);
   });
 });
