@@ -714,7 +714,7 @@ describe('GrantsService.grantMemberByEmail', () => {
       email: account.email.toUpperCase(),
       applicationId: application._id.toString(),
       role: GrantRoles.EDITOR,
-      actorRole: GrantRoles.ADMIN,
+      actorRole: Roles.ADMIN,
       actorId: new Types.ObjectId().toString(),
     });
 
@@ -755,7 +755,7 @@ describe('GrantsService.grantMemberByEmail', () => {
       email,
       applicationId: application._id.toString(),
       role: GrantRoles.VIEWER,
-      actorRole: GrantRoles.ADMIN,
+      actorRole: Roles.ADMIN,
     });
 
     assert.deepStrictEqual(result, { email, role: GrantRoles.VIEWER });
@@ -781,7 +781,7 @@ describe('GrantsService.grantMemberByEmail', () => {
       email: holder.email,
       applicationId: application._id.toString(),
       role: GrantRoles.VIEWER,
-      actorRole: GrantRoles.ADMIN,
+      actorRole: Roles.ADMIN,
     });
 
     assert.deepStrictEqual(result, {
@@ -807,7 +807,7 @@ describe('GrantsService.grantMemberByEmail', () => {
         email: account.email,
         applicationId: application._id.toString(),
         role: GrantRoles.ADMIN,
-        actorRole: GrantRoles.ADMIN,
+        actorRole: Roles.ADMIN,
       }),
       ForbiddenError,
     );
@@ -823,7 +823,7 @@ describe('GrantsService.grantMemberByEmail', () => {
         email: adminAccount.email,
         applicationId: application._id.toString(),
         role: GrantRoles.VIEWER,
-        actorRole: GrantRoles.ADMIN,
+        actorRole: Roles.ADMIN,
       }),
       ForbiddenError,
     );

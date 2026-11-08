@@ -105,6 +105,7 @@ export class GrantsService implements GrantsPort {
         email,
         applicationId: input.applicationId,
         role: input.role,
+        application,
       });
     }
 
@@ -145,6 +146,7 @@ export class GrantsService implements GrantsPort {
     email: string;
     applicationId: string;
     role: GrantRoles;
+    application: Application;
   }): Promise<GrantedMember> {
     if (!this.invitations) {
       throw new Error('Invitations port is not configured');

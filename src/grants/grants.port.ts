@@ -33,7 +33,7 @@ export interface GrantMemberInput {
   applicationId: string;
   role: GrantRoles;
   /** Global role of the caller: only `owner` may grant the admin role. */
-  actorRole: Roles | GrantRoles;
+  actorRole: Roles;
   actorId?: string;
 }
 

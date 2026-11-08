@@ -13,7 +13,10 @@ import type { HoldersPort } from '../holders';
 import { CryptoService } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
 import type { UsersPort } from '../users';
-import type { InviteMemberInput } from './invitations.port';
+import type {
+  InvitationMailerPort,
+  InviteMemberInput,
+} from './invitations.port';
 import {
   LinkNotificationsService,
   LinkNotificationResult,
@@ -55,56 +58,36 @@ export class InvitationsService {
     private readonly publicAppUrl: string,
     private readonly notifications: LinkNotificationsService,
     private readonly logger: LoggerInterface,
+    private readonly invitationMailer?: InvitationMailerPort,
   ) {}
 
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
     const email = normalizeEmail(input.email ?? '');
-
     const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
+    const application = await this.findApplication(input.applicationId);
 
-    const application = await this.applicationsService.findAssignableById(
-      input.applicationId,
-    );
-    if (!application) {
-      throw new EntityNotFoundError('Application not found');
-    }
-
-    const existingUser = await this.usersService.findByEmail(email);
-    const existingHolder = await this.holdersService.findByEmail(email);
-    if (existingUser || existingHolder) {
-      // Keep the response generic: a per-app admin must not be able to probe
-      // whether an email has an account anywhere in the service.
-      throw new InvalidArgumentError('Invitation could not be created');
-    }
-
-    const created = await this.linksService.createInvitation({
+    const created = await this.buildInvitation({
       email,
-      applicationId: input.applicationId,
+      application,
       role: input.role,
       ...(telegramChatId === undefined ? {} : { telegramChatId }),
-    });
-
-    const link = buildInvitationLink(this.publicAppUrl, created.token);
-    const notification = await this.notifications.notifyInvitation({
-      linkId: created.link._id.toString(),
-      link,
-      ...(telegramChatId === undefined ? {} : { chatId: telegramChatId }),
+      allowHolder: false,
     });
 
     return {
-      link,
-      expiresAt: created.link.expiresAt,
+      link: created.link,
+      expiresAt: created.created.link.expiresAt,
       email,
       applicationId: input.applicationId,
       role: input.role,
-      notification,
+      notification: created.notification,
     };
   }
 
   /**
-   * Invites an email that has no verified account. A pre-verification holder is
-   * a valid target here, unlike the public invitation flow, because the member
-   * is being onboarded by an administrator.
+   * Invites an email that has no account. A pre-verification holder is a valid
+   * target here, unlike the public invitation flow, because the member is being
+   * onboarded by an administrator.
    */
   async inviteMember(input: InviteMemberInput): Promise<void> {
     const email = normalizeEmail(input.email ?? '');
@@ -113,30 +96,70 @@ export class InvitationsService {
       throw new InvalidArgumentError('Invalid email format');
     }
 
-    const application = await this.applicationsService.findAssignableById(
-      input.applicationId,
-    );
+    const application =
+      input.application ?? (await this.findApplication(input.applicationId));
+
+    const created = await this.buildInvitation({
+      email,
+      application,
+      role: input.role,
+      allowHolder: true,
+    });
+
+    await this.invitationMailer?.sendInvitationEmail(email, created.link);
+  }
+
+  private async findApplication(applicationId: string) {
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+
     if (!application) {
       throw new EntityNotFoundError('Application not found');
     }
 
-    const existingUser = await this.usersService.findByEmail(email);
-    if (existingUser) {
+    return application;
+  }
+
+  private async buildInvitation(input: {
+    email: string;
+    application: {
+      _id: { toString(): string };
+      active: boolean;
+    };
+    role: GrantRoles;
+    telegramChatId?: string;
+    allowHolder: boolean;
+  }) {
+    const existingUser = await this.usersService.findByEmail(input.email);
+    const existingHolder = input.allowHolder
+      ? null
+      : await this.holdersService.findByEmail(input.email);
+
+    if (existingUser || existingHolder) {
+      // Keep the response generic: a per-app admin must not be able to probe
+      // whether an email has an account anywhere in the service.
       throw new InvalidArgumentError('Invitation could not be created');
     }
 
     const created = await this.linksService.createInvitation({
-      email,
-      applicationId: input.applicationId,
+      email: input.email,
+      applicationId: input.application._id.toString(),
       role: input.role,
+      ...(input.telegramChatId === undefined
+        ? {}
+        : { telegramChatId: input.telegramChatId }),
     });
 
     const link = buildInvitationLink(this.publicAppUrl, created.token);
-
-    await this.notifications.notifyInvitation({
+    const notification = await this.notifications.notifyInvitation({
       linkId: created.link._id.toString(),
       link,
+      ...(input.telegramChatId === undefined
+        ? {}
+        : { chatId: input.telegramChatId }),
     });
+
+    return { created, link, notification };
   }
 
   async accept(input: AcceptInvitationInput): Promise<void> {
@@ -153,6 +176,19 @@ export class InvitationsService {
 
     if (!link.email || !link.applicationId || !link.role) {
       throw new InvalidLinkError();
+    }
+
+    // The invitee may have verified their own signup after the invitation was
+    // created: attach the grant to that account instead of failing to create a
+    // duplicate user.
+    const existingUser = await this.usersService.findByEmail(link.email);
+    if (existingUser) {
+      await this.grantsService.assignRole({
+        userId: existingUser._id.toString(),
+        applicationId: link.applicationId.toString(),
+        role: link.role,
+      });
+      return;
     }
 
     const passwordHash = await this.cryptoService.hashString(input.password);
