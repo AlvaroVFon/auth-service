@@ -26,6 +26,7 @@ import {
   type ListQuery,
   type PaginatedResult,
 } from '../common/pagination';
+import type { RequestAuditContext } from '../common/request-context';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
 import { User as UserInterface } from '../users/users.interface';
@@ -41,10 +42,8 @@ import type {
 } from './users.port';
 
 /** Request context attached to an owner support action in the audit trail. */
-export interface UserSupportActionContext {
+export interface UserSupportActionContext extends RequestAuditContext {
   actorId?: string;
-  ipAddress?: string;
-  userAgent?: string;
 }
 
 /**

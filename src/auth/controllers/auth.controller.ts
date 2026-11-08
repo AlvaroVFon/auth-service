@@ -17,9 +17,7 @@ export class AuthController {
   ) {}
 
   private buildRequestContext(req: Request): RequestContext {
-    const { ipAddress, userAgent } = extractRequestContext(req);
-
-    return { ipAddress, userAgent };
+    return extractRequestContext(req);
   }
 
   private buildIdentity(req: Request): TokenIdentity {

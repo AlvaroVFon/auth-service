@@ -31,10 +31,15 @@ const pickUserProfile = (
   return profile;
 };
 
-const supportContext = (req: Request): UserSupportActionContext => ({
-  ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
-  ...extractRequestContext(req),
-});
+const supportContext = (req: Request): UserSupportActionContext => {
+  const { ipAddress, userAgent } = extractRequestContext(req);
+
+  return {
+    ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
+    ...(ipAddress === undefined ? {} : { ipAddress }),
+    ...(userAgent === undefined ? {} : { userAgent }),
+  };
+};
 
 export class UsersController {
   constructor(private readonly userService: UsersService) {}

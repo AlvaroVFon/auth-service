@@ -1,17 +1,19 @@
 import type { Request } from 'express';
 
-/** Client context attached to audit events. */
+/** Optional client context attached to audit events. */
 export interface RequestAuditContext {
   ipAddress?: string;
   userAgent?: string;
 }
 
-/** Extracts the request context shared by every audited controller. */
-export const extractRequestContext = (req: Request): RequestAuditContext => {
-  const userAgent = req.get('User-Agent');
+/** Request context with both keys present, as the auth services consume it. */
+export interface RequestContext {
+  ipAddress: string | undefined;
+  userAgent: string | undefined;
+}
 
-  return {
-    ...(req.ip === undefined ? {} : { ipAddress: req.ip }),
-    ...(userAgent === undefined ? {} : { userAgent }),
-  };
-};
+/** Extracts the request context shared by every audited controller. */
+export const extractRequestContext = (req: Request): RequestContext => ({
+  ipAddress: req.ip,
+  userAgent: req.get('User-Agent'),
+});
