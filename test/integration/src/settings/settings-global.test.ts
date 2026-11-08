@@ -32,11 +32,15 @@ describe('Global settings persistence', () => {
       { $set: { appName: 'Edited' } },
     );
 
+    const edited = await GlobalSettingsModel.findById('global');
+    const updatedAt = edited?.updatedAt;
+
     await ensureGlobalSettings(GlobalSettingsModel, { appName: 'Seeded' });
 
     assert.strictEqual(await documentCount(), 1);
     const document = await GlobalSettingsModel.findById('global');
     assert.strictEqual(document?.appName, 'Edited');
+    assert.strictEqual(document?.updatedAt?.getTime(), updatedAt?.getTime());
   });
 
   test('the document only contains policy fields', async () => {

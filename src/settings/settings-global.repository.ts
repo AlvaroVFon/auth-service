@@ -1,5 +1,6 @@
 import type { Model } from 'mongoose';
 
+import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import {
   GLOBAL_SETTINGS_KEY,
   type GlobalSettingsDocument,
@@ -50,13 +51,24 @@ export class GlobalSettingsRepository implements GlobalSettingsPort {
       return;
     }
 
-    await this.model.updateOne(
-      { _id: GLOBAL_SETTINGS_KEY },
-      {
-        ...(Object.keys($set).length === 0 ? {} : { $set }),
-        ...(Object.keys($unset).length === 0 ? {} : { $unset }),
-      },
-      { upsert: true, setDefaultsOnInsert: true },
-    );
+    const filter = { _id: GLOBAL_SETTINGS_KEY };
+    const update = {
+      ...(Object.keys($set).length === 0 ? {} : { $set }),
+      ...(Object.keys($unset).length === 0 ? {} : { $unset }),
+    };
+
+    try {
+      await this.model.updateOne(filter, update, {
+        upsert: true,
+        setDefaultsOnInsert: true,
+      });
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
+
+      // Another writer created the singleton first: retry without upsert.
+      await this.model.updateOne(filter, update);
+    }
   }
 }

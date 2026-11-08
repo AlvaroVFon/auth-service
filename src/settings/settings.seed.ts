@@ -1,5 +1,6 @@
 import type { Model } from 'mongoose';
 
+import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import {
   GLOBAL_SETTINGS_KEY,
   type GlobalSettingsDocument,
@@ -21,11 +22,19 @@ export const ensureGlobalSettings = async (
   const settings = validateApplicationSettings(environment) ?? {};
   const now = new Date();
 
-  await model.updateOne(
-    { _id: GLOBAL_SETTINGS_KEY },
-    { $setOnInsert: { ...settings, createdAt: now, updatedAt: now } },
-    // Mongoose would otherwise inject `$set: { updatedAt }` on every restart,
-    // turning a no-op seed into a real write.
-    { upsert: true, setDefaultsOnInsert: true, timestamps: false },
-  );
+  try {
+    await model.updateOne(
+      { _id: GLOBAL_SETTINGS_KEY },
+      { $setOnInsert: { ...settings, createdAt: now, updatedAt: now } },
+      // Mongoose would otherwise inject `$set: { updatedAt }` on every restart,
+      // turning a no-op seed into a real write.
+      { upsert: true, setDefaultsOnInsert: true, timestamps: false },
+    );
+  } catch (error) {
+    // Two instances booting against a fresh database race on the singleton:
+    // the loser of the insert just finds it created by the winner.
+    if (!isDuplicateKeyError(error)) {
+      throw error;
+    }
+  }
 };
