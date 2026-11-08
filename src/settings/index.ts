@@ -21,6 +21,13 @@ export {
   type SettingsChanges,
   type SettingsPort,
 } from './settings.port';
+export {
+  GLOBAL_SETTINGS_KEY,
+  type GlobalSettingsDocument,
+} from './settings-global.interface';
+export { GlobalSettingsRepository } from './settings-global.repository';
+export { GlobalSettingsModel } from './settings-global.schema';
+export { ensureGlobalSettings } from './settings.seed';
 export { SettingsService } from './settings.service';
 export {
   MFA_POLICIES,
