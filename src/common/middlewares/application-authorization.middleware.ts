@@ -37,23 +37,26 @@ export class ApplicationAuthorizationMiddleware {
    * the admin of that application. Anything else is a 404: an application the
    * caller cannot read must be indistinguishable from one that does not exist,
    * so the route can never be used to enumerate applications.
+   *
+   * The route parameter is explicit so mounting the reader on a surface that
+   * names it differently is a visible decision instead of an implicit contract.
    */
-  allowApplicationReader = async (
-    req: Request,
-    _res: Response,
-    next: NextFunction,
-  ) => {
-    try {
-      await this.authorizeApplicationAdmin(
-        req,
-        req.params.id,
-        () => new EntityNotFoundError('Application not found'),
-      );
-      next();
-    } catch (error) {
-      next(error);
-    }
-  };
+  allowApplicationReader = this.createApplicationReader('id');
+
+  private createApplicationReader(param: string) {
+    return async (req: Request, _res: Response, next: NextFunction) => {
+      try {
+        await this.authorizeApplicationAdmin(
+          req,
+          req.params[param],
+          () => new EntityNotFoundError('Application not found'),
+        );
+        next();
+      } catch (error) {
+        next(error);
+      }
+    };
+  }
 
   /**
    * Shared policy for both application surfaces: the owner always passes;
