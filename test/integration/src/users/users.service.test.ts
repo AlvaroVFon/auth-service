@@ -965,3 +965,66 @@ describe('UsersService email normalization', () => {
     );
   });
 });
+
+describe('UsersService session listing', () => {
+  const createUser = () =>
+    fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('sessions+'),
+      password: 'hashedpassword123',
+    });
+
+  test('delegates with the target id once the user exists', async () => {
+    const user = await createUser();
+    const listSessions = mock.fn(async () => []);
+    const service = new UsersService(User, new CryptoService());
+    service.setSessionLister({ listSessions });
+
+    const sessions = await service.listSessions(user._id.toString());
+
+    assert.deepStrictEqual(sessions, []);
+    assert.deepStrictEqual(listSessions.mock.calls[0]?.arguments, [
+      user._id.toString(),
+    ]);
+  });
+
+  test('fails closed when no lister is wired', async () => {
+    const user = await createUser();
+    const service = new UsersService(User, new CryptoService());
+
+    await assert.rejects(
+      service.listSessions(user._id.toString()),
+      new Error('Session lister is not configured'),
+    );
+  });
+
+  test('answers 404 for the owner and for an unknown id', async () => {
+    const listSessions = mock.fn(async () => []);
+    const owner = await fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('sessions-owner+'),
+      role: Roles.OWNER,
+      password: 'hashedpassword123',
+      verified: true,
+    });
+    const service = new UsersService(User, new CryptoService());
+    service.setSessionLister({ listSessions });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.listSessions(id),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+    assert.strictEqual(listSessions.mock.callCount(), 0);
+  });
+
+  test('rejects a malformed id', async () => {
+    const service = new UsersService(User, new CryptoService());
+
+    await assert.rejects(
+      service.listSessions('bad-id'),
+      new InvalidArgumentError('Invalid ID format'),
+    );
+  });
+});

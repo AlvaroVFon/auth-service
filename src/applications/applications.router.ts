@@ -1,6 +1,7 @@
 import type { Application } from 'express';
 
 import { Roles } from '../common/enums/roles.enum';
+import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { ApplicationsController } from './applications.controller';
@@ -9,6 +10,7 @@ export class ApplicationsRouter {
   constructor(
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly authorizationMiddleware: AuthorizationMiddleware,
+    private readonly applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware,
     private readonly applicationsController: ApplicationsController,
     private readonly app: Application,
   ) {
@@ -33,9 +35,12 @@ export class ApplicationsRouter {
       this.applicationsController.findAll.bind(this.applicationsController),
     );
 
+    // The owner or the admin of that application; every other caller gets the
+    // same 404 as a missing application.
     this.app.get(
       '/applications/:id',
-      ...ownerOnly,
+      this.authenticationMiddleware.authenticateAny,
+      this.applicationAuthorizationMiddleware.allowApplicationReader,
       this.applicationsController.findById.bind(this.applicationsController),
     );
 

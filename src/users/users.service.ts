@@ -34,6 +34,8 @@ import type {
   UserListItem,
   UserSessionRevokerPort,
   UserSortField,
+  UserSessionsPort,
+  UserSessionView,
   UsersPort,
 } from './users.port';
 
@@ -55,6 +57,7 @@ const USER_LIST_PROJECTION = [
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
   private sessionRevoker?: UserSessionRevokerPort;
+  private sessionLister?: UserSessionsPort;
 
   constructor(
     private readonly usersModel: Model<UserInterface>,
@@ -251,6 +254,37 @@ export class UsersService implements UsersPort {
 
   setSessionRevoker(revoker: UserSessionRevokerPort): void {
     this.sessionRevoker = revoker;
+  }
+
+  setSessionLister(lister: UserSessionsPort): void {
+    this.sessionLister = lister;
+  }
+
+  /**
+   * Lists the active sessions of the target user. The owner is reported as
+   * missing, like an unknown id, so the support surface never exposes it.
+   */
+  async listSessions(id: string): Promise<UserSessionView[]> {
+    if (!id) {
+      throw new InvalidArgumentError('ID is required');
+    }
+    if (!OBJECTID_REGEX.test(id)) {
+      throw new InvalidArgumentError('Invalid ID format');
+    }
+
+    const user = await this.usersModel
+      .findOne({ _id: id, role: { $ne: Roles.OWNER } })
+      .select('_id');
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    if (!this.sessionLister) {
+      throw new Error('Session lister is not configured');
+    }
+
+    return this.sessionLister.listSessions(id);
   }
 
   async updateOneById(

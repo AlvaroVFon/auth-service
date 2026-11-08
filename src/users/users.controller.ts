@@ -57,6 +57,14 @@ export class UsersController {
   }
 
   @Catch()
+  async listUserSessions(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const sessions = await this.userService.listSessions(id);
+
+    res.status(200).json(sessions);
+  }
+
+  @Catch()
   async findAll(req: Request, res: Response): Promise<void> {
     const query = parseListQuery<UserSortField>(
       req.query as Record<string, unknown>,

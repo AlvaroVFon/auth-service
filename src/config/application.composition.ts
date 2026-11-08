@@ -25,6 +25,7 @@ import { RefreshTokenService } from '../auth/tokens/refresh-token.service';
 import { SessionService } from '../auth/tokens/session.service';
 import { HttpInterceptor } from '../common/interceptors/exception.interceptor';
 import { HttpLoggerInterceptor } from '../common/interceptors/httplogger.interceptor';
+import { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { GrantsPort } from '../grants';
@@ -246,6 +247,13 @@ export const createApplicationComposition = (
     logger,
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
+  // Single authorization policy shared by the applications, grants and links
+  // surfaces; it can only be built once both services exist.
+  const applicationAuthorizationMiddleware =
+    new ApplicationAuthorizationMiddleware(
+      grantsModule.service,
+      applicationsModule.service,
+    );
   const ownerBootstrap = new OwnerBootstrapService(usersModule.service);
   const telegramConfig =
     options.telegram === undefined ? resolveTelegramConfig() : null;
@@ -281,6 +289,9 @@ export const createApplicationComposition = (
     getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
   );
   usersModule.service.setSessionRevoker(sessionService);
+  usersModule.service.setSessionLister({
+    listSessions: (userId) => sessionService.list(userId),
+  });
   const mfaService = new MfaService(
     usersModule.service,
     cryptoService,
@@ -338,8 +349,6 @@ export const createApplicationComposition = (
     ),
     authenticationMiddleware,
     authorizationMiddleware,
-    grantsService: grantsModule.service,
-    applicationsService: applicationsModule.service,
     logger,
   });
   const authModule = new AuthModule({
@@ -393,11 +402,11 @@ export const createApplicationComposition = (
       GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
       healthModule.initialize(app);
       jwksModule.initialize(app);
-      applicationsModule.initialize(app);
-      grantsModule.initialize(app);
+      applicationsModule.initialize(app, applicationAuthorizationMiddleware);
+      grantsModule.initialize(app, applicationAuthorizationMiddleware);
       usersModule.initialize(app);
       authModule.initialize(app);
-      linksModule.initialize(app);
+      linksModule.initialize(app, applicationAuthorizationMiddleware);
       auditModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },
