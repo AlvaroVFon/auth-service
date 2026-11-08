@@ -6,8 +6,11 @@ import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exc
 import {
   MfaPolicy,
   SETTINGS_CODE_DEFAULTS,
+  SettingsCache,
   SettingsService,
+  type ApplicationSettingsWriterPort,
   type GlobalSettingsPort,
+  type SettingsChanges,
 } from '../../../../src/settings';
 import type { ApplicationSettings } from '../../../../src/settings/settings.interface';
 
@@ -35,10 +38,14 @@ const buildService = ({
   application,
   global = {},
   findById,
+  writer,
+  cache,
 }: {
   application?: Application | null;
   global?: Partial<ApplicationSettings>;
   findById?: (id: string) => Promise<Application | null>;
+  writer?: ApplicationSettingsWriterPort;
+  cache?: SettingsCache<unknown> & never;
 }) =>
   new SettingsService(
     {
@@ -47,6 +54,8 @@ const buildService = ({
     {
       get: async () => global,
     } as GlobalSettingsPort,
+    writer,
+    cache as never,
   );
 
 describe('SettingsService', () => {
@@ -217,7 +226,11 @@ describe('SettingsService', () => {
   });
 
   test('reads the environment at resolution time, not in the constructor', async () => {
-    const service = buildService({ application: buildApplication() });
+    // Without a cache every resolution reads the current environment.
+    const service = buildService({
+      application: buildApplication(),
+      cache: new SettingsCache(0) as never,
+    });
 
     process.env.JWT_EXPIRATION = '100';
     const first = await service.resolveForApplication(APP_ID);
@@ -252,5 +265,216 @@ describe('SettingsService', () => {
       value: 7200,
       source: 'environment',
     });
+  });
+});
+
+describe('SettingsService writes and cache', () => {
+  const createMutableService = () => {
+    const store: {
+      settings: ApplicationSettings;
+      global: Partial<ApplicationSettings>;
+    } = {
+      settings: { appName: 'Old' },
+      global: { maxSessionsPerUser: 7 },
+    };
+    const application = buildApplication(store.settings);
+    let now = 0;
+    const cache = new SettingsCache(1_000, 500, () => now) as never;
+    const updateSettings = mock.fn(
+      async (_id: string, changes: SettingsChanges) => {
+        for (const [field, value] of Object.entries(changes.set)) {
+          (store.settings as Record<string, unknown>)[field] = value;
+        }
+        for (const field of changes.unset) {
+          delete (store.settings as Record<string, unknown>)[field];
+        }
+      },
+    );
+    const writer: ApplicationSettingsWriterPort = {
+      updateSettings,
+    };
+    const update = mock.fn(async () => {});
+    const service = new SettingsService(
+      {
+        findById: async () => application,
+      } as unknown as ApplicationsPort,
+      {
+        get: async () => store.global,
+        update: async (changes: SettingsChanges) => {
+          await update();
+          for (const [field, value] of Object.entries(changes.set)) {
+            (store.global as Record<string, unknown>)[field] = value;
+          }
+          for (const field of changes.unset) {
+            delete (store.global as Record<string, unknown>)[field];
+          }
+        },
+      } as GlobalSettingsPort,
+      writer,
+      cache,
+    );
+
+    return {
+      service,
+      store,
+      writer,
+      updateSettings,
+      update,
+      advance: (ms: number) => {
+        now += ms;
+      },
+    };
+  };
+
+  test('AC-1: a write is visible in the next read without a restart', async () => {
+    const { service } = createMutableService();
+
+    const before = await service.resolveForApplication(APP_ID);
+    assert.deepStrictEqual(before.appName, {
+      value: 'Old',
+      source: 'application',
+    });
+
+    const after = await service.updateApplicationSettings(APP_ID, {
+      appName: 'New',
+    });
+
+    assert.deepStrictEqual(after.appName, {
+      value: 'New',
+      source: 'application',
+    });
+  });
+
+  test('AC-2: writing one application keeps the other cache entries', async () => {
+    const applications = new Map<string, Application>();
+    const first: Application = {
+      ...buildApplication({ appName: 'First' }),
+      _id: new Types.ObjectId(),
+    };
+    const second: Application = {
+      ...buildApplication({ appName: 'Second' }),
+      _id: new Types.ObjectId(),
+    };
+    applications.set(first._id.toString(), first);
+    applications.set(second._id.toString(), second);
+
+    const service = new SettingsService(
+      {
+        findById: async (id: string) => applications.get(id) ?? null,
+      } as unknown as ApplicationsPort,
+      { get: async () => ({}) } as GlobalSettingsPort,
+      {
+        updateSettings: async (id, changes) => {
+          const application = applications.get(id);
+          for (const [field, value] of Object.entries(changes.set)) {
+            (application!.settings as Record<string, unknown>)[field] = value;
+          }
+        },
+      },
+      new SettingsCache(60_000),
+    );
+
+    await service.resolveForApplication(first._id.toString());
+    await service.resolveForApplication(second._id.toString());
+
+    await service.updateApplicationSettings(first._id.toString(), {
+      appName: 'First updated',
+    });
+
+    // The second application changed behind the cache: it must still be served
+    // from cache because its entry was not invalidated.
+    (second.settings as Record<string, unknown>).appName = 'Second changed';
+
+    const cachedSecond = await service.resolveForApplication(
+      second._id.toString(),
+    );
+    assert.deepStrictEqual(cachedSecond.appName, {
+      value: 'Second',
+      source: 'application',
+    });
+
+    const updatedFirst = await service.resolveForApplication(
+      first._id.toString(),
+    );
+    assert.deepStrictEqual(updatedFirst.appName, {
+      value: 'First updated',
+      source: 'application',
+    });
+  });
+
+  test('AC-3: the entry is refreshed after the TTL', async () => {
+    let now = 0;
+    const application = buildApplication({ appName: 'Initial' });
+    const service = new SettingsService(
+      {
+        findById: async () => application,
+      } as unknown as ApplicationsPort,
+      { get: async () => ({}) } as GlobalSettingsPort,
+      undefined,
+      new SettingsCache(1_000, 500, () => now),
+    );
+
+    await service.resolveForApplication(APP_ID);
+    application.settings = { appName: 'Behind the cache' };
+
+    const cached = await service.resolveForApplication(APP_ID);
+    assert.strictEqual(cached.appName.value, 'Initial');
+
+    now += 1_000;
+
+    const refreshed = await service.resolveForApplication(APP_ID);
+    assert.strictEqual(refreshed.appName.value, 'Behind the cache');
+  });
+
+  test('AC-4: an invalid patch never reaches the writer or the cache', async () => {
+    const { service, updateSettings } = createMutableService();
+    await service.resolveForApplication(APP_ID);
+
+    for (const patch of [
+      { accessTokenTtlSeconds: -1 },
+      { mfaPolicy: 'sometimes' },
+      { maxSessionsPerUser: 0 },
+      { unknownField: 1 },
+    ]) {
+      await assert.rejects(
+        service.updateApplicationSettings(APP_ID, patch),
+        InvalidArgumentError,
+      );
+    }
+
+    assert.strictEqual(updateSettings.mock.callCount(), 0);
+    const resolved = await service.resolveForApplication(APP_ID);
+    assert.strictEqual(resolved.appName.value, 'Old');
+  });
+
+  test('AC-5: a null removes the override and inherits again', async () => {
+    const { service, store } = createMutableService();
+    store.global = { appName: 'Global name' };
+    await service.resolveForApplication(APP_ID);
+
+    const resolved = await service.updateApplicationSettings(APP_ID, {
+      appName: null,
+    });
+
+    assert.deepStrictEqual(resolved.appName, {
+      value: 'Global name',
+      source: 'global',
+    });
+    assert.strictEqual('appName' in store.settings, false);
+  });
+
+  test('updates and invalidates the global settings', async () => {
+    const { service, update } = createMutableService();
+    await service.resolveGlobal();
+
+    const resolved = await service.updateGlobalSettings({
+      maxSessionsPerUser: 11,
+    });
+
+    assert.deepStrictEqual(resolved.maxSessionsPerUser, {
+      value: 11,
+      source: 'global',
+    });
+    assert.strictEqual(update.mock.callCount(), 1);
   });
 });

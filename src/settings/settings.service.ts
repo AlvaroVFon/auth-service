@@ -1,21 +1,32 @@
 import type { ApplicationsPort } from '../applications';
 import { OBJECTID_REGEX } from '../common/constants/regex';
+import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import { SettingsCache } from './settings.cache';
 import {
   resolveEnvironmentSettings,
   SETTINGS_CODE_DEFAULTS,
 } from './settings.defaults';
 import type { ApplicationSettings } from './settings.interface';
 import type {
+  ApplicationSettingsWriterPort,
   GlobalSettingsPort,
   ResolvedSetting,
   ResolvedSettings,
+  SettingsChanges,
   SettingsPort,
 } from './settings.port';
 import {
+  isSettingsField,
   SETTINGS_FIELDS,
+  SETTINGS_VALIDATION_MESSAGES,
   type SettingsField,
   validateApplicationSettings,
 } from './settings.validation';
+
+const GLOBAL_CACHE_KEY = 'global';
+
+const applicationCacheKey = (applicationId: string): string =>
+  `application:${applicationId}`;
 
 /**
  * `ApplicationsPort.findById` returns a hydrated document, so `settings` is a
@@ -36,25 +47,109 @@ const toPlainSettings = (
   return plain as ApplicationSettings;
 };
 
+/**
+ * A patch is validated before it touches Mongo or the cache. A `null` value is
+ * an explicit request to remove that override, not an invalid value.
+ */
+const parseSettingsPatch = (
+  patch: Record<string, unknown> | null | undefined,
+): SettingsChanges => {
+  if (
+    patch === undefined ||
+    patch === null ||
+    typeof patch !== 'object' ||
+    Array.isArray(patch)
+  ) {
+    throw new InvalidArgumentError(SETTINGS_VALIDATION_MESSAGES.settings);
+  }
+
+  const values: Record<string, unknown> = {};
+  const unset: SettingsField[] = [];
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (!isSettingsField(key)) {
+      throw new InvalidArgumentError(`settings has unknown field '${key}'`);
+    }
+
+    if (value === null) {
+      unset.push(key);
+    } else {
+      values[key] = value;
+    }
+  }
+
+  return { set: validateApplicationSettings(values) ?? {}, unset };
+};
+
 export class SettingsService implements SettingsPort {
   constructor(
     private readonly applicationsService: ApplicationsPort,
     private readonly globalSettings: GlobalSettingsPort,
+    private readonly applicationSettingsWriter?: ApplicationSettingsWriterPort,
+    private readonly cache: SettingsCache<ResolvedSettings> = new SettingsCache(),
   ) {}
 
   async resolveForApplication(
     applicationId: string,
   ): Promise<ResolvedSettings> {
+    const key = applicationCacheKey(applicationId);
+    const cached = this.cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     const [application, global] = await Promise.all([
       this.findApplication(applicationId),
       this.globalSettings.get(),
     ]);
 
-    return this.resolve(application?.settings, global);
+    const resolved = this.resolve(application?.settings, global);
+    this.cache.set(key, resolved);
+
+    return resolved;
   }
 
   async resolveGlobal(): Promise<ResolvedSettings> {
-    return this.resolve(undefined, await this.globalSettings.get());
+    const cached = this.cache.get(GLOBAL_CACHE_KEY);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const resolved = this.resolve(undefined, await this.globalSettings.get());
+    this.cache.set(GLOBAL_CACHE_KEY, resolved);
+
+    return resolved;
+  }
+
+  async updateApplicationSettings(
+    applicationId: string,
+    patch: Record<string, unknown>,
+  ): Promise<ResolvedSettings> {
+    const changes = parseSettingsPatch(patch);
+
+    if (!this.applicationSettingsWriter) {
+      throw new Error('Application settings writer is not configured');
+    }
+
+    await this.applicationSettingsWriter.updateSettings(applicationId, changes);
+    this.cache.invalidate(applicationCacheKey(applicationId));
+
+    return this.resolveForApplication(applicationId);
+  }
+
+  async updateGlobalSettings(
+    patch: Record<string, unknown>,
+  ): Promise<ResolvedSettings> {
+    const changes = parseSettingsPatch(patch);
+
+    if (!this.globalSettings.update) {
+      throw new Error('Global settings writer is not configured');
+    }
+
+    await this.globalSettings.update(changes);
+    this.cache.invalidate(GLOBAL_CACHE_KEY);
+
+    return this.resolveGlobal();
   }
 
   /**
