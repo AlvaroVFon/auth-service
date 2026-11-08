@@ -155,6 +155,15 @@ describe('E2E application members listing', () => {
       .expect(401);
   });
 
+  test('rejects a q search instead of silently ignoring it', async () => {
+    const application = await createApplication();
+
+    const response = await listMembers(application._id.toString())
+      .query({ q: 'alice' })
+      .expect(400);
+    assert.strictEqual(response.body.code, 'INVALID_ARGUMENT');
+  });
+
   test('AC-4: pages do not overlap or skip members and total stays stable', async () => {
     const application = await createApplication();
     const members = await Promise.all([

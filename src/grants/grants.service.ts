@@ -132,7 +132,19 @@ export class GrantsService implements GrantsPort {
     const items = grants.flatMap((grant) => {
       const summary = summariesById.get(grant.userId.toString());
 
-      return summary ? [{ ...summary, role: grant.role }] : [];
+      return summary
+        ? [
+            {
+              ...summary,
+              role: grant.role,
+              // `createdAt` is the membership date so the exposed value matches
+              // the `createdAt` ordering.
+              ...(grant.createdAt === undefined
+                ? {}
+                : { createdAt: grant.createdAt }),
+            },
+          ]
+        : [];
     });
 
     return buildPaginatedResult(items, total, query);

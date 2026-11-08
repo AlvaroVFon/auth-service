@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { parseListQuery } from '../common/pagination';
 import {
   GRANT_MEMBER_LIST_OPTIONS,
@@ -38,6 +39,10 @@ export class GrantsController {
       req.query as Record<string, unknown>,
       GRANT_MEMBER_LIST_OPTIONS,
     );
+    if (query.q !== undefined) {
+      throw new InvalidArgumentError('q is not supported on this listing');
+    }
+
     const members = await this.grantsService.listMembers(applicationId, query);
 
     res.status(200).json(members);
