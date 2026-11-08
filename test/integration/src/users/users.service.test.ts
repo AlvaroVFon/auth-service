@@ -1099,7 +1099,7 @@ describe('UsersService session listing', () => {
     const service = new UsersService(User, new CryptoService());
     service.setSessionLister({
       listSessions,
-      revokeSession: async () => {},
+      revokeSession: async () => true,
       revokeAllSessions: async () => [],
     });
 
@@ -1133,7 +1133,7 @@ describe('UsersService session listing', () => {
     const service = new UsersService(User, new CryptoService());
     service.setSessionLister({
       listSessions,
-      revokeSession: async () => {},
+      revokeSession: async () => true,
       revokeAllSessions: async () => [],
     });
 
@@ -1166,7 +1166,7 @@ describe('UsersService session revocation', () => {
 
   const buildService = (overrides: {
     listSessions?: (userId: string) => Promise<never[]>;
-    revokeSession?: (userId: string, sessionId: string) => Promise<void>;
+    revokeSession?: (userId: string, sessionId: string) => Promise<boolean>;
     revokeAllSessions?: (userId: string) => Promise<string[]>;
     record?: ReturnType<typeof mock.fn>;
   }) => {
@@ -1181,7 +1181,7 @@ describe('UsersService session revocation', () => {
     );
     service.setSessionLister({
       listSessions: overrides.listSessions ?? (async () => []),
-      revokeSession: overrides.revokeSession ?? (async () => {}),
+      revokeSession: overrides.revokeSession ?? (async () => true),
       revokeAllSessions: overrides.revokeAllSessions ?? (async () => []),
     });
 
@@ -1191,7 +1191,7 @@ describe('UsersService session revocation', () => {
   test('revokes one session and audits the session id', async () => {
     const user = await createUser();
     const sessionId = '550e8400-e29b-41d4-a716-446655440099';
-    const revokeSession = mock.fn(async () => {});
+    const revokeSession = mock.fn(async () => true);
     const { service, record } = buildService({ revokeSession });
 
     await service.revokeSession(user._id.toString(), sessionId, {
@@ -1207,6 +1207,17 @@ describe('UsersService session revocation', () => {
     assert.strictEqual(event.event, AuditEvent.SESSION_REVOKED_BY_ADMIN);
     assert.strictEqual(event.sessionId, sessionId);
     assert.strictEqual(event.targetUserId, user._id.toString());
+  });
+
+  test('does not audit a repeated (already revoked) session', async () => {
+    const user = await createUser();
+    const revokeSession = mock.fn(async () => false);
+    const { service, record } = buildService({ revokeSession });
+
+    await service.revokeSession(user._id.toString(), 'session-a');
+
+    assert.strictEqual(revokeSession.mock.callCount(), 1);
+    assert.strictEqual(record.mock.callCount(), 0);
   });
 
   test('revokes every session and audits each one', async () => {
@@ -1233,7 +1244,7 @@ describe('UsersService session revocation', () => {
       password: 'hashedpassword123',
       verified: true,
     });
-    const revokeSession = mock.fn(async () => {});
+    const revokeSession = mock.fn(async () => true);
     const { service, record } = buildService({ revokeSession });
 
     for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {

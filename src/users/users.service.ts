@@ -370,13 +370,19 @@ export class UsersService implements UsersPort {
   ): Promise<void> {
     await this.assertSessionTarget(id);
 
-    await this.requireSessionManager().revokeSession(id, sessionId);
-    await this.recordSupportEvent(
-      AuditEvent.SESSION_REVOKED_BY_ADMIN,
+    const revoked = await this.requireSessionManager().revokeSession(
       id,
-      context,
       sessionId,
     );
+
+    if (revoked) {
+      await this.recordSupportEvent(
+        AuditEvent.SESSION_REVOKED_BY_ADMIN,
+        id,
+        context,
+        sessionId,
+      );
+    }
   }
 
   /** Revokes every session of the target across audiences, auditing each one. */

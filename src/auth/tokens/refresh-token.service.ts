@@ -119,7 +119,7 @@ export class RefreshTokenService {
     }
   }
 
-  async revokeBySessionId(userId: string, sessionId: string): Promise<void> {
+  async revokeBySessionId(userId: string, sessionId: string): Promise<boolean> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
     }
@@ -140,7 +140,7 @@ export class RefreshTokenService {
     );
 
     if (result.matchedCount > 0) {
-      return;
+      return true;
     }
 
     // Revoking an already revoked session is a successful no-op; only an
@@ -150,6 +150,9 @@ export class RefreshTokenService {
     if (!exists) {
       throw new EntityNotFoundError('Session not found');
     }
+
+    // It belonged to the user but was already revoked: a successful no-op.
+    return false;
   }
 
   async pruneActiveSessions(userId: string, keep: number): Promise<void> {
@@ -282,32 +285,43 @@ export class RefreshTokenService {
     const filter = {
       userId,
       revokedAt: null,
+      expiresAt: { $gt: new Date() },
       ...(audience === undefined ? {} : { audience }),
     };
     const revoked: Array<{ sessionId: string; jti: string }> = [];
 
     // Re-list until no active token remains (bounded), so a token issued while
-    // the revocation runs is revoked and reported too.
+    // the revocation runs is revoked and reported too. The timestamp marks the
+    // tokens this call actually revoked, not ones a concurrent action closed.
     for (let pass = 0; pass < 3; pass += 1) {
       const active = await this.refreshTokenModel
         .find(filter)
-        .select('sessionId jti')
-        .lean<Array<{ sessionId?: string; jti: string }>>();
+        .select('_id')
+        .lean<Array<{ _id: Types.ObjectId }>>();
 
       if (active.length === 0) {
         break;
       }
 
-      for (const token of active) {
+      const revokedAt = new Date();
+      const ids = active.map((token) => token._id);
+
+      await this.refreshTokenModel.updateMany(
+        { _id: { $in: ids }, revokedAt: null },
+        { revokedAt },
+      );
+
+      const revokedNow = await this.refreshTokenModel
+        .find({ _id: { $in: ids }, revokedAt })
+        .select('sessionId jti')
+        .lean<Array<{ sessionId?: string; jti: string }>>();
+
+      for (const token of revokedNow) {
         revoked.push({
           sessionId: token.sessionId ?? token.jti,
           jti: token.jti,
         });
       }
-
-      await this.refreshTokenModel.updateMany(filter, {
-        revokedAt: new Date(),
-      });
     }
 
     return revoked;

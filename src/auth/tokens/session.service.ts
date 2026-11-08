@@ -145,8 +145,8 @@ export class SessionService {
     return tokens.map((token) => this.toView(token));
   }
 
-  async revoke(userId: string, sessionId: string): Promise<void> {
-    await this.refreshTokenService.revokeBySessionId(userId, sessionId);
+  async revoke(userId: string, sessionId: string): Promise<boolean> {
+    return this.refreshTokenService.revokeBySessionId(userId, sessionId);
   }
 
   private toView(token: RefreshToken): SessionView {
