@@ -98,6 +98,10 @@ export class InvitationsService {
    * onboarded by an administrator.
    */
   async inviteMember(input: InviteMemberInput): Promise<void> {
+    if (input.role === GrantRoles.ADMIN && input.actorRole !== Roles.OWNER) {
+      throw new ForbiddenError('Only the owner can invite an admin');
+    }
+
     const email = normalizeEmail(input.email ?? '');
 
     if (!EMAIL_REGEX.test(email)) {

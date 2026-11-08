@@ -891,6 +891,25 @@ describe('GrantsService.grantMemberByEmail', () => {
     );
   });
 
+  test('assignRoleIfAbsent rejects a missing user before inserting', async () => {
+    const service = createService();
+    const application = await createApplication();
+
+    await assert.rejects(
+      service.assignRoleIfAbsent({
+        userId: new Types.ObjectId().toString(),
+        applicationId: application._id.toString(),
+        role: GrantRoles.VIEWER,
+      }),
+      new EntityNotFoundError('User not found'),
+    );
+
+    const grants = await fixture.find<Grant>(GrantModel.modelName, {
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 0);
+  });
+
   test('AC-4: repeating the grant converges the role without duplicates', async () => {
     const service = createService();
     const application = await createApplication();

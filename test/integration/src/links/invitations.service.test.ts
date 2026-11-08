@@ -531,6 +531,25 @@ describe('InvitationsService.inviteMember', () => {
     assert.strictEqual(await users.findByEmail(email), null);
   });
 
+  test('rejects an admin invitation from a non-owner through the member port', async () => {
+    const service = buildService();
+    const application = await createApplication();
+
+    await assert.rejects(
+      service.inviteMember({
+        email: `admin-invite-${Date.now()}@example.com`,
+        applicationId: application._id.toString(),
+        role: GrantRoles.ADMIN,
+        actorRole: Roles.ADMIN,
+      }),
+      new ForbiddenError('Only the owner can invite an admin'),
+    );
+    assert.strictEqual(
+      invitationMailer.sendInvitationEmail.mock.callCount(),
+      0,
+    );
+  });
+
   test('rejects an existing account and does not email it', async () => {
     const service = buildService();
     const application = await createApplication();
