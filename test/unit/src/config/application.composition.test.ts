@@ -90,3 +90,25 @@ describe('application composition wiring', () => {
     );
   });
 });
+
+describe('application composition settings', () => {
+  test('exposes a ready settings service', () => {
+    const composition = createApplicationComposition({
+      logger: silentLogger,
+      mailer: {
+        sendEmail: mock.fn(() => Promise.resolve()),
+        sendMailWithTemplate: mock.fn(() => Promise.resolve()),
+      } as unknown as MailerInterface,
+    });
+
+    assert.strictEqual(
+      typeof composition.settings.resolveForApplication,
+      'function',
+    );
+    assert.strictEqual(typeof composition.settings.resolveGlobal, 'function');
+    assert.strictEqual(
+      typeof composition.settings.updateApplicationSettings,
+      'function',
+    );
+  });
+});

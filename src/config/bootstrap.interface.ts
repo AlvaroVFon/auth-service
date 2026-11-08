@@ -14,4 +14,5 @@ export interface BootstrapOverrides {
   ) => { close?: (callback?: (err?: Error) => void) => unknown };
   ownerBootstrap?: OwnerProvisioner;
   ownerCredentials?: OwnerCredentials | null;
+  settingsSeed?: () => Promise<void>;
 }
