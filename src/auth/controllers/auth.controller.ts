@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { Catch } from '../../common/decorators/catch.decorator';
 import { InvalidCredentialsError } from '../../common/exceptions/auth.exceptions';
 import { InvalidArgumentError } from '../../common/exceptions/base.exception';
+import { extractRequestContext } from '../../common/request-context';
 import { MfaService } from '../mfa';
 import { AuthService } from '../services/auth.service';
 import { ProfileService, TokenIdentity } from '../services/profile.service';
@@ -16,10 +17,9 @@ export class AuthController {
   ) {}
 
   private buildRequestContext(req: Request): RequestContext {
-    return {
-      ipAddress: req.ip ?? undefined,
-      userAgent: req.get('User-Agent') ?? undefined,
-    };
+    const { ipAddress, userAgent } = extractRequestContext(req);
+
+    return { ipAddress, userAgent };
   }
 
   private buildIdentity(req: Request): TokenIdentity {

@@ -104,6 +104,13 @@ describe('E2E users support actions', () => {
         ownerResponse.body.message,
       );
     }
+
+    // A malformed id reaches the controller instead of dying in the body guard.
+    const malformed = await request(app)
+      .post('/users/not-an-object-id/unlock')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(400);
+    assert.strictEqual(malformed.body.code, 'INVALID_ARGUMENT');
   });
 
   test('AC-4: only the owner can run the support actions', async () => {

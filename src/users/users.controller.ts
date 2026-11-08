@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import { extractRequestContext } from '../common/request-context';
 import { parseUserUpdatePayload } from './user-update-payload';
 import { User as UserInterface } from './users.interface';
 import { UserSupportActionContext, UsersService } from './users.service';
@@ -30,10 +31,7 @@ const pickUserProfile = (
 
 const supportContext = (req: Request): UserSupportActionContext => ({
   ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
-  ...(req.ip === undefined ? {} : { ipAddress: req.ip }),
-  ...(req.headers['user-agent'] === undefined
-    ? {}
-    : { userAgent: req.headers['user-agent'] }),
+  ...extractRequestContext(req),
 });
 
 export class UsersController {
