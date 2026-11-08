@@ -34,6 +34,7 @@ export const createAuditSchema = (
       targetUserId: { type: Schema.Types.ObjectId, ref: 'User' },
       ipAddress: { type: String },
       userAgent: { type: String },
+      fields: { type: [String], default: undefined },
     },
     {
       timestamps: { createdAt: true, updatedAt: false },

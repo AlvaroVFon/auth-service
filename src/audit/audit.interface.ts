@@ -14,6 +14,7 @@ export enum AuditEvent {
   APPLICATION_ACTIVATED = 'application.activated',
   APPLICATION_DEACTIVATED = 'application.deactivated',
   APPLICATION_ARCHIVED = 'application.archived',
+  SETTINGS_UPDATED = 'settings.updated',
   USER_UNLOCKED = 'user.unlocked',
   USER_VERIFIED = 'user.verified',
 }
@@ -37,5 +38,6 @@ export interface AuditEventRecord {
   targetUserId?: Types.ObjectId;
   ipAddress?: string;
   userAgent?: string;
+  fields?: string[];
   createdAt?: Date;
 }

@@ -54,6 +54,7 @@ export class AuditService implements AuditPort {
         ...(input.userAgent === undefined
           ? {}
           : { userAgent: input.userAgent }),
+        ...(input.fields === undefined ? {} : { fields: input.fields }),
       });
     } catch (error) {
       // Auditing is best effort: a write failure must never break the auth flow.

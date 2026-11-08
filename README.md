@@ -250,6 +250,9 @@ returns `400 INVALID_ARGUMENT`, matching signup and password reset. Changing the
 email still does not trigger a verification flow: the account keeps its current
 `verified` flag.
 
+| `GET` | `/settings` | Owner | Effective global policy with its sources and defaults. |
+| `PATCH` | `/settings` | Owner | Updates the global policy; audited as `settings.updated`. |
+
 ### Listing contract
 
 `GET /users`, `GET /applications` and `GET /audit-events` share one listing
