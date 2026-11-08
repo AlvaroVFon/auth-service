@@ -499,6 +499,7 @@ describe('E2E audit events', () => {
         email: 'other@example.com',
       });
       await seedEvents(1, {
+        event: AuditEvent.GRANT_ASSIGNED,
         email: 'other@example.com',
         audience: 'login-aud',
       });

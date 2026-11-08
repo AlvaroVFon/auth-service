@@ -164,7 +164,12 @@ describe('AuditService', () => {
 
       const query = find.mock.calls[0]?.arguments[0] as Record<string, unknown>;
       const or = query.$or as Array<Record<string, RegExp>>;
-      assert.strictEqual(or.length, 3);
+      assert.deepStrictEqual(
+        or
+          .map((clause) => Object.keys(clause)[0] ?? '')
+          .sort((a, b) => a.localeCompare(b)),
+        ['audience', 'email', 'event'],
+      );
       for (const clause of or) {
         const regex = Object.values(clause)[0]!;
         assert.strictEqual(regex.source, '^login\\.\\*');
