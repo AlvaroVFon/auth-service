@@ -263,6 +263,21 @@ export class UsersService implements UsersPort {
     const update: UpdateQuery<UserInterface> = { $set: { ...updateData } };
     const set = update.$set as Record<string, unknown>;
 
+    if (updateData.email !== undefined) {
+      const current = await this.usersModel.findById(id).select('email');
+
+      if (!current) {
+        throw new EntityNotFoundError('User not found');
+      }
+
+      // The owner can change the address, but nobody has proved it yet: a
+      // verified account must not keep logging in and receiving reset links on
+      // an address it no longer controls.
+      if (normalizeEmail(current.email) !== normalizeEmail(updateData.email)) {
+        set.verified = false;
+      }
+    }
+
     // Hash into the copy: mutating the caller's payload would hash an
     // already-hashed password if the same object is reused.
     if (updateData.password !== undefined) {

@@ -78,6 +78,68 @@ describe('E2E Test - Update User By ID', () => {
     assert.strictEqual(stored?.email, 'updated@example.com');
   });
 
+  test('should reset verified when a verified account changes its email', async () => {
+    const user = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('emailverified'),
+      password: STRONG_PASSWORD_HASH,
+      verified: true,
+    });
+    const { application } = await createApplicationAccess(user._id.toString());
+
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(200);
+
+    const newEmail = generateRandomEmail('emailverifiednew');
+    const response = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: newEmail })
+      .expect(200);
+
+    assert.strictEqual(response.body.verified, false);
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.email, newEmail);
+    assert.strictEqual(stored?.verified, false);
+
+    const denied = await request(app)
+      .post('/auth/login')
+      .send({
+        email: newEmail,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(403);
+    assert.strictEqual(denied.body.message, 'Email is not verified');
+  });
+
+  test('should keep verified when the email does not change', async () => {
+    const user = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('emailsame'),
+      password: STRONG_PASSWORD_HASH,
+      verified: true,
+    });
+
+    const response = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: user.email })
+      .expect(200);
+
+    assert.strictEqual(response.body.verified, true);
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.verified, true);
+  });
+
   test('should reject an invalid email', async () => {
     const user = await fixture.create<User>('User', {
       email: generateRandomEmail('updateinvalidemail'),

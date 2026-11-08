@@ -238,8 +238,9 @@ returns `400 Invalid email format` and an address already used by another user
 returns `400 ENTITY_ALREADY_EXISTS`. A `password` that is empty or fails the
 password policy (8+ characters with upper case, lower case, a digit and a symbol)
 returns `400 INVALID_ARGUMENT`, matching signup and password reset. Changing the
-email still does not trigger a verification flow: the account keeps its current
-`verified` flag.
+email of a verified account resets `verified` to `false`, so the account cannot log
+in or receive reset links on an address nobody has proved yet; the owner re-verifies
+it through the support endpoint once the new address is confirmed.
 
 ### Audit
 
