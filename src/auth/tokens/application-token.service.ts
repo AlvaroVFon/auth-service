@@ -48,13 +48,14 @@ export class ApplicationTokenService {
     };
   }
 
-  async resolveAccess(
-    userId: string,
+  /**
+   * Resolves an application by slug or audience without a user. Unknown and
+   * inactive applications both resolve to `null`, so the caller can collapse
+   * both into the generic credential error of the login flow.
+   */
+  async resolveApplication(
     applicationIdentifier: string,
-    loadedUser?: User,
-  ): Promise<ApplicationAccess> {
-    assertObjectId(userId, 'userId');
-
+  ): Promise<Application | null> {
     if (!applicationIdentifier || !applicationIdentifier.trim()) {
       throw new InvalidArgumentError('Application identifier is required');
     }
@@ -62,6 +63,29 @@ export class ApplicationTokenService {
     const application = await this.applicationsService.findBySlugOrAudience(
       applicationIdentifier,
     );
+
+    return application?.active ? application : null;
+  }
+
+  async resolveAccess(
+    userId: string,
+    applicationIdentifier: string,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    assertObjectId(userId, 'userId');
+
+    const application = await this.resolveApplication(applicationIdentifier);
+
+    return this.authorize(userId, application, loadedUser);
+  }
+
+  /** Authorizes against an application the caller already resolved. */
+  async authorizeResolved(
+    userId: string,
+    application: Application,
+    loadedUser?: User,
+  ): Promise<ApplicationAccess> {
+    assertObjectId(userId, 'userId');
 
     return this.authorize(userId, application, loadedUser);
   }

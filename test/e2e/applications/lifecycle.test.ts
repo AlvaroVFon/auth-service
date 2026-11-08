@@ -182,11 +182,8 @@ describe('E2E Applications lifecycle', () => {
       .expect(200)
       .expect(({ body }) => assert.strictEqual(body.active, false));
 
-    const denied = await login(user.email, application.slug).expect(403);
-    assert.strictEqual(
-      denied.body.message,
-      'User has no access to this application',
-    );
+    const denied = await login(user.email, application.slug).expect(401);
+    assert.strictEqual(denied.body.message, 'Invalid email or password');
     assert.strictEqual(denied.body.accessToken, undefined);
 
     await request(app)

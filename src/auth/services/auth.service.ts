@@ -123,6 +123,13 @@ export class AuthService {
         ? credentials.application.trim()
         : '';
 
+    // Identify the application before checking the password. The lookup is
+    // safe because an unknown or inactive application is collapsed into the
+    // generic credential error below, after the password is verified.
+    const resolvedApplication = application
+      ? await this.applicationTokens.resolveApplication(application)
+      : null;
+
     let user: User;
     try {
       user = await this.usersService.verifyCredentials(
@@ -139,7 +146,7 @@ export class AuthService {
             ? AuditEvent.ACCOUNT_LOCKED
             : AuditEvent.LOGIN_FAILED,
           email,
-          application,
+          this.resolvedApplicationAudit(resolvedApplication),
           ctx,
         );
       } else {
@@ -155,16 +162,23 @@ export class AuthService {
     let audience: string | undefined;
 
     try {
+      // Invalid and inactive applications are indistinguishable from wrong
+      // credentials. The password was verified already, so the timing matches.
+      if (application && !resolvedApplication) {
+        throw new InvalidCredentialsError('Invalid email or password');
+      }
+
       this.assertVerified(user);
 
-      if (application) {
-        const access = await this.applicationTokens.resolveAccess(
+      if (application && resolvedApplication) {
+        applicationId = resolvedApplication._id.toString();
+        audience = resolvedApplication.audience;
+
+        const access = await this.applicationTokens.authorizeResolved(
           userId,
-          application,
+          resolvedApplication,
           user,
         );
-        applicationId = access.application._id.toString();
-        audience = access.application.audience;
 
         if (user.mfaEnabled) {
           return this.buildMfaChallenge(
@@ -240,7 +254,7 @@ export class AuthService {
   private async recordLoginFailure(
     event: AuditEvent,
     email: string,
-    application: string,
+    application: { applicationId?: string; audience?: string },
     ctx?: RequestContext,
   ): Promise<void> {
     let userId: string | undefined;
@@ -257,9 +271,25 @@ export class AuthService {
       result: AuditResult.FAILURE,
       ...(userId === undefined ? {} : { userId }),
       email,
-      ...(application ? { audience: application } : {}),
+      ...(application.applicationId === undefined
+        ? {}
+        : { applicationId: application.applicationId }),
+      ...(application.audience === undefined
+        ? {}
+        : { audience: application.audience }),
       ...this.auditContext(ctx),
     });
+  }
+
+  private resolvedApplicationAudit(
+    application: { _id: { toString(): string }; audience: string } | null,
+  ): { applicationId?: string; audience?: string } {
+    return application === null
+      ? {}
+      : {
+          applicationId: application._id.toString(),
+          audience: application.audience,
+        };
   }
 
   private auditContext(ctx?: RequestContext): {

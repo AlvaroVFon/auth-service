@@ -39,7 +39,9 @@ sequenceDiagram
     alt active grant
         API->>DB: create the refresh session
         API-->>User: 200 {accessToken, refreshToken}
-    else missing grant or inactive application
+    else unknown or inactive application
+        API-->>User: 401 (no tokens)
+    else missing grant
         API-->>User: 403 (no tokens)
     end
 
@@ -77,10 +79,11 @@ curl -s -X POST http://localhost:3000/auth/login \
 - `200` with exactly two fields: the access token is short-lived
   (`JWT_EXPIRATION`, one hour with `.env.example`), the refresh token lasts
   `JWT_REFRESH_EXPIRATION` (24 hours).
-- The account needs an active grant on that application. A missing or inactive
-  application and a revoked grant return the same
-  `403 User has no access to this application`, so the route cannot be used to
-  enumerate applications.
+- The application is resolved before the password is checked, and an unknown
+  or inactive application returns the same `401 Invalid email or password` as
+  wrong credentials, so the route cannot be used to enumerate applications.
+- The account also needs an active grant on that application. A missing or
+  revoked grant returns `403 User has no access to this application`.
 - Without `application`, only the global owner can log in. Any other account
   gets `403 An application is required`.
 - Invalid credentials return the same `401 Invalid email or password` on every
@@ -231,7 +234,8 @@ reference](../../README.md#device-sessions).
 | `401 {"message":"Invalid email or password","code":"INVALID_CREDENTIALS"}`                         | Wrong password, unknown email, or a signup holder that never completed verification: the response is intentionally identical                                                                                                                               |
 | `423 {"message":"Account is temporarily locked. Please try again later.","code":"ACCOUNT_LOCKED"}` | `MAX_LOGIN_ATTEMPTS` wrong passwords reached (5 with `.env.example`); wait `LOCKOUT_DURATION_MS` (15 minutes) or unlock the account as the owner                                                                                                           |
 | `403 {"message":"An application is required","code":"FORBIDDEN"}`                                  | A non-owner account logged in without `application`                                                                                                                                                                                                        |
-| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`                      | No grant, unknown application or inactive application; all collapse into one response                                                                                                                                                                      |
+| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`                      | The account has no grant on the active application, or its grant was revoked                                                                                                                                                                               |
+| `401 {"message":"Invalid email or password","code":"INVALID_CREDENTIALS"}`                         | Unknown or inactive application: the password is verified first and the response is identical to wrong credentials                                                                                                                                         |
 | `403 {"message":"Email is not verified","code":"FORBIDDEN"}`                                       | An existing user has `verified: false` (owner-created or legacy); `PATCH /users/:id` no longer edits it, so re-verification needs the support endpoint (not implemented yet). A pending signup holder is not a user and falls into the generic `401` above |
 | `401 {"message":"Invalid or missing authorization header","code":"INVALID_CREDENTIALS"}`           | No `Authorization: Bearer` header on an authenticated route                                                                                                                                                                                                |
 | `401 {"message":"InvalidTokenError: Token is invalid or has expired","code":"INVALID_TOKEN"}`      | Malformed, tampered or expired token; refresh it or log in again                                                                                                                                                                                           |
