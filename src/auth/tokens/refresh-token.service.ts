@@ -222,6 +222,11 @@ export class RefreshTokenService {
         .limit(REVOCATION_BATCH_SIZE)
         .lean<ActiveAudienceToken[]>();
 
+      if (active.length === 0) {
+        complete = true;
+        break;
+      }
+
       for (const token of active) {
         sessions.push({
           userId: token.userId.toString(),

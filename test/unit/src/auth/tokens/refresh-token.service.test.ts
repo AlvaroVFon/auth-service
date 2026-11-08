@@ -10,42 +10,73 @@ const token = (index: number) => ({
   jti: `jti-${index}`,
 });
 
-const buildModel = (batchSizes: number[]): Model<RefreshToken> => {
+interface ModelCalls {
+  limits: number[];
+  filters: unknown[];
+}
+
+const buildModel = (
+  batchSizes: number[],
+  calls: ModelCalls,
+): Model<RefreshToken> => {
   let call = 0;
   const find = () => ({
     select: () => ({
-      limit: () => ({
-        lean: async () => {
-          const size = batchSizes[Math.min(call, batchSizes.length - 1)] ?? 0;
-          call += 1;
-          return Array.from({ length: size }, (_, index) => token(index));
-        },
-      }),
+      limit: (limit: number) => {
+        calls.limits.push(limit);
+        return {
+          lean: async () => {
+            const size = batchSizes[Math.min(call, batchSizes.length - 1)] ?? 0;
+            call += 1;
+            return Array.from({ length: size }, (_, index) => token(index));
+          },
+        };
+      },
     }),
   });
-  const updateMany = async () => ({ modifiedCount: 0 });
+  const updateMany = async (filter: unknown) => {
+    calls.filters.push(filter);
+
+    return { modifiedCount: 0 };
+  };
 
   return { find, updateMany } as unknown as Model<RefreshToken>;
 };
 
+const newCalls = (): ModelCalls => ({ limits: [], filters: [] });
+
 describe('RefreshTokenService.revokeAllByAudience completion', () => {
   test('reports an incomplete revocation when every pass is a full batch', async () => {
+    const calls = newCalls();
     const service = new RefreshTokenService(
-      buildModel([500, 500, 500, 500, 500]),
+      buildModel([500, 500, 500, 500, 500], calls),
     );
 
     const result = await service.revokeAllByAudience('app-aud');
 
     assert.strictEqual(result.complete, false);
     assert.strictEqual(result.sessions.length, 2_500);
+    assert.deepStrictEqual(calls.limits, [500, 500, 500, 500, 500]);
+    assert.strictEqual(calls.filters.length, 5);
+    for (const filter of calls.filters) {
+      const ids = (filter as { _id: { $in: unknown[] } })._id.$in;
+      assert.strictEqual(ids.length, 500);
+    }
   });
 
   test('reports completion when the last pass is below the batch size', async () => {
-    const service = new RefreshTokenService(buildModel([2, 0]));
+    const calls = newCalls();
+    const service = new RefreshTokenService(buildModel([2, 0], calls));
 
     const result = await service.revokeAllByAudience('app-aud');
 
     assert.strictEqual(result.complete, true);
     assert.strictEqual(result.sessions.length, 2);
+    assert.deepStrictEqual(calls.limits, [500]);
+    assert.strictEqual(calls.filters.length, 1);
+    assert.strictEqual(
+      (calls.filters[0] as { _id: { $in: unknown[] } })._id.$in.length,
+      2,
+    );
   });
 });
