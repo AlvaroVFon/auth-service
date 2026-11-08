@@ -28,8 +28,14 @@ export class SettingsAdminService {
     patch: Record<string, unknown>,
     actorId?: string,
   ): Promise<GlobalSettingsView> {
-    const fields = Object.keys(patch ?? {});
+    const before = await this.settingsService.resolveGlobal();
     const resolved = await this.settingsService.updateGlobalSettings(patch);
+    // A repeated value is a no-op; only real transitions are audited.
+    const fields = SETTINGS_FIELDS.filter(
+      (field) =>
+        JSON.stringify(before[field].value) !==
+        JSON.stringify(resolved[field].value),
+    );
 
     if (fields.length > 0 && this.auditService) {
       await this.auditService.record({

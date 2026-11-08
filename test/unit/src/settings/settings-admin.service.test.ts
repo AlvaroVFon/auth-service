@@ -73,6 +73,26 @@ describe('SettingsAdminService', () => {
     assert.strictEqual('applicationId' in event, false);
   });
 
+  test('does not audit a patch that resends the current value', async () => {
+    const record = mock.fn(async () => {});
+    const service = new SettingsAdminService(
+      {
+        resolveForApplication: async () => buildResolved(),
+        resolveGlobal: async () => buildResolved(),
+        updateApplicationSettings: async () => buildResolved(),
+        updateGlobalSettings: async () => buildResolved(),
+      } satisfies SettingsPort,
+      { record } as never,
+    );
+
+    await service.updateGlobal(
+      { appName: SETTINGS_CODE_DEFAULTS.appName },
+      'actor-1',
+    );
+
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
   test('does not audit an empty patch', async () => {
     const { service, record } = buildService();
 
