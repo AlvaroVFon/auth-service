@@ -94,8 +94,9 @@ export class ProfileService {
     // owner can log in with an application scope and then carry a grant role.
     const applications =
       user.role === Roles.OWNER
-        ? (await this.applicationsService.findAll()).map((application) =>
-            this.toApplicationContext(application, Roles.OWNER),
+        ? (await this.applicationsService.findAllForContext()).map(
+            (application) =>
+              this.toApplicationContext(application, Roles.OWNER),
           )
         : (await this.grantsService.listActiveByUser(identity.id)).map(
             ({ application, role }) =>

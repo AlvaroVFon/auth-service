@@ -8,8 +8,10 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
+import type { ListQuery } from '../../../../src/common/pagination';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import { User as UserInterface } from '../../../../src/users/users.interface';
+import type { UserSortField } from '../../../../src/users/users.port';
 import { User } from '../../../../src/users/users.schema';
 import { UsersService } from '../../../../src/users/users.service';
 import fixture from '../../../fixtures';
@@ -431,13 +433,25 @@ describe('UsersService', () => {
     });
 
     describe('FindAll()', () => {
-      test('should return an empty array if no users exist', async () => {
-        const users = await usersService.findAll();
-        assert.ok(Array.isArray(users));
-        assert.strictEqual(users.length, 0);
+      const query = (
+        overrides: Partial<ListQuery<UserSortField>> = {},
+      ): ListQuery<UserSortField> => ({
+        page: 1,
+        limit: 20,
+        sort: { field: 'createdAt', direction: -1 },
+        ...overrides,
       });
 
-      test('should return all users', async () => {
+      test('should return an empty page if no users exist', async () => {
+        const result = await usersService.findAll(query());
+
+        assert.deepStrictEqual(result.items, []);
+        assert.strictEqual(result.total, 0);
+        assert.strictEqual(result.page, 1);
+        assert.strictEqual(result.limit, 20);
+      });
+
+      test('should paginate the users and report the total', async () => {
         const users = await fixture.createMany<UserInterface>('User', [
           {
             email: generateRandomEmail('findall1+'),
@@ -449,17 +463,111 @@ describe('UsersService', () => {
             username: 'findalluser2',
             password: 'hashedpassword123',
           },
+          {
+            email: generateRandomEmail('findall3+'),
+            username: 'findalluser3',
+            password: 'hashedpassword123',
+          },
         ]);
 
-        const foundUsers = await usersService.findAll();
-        assert.ok(Array.isArray(foundUsers));
-        assert.strictEqual(foundUsers.length, users.length);
-        assert.strictEqual(foundUsers[0]!.email, users[0]!.email);
-        assert.strictEqual(foundUsers[1]!.email, users[1]!.email);
-        assert.ok(foundUsers[0]!._id);
-        assert.ok(foundUsers[1]!._id);
-        assert.ok(foundUsers[0]!.password);
-        assert.ok(foundUsers[1]!.password);
+        const firstPage = await usersService.findAll(
+          query({ page: 1, limit: 2 }),
+        );
+        assert.strictEqual(firstPage.items.length, 2);
+        assert.strictEqual(firstPage.total, users.length);
+        assert.strictEqual(firstPage.page, 1);
+        assert.strictEqual(firstPage.limit, 2);
+
+        const secondPage = await usersService.findAll(
+          query({ page: 2, limit: 2 }),
+        );
+        assert.strictEqual(secondPage.items.length, 1);
+        assert.strictEqual(secondPage.total, users.length);
+        assert.strictEqual(secondPage.page, 2);
+
+        const ids = [...firstPage.items, ...secondPage.items].map((user) =>
+          user._id.toString(),
+        );
+        assert.deepStrictEqual(
+          [...new Set(ids)].sort(),
+          users.map((user) => user._id.toString()).sort(),
+        );
+      });
+
+      test('should filter by email or username prefix and reflect it in the total', async () => {
+        await fixture.createMany<UserInterface>('User', [
+          {
+            email: generateRandomEmail('alice+'),
+            username: 'alice-user',
+            password: 'hashedpassword123',
+          },
+          {
+            email: generateRandomEmail('bob+'),
+            username: 'ali-baba',
+            password: 'hashedpassword123',
+          },
+          {
+            email: generateRandomEmail('carol+'),
+            username: 'carol-user',
+            password: 'hashedpassword123',
+          },
+        ]);
+
+        const byEmail = await usersService.findAll(query({ q: 'alice' }));
+        assert.strictEqual(byEmail.total, 1);
+        assert.match(byEmail.items[0]!.email, /^alice/);
+
+        const byUsername = await usersService.findAll(query({ q: 'ali' }));
+        assert.strictEqual(byUsername.total, 2);
+        assert.deepStrictEqual(
+          byUsername.items
+            .map((user) => user.username)
+            .sort((a, b) => (a ?? '').localeCompare(b ?? '')),
+          ['ali-baba', 'alice-user'],
+        );
+      });
+
+      test('should treat the search term literally', async () => {
+        await fixture.create<UserInterface>('User', {
+          email: generateRandomEmail('literal+'),
+          username: 'literal-user',
+          password: 'hashedpassword123',
+        });
+
+        const result = await usersService.findAll(query({ q: '.*' }));
+
+        assert.strictEqual(result.total, 0);
+        assert.deepStrictEqual(result.items, []);
+      });
+
+      test('should order by the requested field and hide secrets', async () => {
+        await fixture.createMany<UserInterface>('User', [
+          {
+            email: generateRandomEmail('zeta+'),
+            username: 'zeta-user',
+            password: 'hashedpassword123',
+          },
+          {
+            email: generateRandomEmail('alpha+'),
+            username: 'alpha-user',
+            password: 'hashedpassword123',
+          },
+        ]);
+
+        const result = await usersService.findAll(
+          query({ sort: { field: 'email', direction: 1 } }),
+        );
+
+        assert.deepStrictEqual(
+          result.items.map((user) => user.username),
+          ['alpha-user', 'zeta-user'],
+        );
+        for (const user of result.items) {
+          assert.strictEqual('password' in user, false);
+          assert.strictEqual('loginAttempts' in user, false);
+          assert.strictEqual('lockoutUntil' in user, false);
+          assert.strictEqual('mfaSecret' in user, false);
+        }
       });
     });
 
@@ -966,5 +1074,68 @@ describe('UsersService support actions', () => {
 
     assert.strictEqual(unlocked.loginAttempts, 0);
     assert.strictEqual(verified.verified, true);
+  });
+});
+
+describe('UsersService session listing', () => {
+  const createUser = () =>
+    fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('sessions+'),
+      password: 'hashedpassword123',
+    });
+
+  test('delegates with the target id once the user exists', async () => {
+    const user = await createUser();
+    const listSessions = mock.fn(async () => []);
+    const service = new UsersService(User, new CryptoService());
+    service.setSessionLister({ listSessions });
+
+    const sessions = await service.listSessions(user._id.toString());
+
+    assert.deepStrictEqual(sessions, []);
+    assert.deepStrictEqual(listSessions.mock.calls[0]?.arguments, [
+      user._id.toString(),
+    ]);
+  });
+
+  test('fails closed when no lister is wired', async () => {
+    const user = await createUser();
+    const service = new UsersService(User, new CryptoService());
+
+    await assert.rejects(
+      service.listSessions(user._id.toString()),
+      new Error('Session lister is not configured'),
+    );
+  });
+
+  test('answers 404 for the owner and for an unknown id', async () => {
+    const listSessions = mock.fn(async () => []);
+    const owner = await fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('sessions-owner+'),
+      role: Roles.OWNER,
+      password: 'hashedpassword123',
+      verified: true,
+    });
+    const service = new UsersService(User, new CryptoService());
+    service.setSessionLister({ listSessions });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.listSessions(id),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+    assert.strictEqual(listSessions.mock.callCount(), 0);
+  });
+
+  test('rejects a malformed id', async () => {
+    const service = new UsersService(User, new CryptoService());
+
+    await assert.rejects(
+      service.listSessions('bad-id'),
+      new InvalidArgumentError('Invalid ID format'),
+    );
   });
 });

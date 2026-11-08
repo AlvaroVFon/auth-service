@@ -12,9 +12,17 @@ import {
   duplicateKeyFields,
   isDuplicateKeyError,
 } from '../common/mongo/duplicate-key';
+import {
+  buildPaginatedResult,
+  buildSearchRegex,
+  buildSortObject,
+  type ListQuery,
+  type PaginatedResult,
+} from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
 import { Application } from './applications.interface';
 import {
+  type ApplicationSortField,
   ApplicationsPort,
   CreateApplicationInput,
   UpdateApplicationInput,
@@ -227,9 +235,32 @@ export class ApplicationsService implements ApplicationsPort {
     return bySlug ?? (await this.findByAudience(value));
   }
 
-  async findAll(): Promise<Application[]> {
-    // This order belongs to the catalog endpoint; consumers that build their own
-    // view (the panel context) must order their response themselves.
+  async findAll(
+    query: ListQuery<ApplicationSortField>,
+  ): Promise<PaginatedResult<Application>> {
+    const filter = query.q
+      ? {
+          $or: [
+            { name: buildSearchRegex(query.q) },
+            { slug: buildSearchRegex(query.q) },
+          ],
+        }
+      : {};
+
+    const [items, total] = await Promise.all([
+      this.applicationModel
+        .find(filter)
+        .sort(buildSortObject(query.sort))
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit),
+      this.applicationModel.countDocuments(filter),
+    ]);
+
+    return buildPaginatedResult(items, total, query);
+  }
+
+  async findAllForContext(): Promise<Application[]> {
+    // This order belongs to the panel context, not to the catalog endpoint.
     return this.applicationModel.find().sort({ name: 1, slug: 1, _id: 1 });
   }
 

@@ -3,9 +3,11 @@ import { Request, Response } from 'express';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import { parseListQuery } from '../common/pagination';
 import { extractRequestContext } from '../common/request-context';
 import { parseUserUpdatePayload } from './user-update-payload';
 import { User as UserInterface } from './users.interface';
+import { USER_LIST_OPTIONS, type UserSortField } from './users.port';
 import { UserSupportActionContext, UsersService } from './users.service';
 
 const pickUserProfile = (
@@ -61,8 +63,20 @@ export class UsersController {
   }
 
   @Catch()
-  async findAll(_req: Request, res: Response): Promise<void> {
-    const users = await this.userService.findAll();
+  async listUserSessions(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const sessions = await this.userService.listSessions(id);
+
+    res.status(200).json(sessions);
+  }
+
+  @Catch()
+  async findAll(req: Request, res: Response): Promise<void> {
+    const query = parseListQuery<UserSortField>(
+      req.query as Record<string, unknown>,
+      USER_LIST_OPTIONS,
+    );
+    const users = await this.userService.findAll(query);
 
     res.status(200).json(users);
   }

@@ -55,7 +55,7 @@ describe('ProfileService', () => {
   let verifyToken: ReturnType<typeof mock.fn>;
   let isBlacklisted: ReturnType<typeof mock.fn>;
   let listActiveByUser: ReturnType<typeof mock.fn>;
-  let findAll: ReturnType<typeof mock.fn>;
+  let findAllForContext: ReturnType<typeof mock.fn>;
   let service: ProfileService;
 
   beforeEach(() => {
@@ -69,14 +69,14 @@ describe('ProfileService', () => {
     verifyToken = mock.fn(() => claims());
     isBlacklisted = mock.fn(async () => false);
     listActiveByUser = mock.fn(async () => []);
-    findAll = mock.fn(async () => []);
+    findAllForContext = mock.fn(async () => []);
 
     service = new ProfileService(
       { findById } as unknown as UsersPort,
       { verifyToken } as unknown as JwtService,
       { isBlacklisted } as unknown as TokenBlacklistPort,
       { listActiveByUser } as unknown as GrantsPort,
-      { findAll } as unknown as ApplicationsPort,
+      { findAllForContext } as unknown as ApplicationsPort,
     );
   });
 
@@ -128,7 +128,10 @@ describe('ProfileService', () => {
         verified: true,
         mfaEnabled: false,
       }));
-      findAll.mock.mockImplementation(async () => [applicationA, applicationB]);
+      findAllForContext.mock.mockImplementation(async () => [
+        applicationA,
+        applicationB,
+      ]);
 
       const context = await service.getContext(ownerIdentity);
 
@@ -172,7 +175,10 @@ describe('ProfileService', () => {
         verified: true,
         mfaEnabled: false,
       }));
-      findAll.mock.mockImplementation(async () => [applicationA, applicationB]);
+      findAllForContext.mock.mockImplementation(async () => [
+        applicationA,
+        applicationB,
+      ]);
 
       const context = await service.getContext({
         id: USER_ID,
@@ -214,7 +220,7 @@ describe('ProfileService', () => {
           role: GrantRoles.ADMIN,
         },
       ]);
-      assert.strictEqual(findAll.mock.callCount(), 0);
+      assert.strictEqual(findAllForContext.mock.callCount(), 0);
     });
 
     test('should sort applications deterministically by name and slug', async () => {

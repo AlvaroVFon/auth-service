@@ -1,7 +1,10 @@
 import { Types } from 'mongoose';
 
 import { Application } from '../../../../src/applications/applications.interface';
-import type { UpdateApplicationInput } from '../../../../src/applications/applications.port';
+import type {
+  ApplicationSortField,
+  UpdateApplicationInput,
+} from '../../../../src/applications/applications.port';
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
 import {
@@ -16,6 +19,7 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
+import type { ListQuery } from '../../../../src/common/pagination';
 import fixture from '../../../fixtures';
 import { ApplicationFactory } from '../../../helpers/factories/application.factory';
 import { silentLogger } from '../../../mocks/logger.mock';
@@ -323,23 +327,126 @@ describe('ApplicationsService', () => {
   });
 
   describe('findAll', () => {
-    test('should return every application', async () => {
-      const first = ApplicationFactory.generate();
-      const second = ApplicationFactory.generate();
-      await applicationsService.create({
-        name: first.name,
-        slug: first.slug,
-        audience: first.audience,
-      });
-      await applicationsService.create({
-        name: second.name,
-        slug: second.slug,
-        audience: second.audience,
-      });
+    const query = (
+      overrides: Partial<ListQuery<ApplicationSortField>> = {},
+    ): ListQuery<ApplicationSortField> => ({
+      page: 1,
+      limit: 20,
+      sort: { field: 'name', direction: 1 },
+      ...overrides,
+    });
 
-      const applications = await applicationsService.findAll();
+    const createApplication = (
+      overrides: { name?: string; slug?: string } = {},
+    ) => {
+      const application = ApplicationFactory.generate(overrides);
+      return applicationsService.create({
+        name: application.name,
+        slug: application.slug,
+        audience: application.audience,
+      });
+    };
 
-      assert.strictEqual(applications.length, 2);
+    test('should return an empty page when there is no application', async () => {
+      const result = await applicationsService.findAll(query());
+
+      assert.deepStrictEqual(result.items, []);
+      assert.strictEqual(result.total, 0);
+      assert.strictEqual(result.page, 1);
+      assert.strictEqual(result.limit, 20);
+    });
+
+    test('should paginate the catalog and report the total', async () => {
+      await createApplication({ name: 'Alpha application' });
+      await createApplication({ name: 'Beta application' });
+      await createApplication({ name: 'Gamma application' });
+
+      const page = await applicationsService.findAll(
+        query({ page: 2, limit: 2 }),
+      );
+
+      assert.strictEqual(page.items.length, 1);
+      assert.strictEqual(page.items[0]!.name, 'Gamma application');
+      assert.strictEqual(page.total, 3);
+      assert.strictEqual(page.page, 2);
+      assert.strictEqual(page.limit, 2);
+    });
+
+    test('should search by name or slug prefix and reflect it in the total', async () => {
+      await createApplication({ name: 'Acme portal' });
+      await createApplication({ name: 'Another', slug: 'acme-slug' });
+      await createApplication({ name: 'Other' });
+
+      const result = await applicationsService.findAll(query({ q: 'acme' }));
+
+      assert.strictEqual(result.total, 2);
+      assert.ok(
+        result.items.some((application) => application.slug === 'acme-slug'),
+      );
+      assert.ok(
+        result.items.some((application) => application.name.startsWith('Acme')),
+      );
+    });
+
+    test('should treat the search term literally', async () => {
+      await createApplication();
+
+      const result = await applicationsService.findAll(query({ q: '.*' }));
+
+      assert.strictEqual(result.total, 0);
+      assert.deepStrictEqual(result.items, []);
+    });
+
+    test('should keep a stable order across pages and requests', async () => {
+      await createApplication({ name: 'Same name' });
+      await createApplication({ name: 'Same name' });
+      await createApplication({ name: 'Same name' });
+
+      const page = (pageNumber: number) =>
+        applicationsService.findAll(
+          query({
+            page: pageNumber,
+            limit: 2,
+            sort: { field: 'name', direction: 1 },
+          }),
+        );
+
+      const firstPage = await page(1);
+      const secondPage = await page(2);
+      const repeatedFirstPage = await page(1);
+
+      const ids = [
+        ...firstPage.items.map((application) => application._id.toString()),
+        ...secondPage.items.map((application) => application._id.toString()),
+      ];
+      assert.strictEqual(new Set(ids).size, 3);
+      assert.deepStrictEqual(
+        firstPage.items.map((application) => application._id.toString()),
+        repeatedFirstPage.items.map((application) =>
+          application._id.toString(),
+        ),
+      );
+      assert.strictEqual(
+        firstPage.items[0]!._id.toString() < firstPage.items[1]!._id.toString(),
+        true,
+      );
+    });
+
+    test('should keep returning every application for the auth context', async () => {
+      for (let index = 0; index < 21; index += 1) {
+        await createApplication();
+      }
+      await fixture.create<Application>(
+        'Application',
+        ApplicationFactory.generate({ active: false }),
+      );
+
+      const applications = await applicationsService.findAllForContext();
+
+      assert.strictEqual(applications.length, 22);
+      assert.ok(
+        applications.some((application) => application.active === false),
+      );
     });
   });
 

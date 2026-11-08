@@ -75,6 +75,16 @@ const applicationSchema = new Schema<Application>(
   { timestamps: true },
 );
 
+// Every listing order ends in `_id` (stable pagination), so each sortable
+// field gets the compound index; MongoDB can scan it in reverse for the
+// descending direction. The case-insensitive `q` prefix search cannot use a
+// b-tree index by design and scans the small catalog.
+applicationSchema.index({ name: 1, _id: 1 });
+applicationSchema.index({ slug: 1, _id: 1 });
+applicationSchema.index({ audience: 1, _id: 1 });
+applicationSchema.index({ active: 1, _id: 1 });
+applicationSchema.index({ createdAt: 1, _id: 1 });
+
 export const ApplicationModel = model<Application>(
   'Application',
   applicationSchema,

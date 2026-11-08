@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 
 import { Catch } from '../common/decorators/catch.decorator';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import { parseListQuery } from '../common/pagination';
+import {
+  APPLICATION_LIST_OPTIONS,
+  type ApplicationSortField,
+} from './applications.port';
 import { ApplicationsService } from './applications.service';
 
 export class ApplicationsController {
@@ -20,8 +25,12 @@ export class ApplicationsController {
   }
 
   @Catch()
-  async findAll(_req: Request, res: Response): Promise<void> {
-    const applications = await this.applicationsService.findAll();
+  async findAll(req: Request, res: Response): Promise<void> {
+    const query = parseListQuery<ApplicationSortField>(
+      req.query as Record<string, unknown>,
+      APPLICATION_LIST_OPTIONS,
+    );
+    const applications = await this.applicationsService.findAll(query);
 
     res.status(200).json(applications);
   }

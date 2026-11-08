@@ -19,4 +19,6 @@ export interface User {
   mfaFailedAttempts?: number;
   mfaLockoutUntil?: Date | null;
   mfaLastUsedStep?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 }

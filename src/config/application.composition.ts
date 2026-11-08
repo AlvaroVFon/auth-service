@@ -292,6 +292,9 @@ export const createApplicationComposition = (
     getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
   );
   usersModule.service.setSessionRevoker(sessionService);
+  usersModule.service.setSessionLister({
+    listSessions: (userId) => sessionService.list(userId),
+  });
   const mfaService = new MfaService(
     usersModule.service,
     cryptoService,
