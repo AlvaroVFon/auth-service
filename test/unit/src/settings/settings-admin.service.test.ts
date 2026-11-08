@@ -93,6 +93,36 @@ describe('SettingsAdminService', () => {
     assert.strictEqual(record.mock.callCount(), 0);
   });
 
+  test('audits a source-only transition', async () => {
+    const record = mock.fn(async () => {});
+    const inherited = buildResolved();
+    const overridden = buildResolved();
+    overridden.appName = {
+      value: SETTINGS_CODE_DEFAULTS.appName,
+      source: 'global',
+    };
+    const service = new SettingsAdminService(
+      {
+        resolveForApplication: async () => inherited,
+        resolveGlobal: async () => inherited,
+        updateApplicationSettings: async () => inherited,
+        updateGlobalSettings: async () => overridden,
+      } satisfies SettingsPort,
+      { record } as never,
+    );
+
+    await service.updateGlobal(
+      { appName: SETTINGS_CODE_DEFAULTS.appName },
+      'actor-1',
+    );
+
+    assert.strictEqual(record.mock.callCount(), 1);
+    const event = record.mock.calls[0]?.arguments[0] as
+      | { fields: string[] }
+      | undefined;
+    assert.deepStrictEqual(event?.fields, ['appName']);
+  });
+
   test('does not audit an empty patch', async () => {
     const { service, record } = buildService();
 
