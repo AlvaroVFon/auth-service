@@ -72,7 +72,20 @@ describe('E2E MFA login', () => {
 
   test('AC-2: requires the second factor before issuing tokens', async () => {
     const { user, application, mfa } = await createMfaUser();
+    const beforeChallenge = await fixture.findById<User>(
+      'User',
+      user._id.toString(),
+    );
     const challengeToken = await challenge(user, application);
+
+    const afterChallenge = await fixture.findById<User>(
+      'User',
+      user._id.toString(),
+    );
+    assert.strictEqual(
+      afterChallenge?.lastLoginAt?.getTime(),
+      beforeChallenge?.lastLoginAt?.getTime(),
+    );
 
     await request(app)
       .get('/auth/me')
@@ -93,6 +106,16 @@ describe('E2E MFA login', () => {
       .expect(200);
 
     assert.strictEqual(me.body.application, application.audience);
+
+    const afterVerification = await fixture.findById<User>(
+      'User',
+      user._id.toString(),
+    );
+    assert.ok(afterVerification?.lastLoginAt instanceof Date);
+    assert.notStrictEqual(
+      afterVerification?.lastLoginAt?.getTime(),
+      beforeChallenge?.lastLoginAt?.getTime(),
+    );
   });
 
   test('AC-5: rejects a replayed TOTP code', async () => {

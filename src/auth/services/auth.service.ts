@@ -196,6 +196,7 @@ export class AuthService {
           ctx,
           access.application.audience,
         );
+        await this.recordLogin(userId);
         await this.auditService.record({
           event: AuditEvent.LOGIN_SUCCEEDED,
           result: AuditResult.SUCCESS,
@@ -224,6 +225,7 @@ export class AuthService {
       }
 
       const session = await this.sessionService.create(userId, user.role, ctx);
+      await this.recordLogin(userId);
       await this.auditService.record({
         event: AuditEvent.LOGIN_SUCCEEDED,
         result: AuditResult.SUCCESS,
@@ -283,6 +285,15 @@ export class AuthService {
     });
   }
 
+  /** Best effort: a failed write must never turn a successful login into an error. */
+  private async recordLogin(userId: string): Promise<void> {
+    try {
+      await this.usersService.recordLogin(userId);
+    } catch (error) {
+      this.logger.warn(`Failed to record the last login of ${userId}`, error);
+    }
+  }
+
   private auditContext(ctx?: RequestContext): {
     ipAddress?: string;
     userAgent?: string;
@@ -337,6 +348,7 @@ export class AuthService {
         ctx,
         access.application.audience,
       );
+      await this.recordLogin(userId);
 
       return {
         accessToken: session.accessToken,
@@ -349,6 +361,7 @@ export class AuthService {
     }
 
     const session = await this.sessionService.create(userId, user.role, ctx);
+    await this.recordLogin(userId);
 
     return {
       accessToken: session.accessToken,

@@ -40,6 +40,29 @@ describe('E2E Auth Login', () => {
     assert.ok(responseBody.accessToken);
     assert.ok(JWT_REGEX.test(responseBody.accessToken));
     assert.strictEqual(typeof responseBody.accessToken, 'string');
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.ok(stored?.lastLoginAt instanceof Date);
+  });
+
+  test('should not seal lastLoginAt on a failed login', async () => {
+    const user = await fixture.create<User>('User');
+    const { application } = await createApplicationAccess(user._id.toString());
+    const before = (await fixture.findById<User>('User', user._id.toString()))
+      ?.lastLoginAt;
+
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: 'WrongPassword123!',
+        application: application.slug,
+      })
+      .expect(401);
+
+    const after = (await fixture.findById<User>('User', user._id.toString()))
+      ?.lastLoginAt;
+    assert.strictEqual(after, before);
   });
 
   test('should fail login with incorrect password', async () => {
