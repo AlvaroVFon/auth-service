@@ -51,7 +51,15 @@ export interface AuditEventFilter extends ListQuery<AuditSortField> {
   to?: Date;
 }
 
+/** Login outcomes inside one time window. */
+export interface LoginCount {
+  succeeded: number;
+  failed: number;
+}
+
 export interface AuditPort {
   record(input: RecordAuditEventInput): Promise<void>;
   list(filter: AuditEventFilter): Promise<PaginatedResult<AuditEventRecord>>;
+  /** Counts login events since `since`, grouped by outcome. */
+  countLogins(since: Date): Promise<LoginCount>;
 }

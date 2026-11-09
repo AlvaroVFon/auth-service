@@ -49,11 +49,13 @@ describe('AuditService', () => {
   let skip: ReturnType<typeof mock.fn>;
   let sort: ReturnType<typeof mock.fn>;
   let countDocuments: ReturnType<typeof mock.fn>;
+  let aggregate: ReturnType<typeof mock.fn>;
   let logger: LoggerInterface;
   let service: AuditService;
 
   beforeEach(() => {
     create = mock.fn(() => Promise.resolve({}));
+    aggregate = mock.fn(() => Promise.resolve([]));
     allowDiskUse = mock.fn(() => Promise.resolve([]));
     limit = mock.fn(() => ({ allowDiskUse }));
     skip = mock.fn(() => ({ limit }));
@@ -67,7 +69,12 @@ describe('AuditService', () => {
       debug: mock.fn(),
     };
     service = new AuditService(
-      { create, find, countDocuments } as unknown as Model<AuditEventRecord>,
+      {
+        create,
+        find,
+        countDocuments,
+        aggregate,
+      } as unknown as Model<AuditEventRecord>,
       logger,
     );
   });
@@ -209,6 +216,56 @@ describe('AuditService', () => {
           }),
         ),
         new InvalidArgumentError('from must be before to'),
+      );
+    });
+  });
+
+  describe('countLogins', () => {
+    test('should filter by login events and window, then group by result', async () => {
+      const since = new Date('2026-01-01T00:00:00.000Z');
+
+      await service.countLogins(since);
+
+      const pipeline = aggregate.mock.calls[0]?.arguments[0] as Array<
+        Record<string, unknown>
+      >;
+      assert.deepStrictEqual(pipeline[0], {
+        $match: {
+          event: {
+            $in: [AuditEvent.LOGIN_SUCCEEDED, AuditEvent.LOGIN_FAILED],
+          },
+          createdAt: { $gte: since },
+        },
+      });
+      assert.deepStrictEqual(pipeline[1], {
+        $group: { _id: '$result', count: { $sum: 1 } },
+      });
+    });
+
+    test('should map both outcomes and return zeros for missing rows', async () => {
+      aggregate.mock.mockImplementation(() =>
+        Promise.resolve([
+          { _id: AuditResult.SUCCESS, count: 4 },
+          { _id: AuditResult.FAILURE, count: 2 },
+        ]),
+      );
+
+      assert.deepStrictEqual(
+        await service.countLogins(new Date('2026-01-01')),
+        { succeeded: 4, failed: 2 },
+      );
+
+      aggregate.mock.mockImplementation(() => Promise.resolve([]));
+      assert.deepStrictEqual(
+        await service.countLogins(new Date('2026-01-01')),
+        { succeeded: 0, failed: 0 },
+      );
+    });
+
+    test('should reject an invalid window start', async () => {
+      await assert.rejects(
+        service.countLogins(new Date('invalid')),
+        new InvalidArgumentError('since must be a valid date'),
       );
     });
   });

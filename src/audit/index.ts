@@ -5,6 +5,7 @@ export { AuditModule } from './audit.module';
 export type {
   AuditEventFilter,
   AuditPort,
+  LoginCount,
   RecordAuditEventInput,
 } from './audit.port';
 export { createAuditEventModel } from './audit.schema';
