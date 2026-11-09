@@ -7,7 +7,7 @@ import type { AuthorizationMiddleware } from '../common/middlewares/authorizatio
 import { createRateLimiter } from '../common/middlewares/rate-limiter.middleware';
 import type { LinksController } from './links.controller';
 
-/** Resends are cheap but must not be spammed: three per minute per invitation. */
+/** Resends are cheap but must not be spammed: three per minute per actor and application. */
 export const INVITATION_RESEND_RATE_LIMIT_WINDOW_MS = 60_000;
 export const INVITATION_RESEND_RATE_LIMIT_MAX = 3;
 
