@@ -461,19 +461,17 @@ export class UsersService implements UsersPort {
     }
 
     const sessions = await this.requireSessionPort().listSessions(id);
-    const lastActivity =
-      sessions.length === 0
-        ? undefined
-        : Math.max(
-            ...sessions.map((session) => session.lastActivityAt.getTime()),
-          );
-    // The login timestamp persists after logout; an active session can be more
-    // recent because rotation advances its activity.
-    const candidates = [user.lastLoginAt?.getTime(), lastActivity].filter(
-      (value): value is number => value !== undefined,
-    );
+    // The endpoint contract defines this as the latest activity of the active
+    // sessions, so it is null after a full logout even though `lastLoginAt`
+    // persists on the user document.
     const lastLoginAt =
-      candidates.length === 0 ? null : new Date(Math.max(...candidates));
+      sessions.length === 0
+        ? null
+        : new Date(
+            Math.max(
+              ...sessions.map((session) => session.lastActivityAt.getTime()),
+            ),
+          );
 
     return {
       verified: user.verified,
