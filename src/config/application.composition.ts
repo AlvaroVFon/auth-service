@@ -382,7 +382,10 @@ export const createApplicationComposition = (
     logger,
   });
   const auditModule = new AuditModule({
-    auditController: new AuditController(auditService),
+    auditController: new AuditController(
+      auditService,
+      getNumberEnvVariable('AUDIT_EXPORT_MAX_ROWS', 10_000),
+    ),
     authenticationMiddleware,
     authorizationMiddleware,
     logger,

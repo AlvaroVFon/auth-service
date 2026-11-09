@@ -25,6 +25,28 @@ export enum AuditResult {
   FAILURE = 'failure',
 }
 
+/** Human-readable catalog exposed to the panel's event selector. */
+export const AUDIT_EVENT_DESCRIPTIONS: Readonly<Record<AuditEvent, string>> =
+  Object.freeze({
+    [AuditEvent.LOGIN_SUCCEEDED]: 'A user signed in successfully.',
+    [AuditEvent.LOGIN_FAILED]: 'A sign-in attempt failed.',
+    [AuditEvent.ACCOUNT_LOCKED]: 'A sign-in was rejected by an active lockout.',
+    [AuditEvent.TOKEN_REFRESHED]: 'A session rotated its refresh token.',
+    [AuditEvent.LOGGED_OUT]: 'A user closed a session.',
+    [AuditEvent.SESSION_REVOKED]: 'A session was revoked.',
+    [AuditEvent.SESSIONS_REVOKED]: 'All sessions were revoked.',
+    [AuditEvent.GRANT_ASSIGNED]: 'A grant was assigned.',
+    [AuditEvent.GRANT_REVOKED]: 'A grant was revoked.',
+    [AuditEvent.APPLICATION_UPDATED]: 'An application was updated.',
+    [AuditEvent.APPLICATION_ACTIVATED]: 'An application was activated.',
+    [AuditEvent.APPLICATION_DEACTIVATED]: 'An application was deactivated.',
+    [AuditEvent.APPLICATION_ARCHIVED]: 'An application was archived.',
+    [AuditEvent.MEMBER_GRANTED]: 'A member was granted access.',
+    [AuditEvent.SETTINGS_UPDATED]: 'Policy settings were updated.',
+    [AuditEvent.USER_UNLOCKED]: 'An owner cleared an account lockout.',
+    [AuditEvent.USER_VERIFIED]: 'An owner marked an account as verified.',
+  });
+
 export interface AuditEventRecord {
   _id: Types.ObjectId;
   event: AuditEvent;

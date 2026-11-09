@@ -144,6 +144,7 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `INVITATION_LINK_EXPIRATION_MS`     | Invitation link TTL.                                                                   | `604800000` | No                     |
 | `PASSWORD_RESET_LINK_EXPIRATION_MS` | Password-reset link TTL.                                                               | `3600000`   | No                     |
 | `AUDIT_RETENTION_DAYS`              | Audit event retention through the TTL index.                                           | `90`        | No                     |
+| `AUDIT_EXPORT_MAX_ROWS`             | Maximum rows a CSV audit export may return.                                            | `10000`     | No                     |
 | `MFA_SECRET_ENCRYPTION_KEY`         | Base64-encoded 32-byte key that encrypts TOTP secrets; empty stores them as plaintext. | `Empty`     | Yes                    |
 | `MFA_CHALLENGE_EXPIRATION`          | MFA challenge TTL in seconds.                                                          | `300`       | No                     |
 | `TELEGRAM_BOT_TOKEN`                | Bot token; empty disables Telegram notifications.                                      | `Empty`     | No                     |
@@ -296,9 +297,11 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 
 ### Audit
 
-| Method | Route           | Access | Notes                                                                                             |
-| ------ | --------------- | ------ | ------------------------------------------------------------------------------------------------- |
-| `GET`  | `/audit-events` | Owner  | Filters by `userId`, `email`, `applicationId`, `event`, `from`, `to`; paginated envelope (above). |
+| Method | Route                  | Access | Notes                                                                                                 |
+| ------ | ---------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
+| `GET`  | `/audit-events`        | Owner  | Filters by `userId`, `email`, `applicationId`, `event`, `from`, `to`; paginated envelope (above).     |
+| `GET`  | `/audit-events/events` | Owner  | Static catalog of audit events with a short description.                                              |
+| `GET`  | `/audit-events/export` | Owner  | CSV stream with the same filters, capped at `AUDIT_EXPORT_MAX_ROWS`; exceeding the cap returns `400`. |
 
 ## Deployment
 

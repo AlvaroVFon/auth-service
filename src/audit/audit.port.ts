@@ -51,7 +51,17 @@ export interface AuditEventFilter extends ListQuery<AuditSortField> {
   to?: Date;
 }
 
+/** Filters shared by the listing and the unbounded export. */
+export type AuditExportFilter = Omit<
+  AuditEventFilter,
+  'page' | 'limit' | 'sort'
+>;
+
 export interface AuditPort {
   record(input: RecordAuditEventInput): Promise<void>;
   list(filter: AuditEventFilter): Promise<PaginatedResult<AuditEventRecord>>;
+  /** Counts the rows a CSV export would contain. */
+  countForExport(filter: AuditExportFilter): Promise<number>;
+  /** Streams the export rows in creation order without pagination. */
+  streamForExport(filter: AuditExportFilter): AsyncIterable<AuditEventRecord>;
 }
