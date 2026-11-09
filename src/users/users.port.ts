@@ -76,7 +76,7 @@ export interface UserCounts {
   total: number;
   verified: number;
   unverified: number;
-  /** Accounts with a lockout that is still in force. */
+  /** Accounts with a login or MFA lockout that is still in force. */
   locked: number;
 }
 

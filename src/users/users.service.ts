@@ -78,33 +78,24 @@ export class UsersService implements UsersPort {
 
   async countUsers(): Promise<UserCounts> {
     const now = new Date();
-    const [row] = await this.usersModel.aggregate<{
-      total: number;
-      verified: number;
-      locked: number;
-    }>([
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          verified: { $sum: { $cond: ['$verified', 1, 0] } },
-          locked: {
-            $sum: {
-              $cond: [{ $gt: ['$lockoutUntil', now] }, 1, 0],
-            },
-          },
-        },
-      },
+    // Three index-served counts instead of one collection-wide grouping: the
+    // verified flag and both lockout fields have their own support indexes.
+    const [total, verified, locked] = await Promise.all([
+      this.usersModel.countDocuments({}),
+      this.usersModel.countDocuments({ verified: true }),
+      this.usersModel.countDocuments({
+        $or: [
+          { lockoutUntil: { $gt: now } },
+          { mfaLockoutUntil: { $gt: now } },
+        ],
+      }),
     ]);
-
-    const total = row?.total ?? 0;
-    const verified = row?.verified ?? 0;
 
     return {
       total,
       verified,
       unverified: total - verified,
-      locked: row?.locked ?? 0,
+      locked,
     };
   }
 

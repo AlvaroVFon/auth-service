@@ -1233,15 +1233,20 @@ describe('UsersService.countUsers', () => {
         verified: false,
         lockoutUntil: new Date(Date.now() - 60_000),
       }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-mfa-locked+'),
+        verified: true,
+        mfaLockoutUntil: new Date(Date.now() + 60_000),
+      }),
     ]);
 
     const service = new UsersService(User, new CryptoService());
 
     assert.deepStrictEqual(await service.countUsers(), {
-      total: 4,
-      verified: 2,
+      total: 5,
+      verified: 3,
       unverified: 2,
-      locked: 1,
+      locked: 2,
     });
   });
 });

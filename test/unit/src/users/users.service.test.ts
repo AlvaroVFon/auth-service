@@ -46,12 +46,12 @@ describe('UsersService.createVerifiedUser duplicate handling', () => {
 });
 
 describe('UsersService.countUsers', () => {
-  test('should group by verified and active lockout and derive the unverified total', async () => {
-    const aggregate = mock.fn(async () => [
-      { total: 5, verified: 3, locked: 2 },
-    ]);
+  test('should count total, verified and every active lockout', async () => {
+    const results = [5, 3, 2];
+    let call = 0;
+    const countDocuments = mock.fn(async () => results[call++] ?? 0);
     const service = new UsersService(
-      { aggregate } as unknown as Model<UserInterface>,
+      { countDocuments } as unknown as Model<UserInterface>,
       {} as CryptoService,
     );
 
@@ -63,28 +63,23 @@ describe('UsersService.countUsers', () => {
       unverified: 2,
       locked: 2,
     });
-    const pipeline = aggregate.mock.calls[0]?.arguments[0] as Array<{
-      $group: {
-        total: unknown;
-        verified: unknown;
-        locked: { $sum: { $cond: [unknown, 1, 0] } };
-      };
-    }>;
-    const group = pipeline[0]!.$group;
-    assert.deepStrictEqual(group.total, { $sum: 1 });
-    assert.deepStrictEqual(group.verified, {
-      $sum: { $cond: ['$verified', 1, 0] },
+    assert.deepStrictEqual(countDocuments.mock.calls[0]?.arguments[0], {});
+    assert.deepStrictEqual(countDocuments.mock.calls[1]?.arguments[0], {
+      verified: true,
     });
-    const lockout = group.locked.$sum.$cond[0] as {
-      $gt: [string, Date];
+    const lockout = countDocuments.mock.calls[2]?.arguments[0] as {
+      $or: Array<{
+        lockoutUntil?: { $gt: Date };
+        mfaLockoutUntil?: { $gt: Date };
+      }>;
     };
-    assert.strictEqual(lockout.$gt[0], '$lockoutUntil');
-    assert.ok(lockout.$gt[1] instanceof Date);
+    assert.ok(lockout.$or[0]?.lockoutUntil?.$gt instanceof Date);
+    assert.ok(lockout.$or[1]?.mfaLockoutUntil?.$gt instanceof Date);
   });
 
   test('should return zeros when the collection is empty', async () => {
     const service = new UsersService(
-      { aggregate: async () => [] } as unknown as Model<UserInterface>,
+      { countDocuments: async () => 0 } as unknown as Model<UserInterface>,
       {} as CryptoService,
     );
 
