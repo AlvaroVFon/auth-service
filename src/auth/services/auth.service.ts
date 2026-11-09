@@ -414,15 +414,25 @@ export class AuthService {
         refreshToken: session.refreshToken,
       };
     } catch (error) {
-      // Post-verification denials (revoked grant, inactive application,
-      // missing application, session failure) are login failures too.
-      await this.recordMfaFailure(
-        userId,
-        user.email,
-        claims,
-        ctx,
-        AuditEvent.LOGIN_FAILED,
-      );
+      // Only expected authorization denials are login outcomes; a database or
+      // session-store failure is logged, not counted as a credential attack.
+      if (
+        error instanceof ForbiddenError ||
+        error instanceof UnauthorizedError
+      ) {
+        await this.recordMfaFailure(
+          userId,
+          user.email,
+          claims,
+          ctx,
+          AuditEvent.LOGIN_FAILED,
+        );
+      } else {
+        this.logger.warn(
+          `Unexpected post-verification failure for ${userId}`,
+          error,
+        );
+      }
       throw error;
     }
   }
