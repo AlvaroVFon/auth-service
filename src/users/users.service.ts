@@ -29,7 +29,10 @@ import {
 import type { RequestAuditContext } from '../common/request-context';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
-import { User as UserInterface } from '../users/users.interface';
+import {
+  User as UserInterface,
+  UserSecurityOverview,
+} from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
@@ -430,6 +433,49 @@ export class UsersService implements UsersPort {
     if (!complete) {
       throw new Error('Session revocation incomplete');
     }
+  }
+
+  /**
+   * Aggregate security state of a target. The owner and unknown ids are both
+   * reported as missing, and the projection only selects the public counters.
+   */
+  async getSecurityOverview(id: string): Promise<UserSecurityOverview> {
+    this.assertValidId(id);
+
+    const user = await this.usersModel
+      .findOne({ _id: id, role: { $ne: Roles.OWNER } })
+      .select('verified mfaEnabled loginAttempts lockoutUntil mfaLockoutUntil')
+      .lean<{
+        verified: boolean;
+        mfaEnabled?: boolean;
+        loginAttempts?: number;
+        lockoutUntil?: Date | null;
+        mfaLockoutUntil?: Date | null;
+      }>();
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    const sessions = await this.requireSessionPort().listSessions(id);
+    const lastLoginAt =
+      sessions.length === 0
+        ? null
+        : new Date(
+            Math.max(
+              ...sessions.map((session) => session.lastActivityAt.getTime()),
+            ),
+          );
+
+    return {
+      verified: user.verified,
+      mfaEnabled: user.mfaEnabled ?? false,
+      loginAttempts: user.loginAttempts ?? 0,
+      lockoutUntil: user.lockoutUntil ?? null,
+      mfaLockoutUntil: user.mfaLockoutUntil ?? null,
+      lastLoginAt,
+      activeSessions: sessions.length,
+    };
   }
 
   /** Validates the id and resolves the target, excluding the owner. */

@@ -1444,3 +1444,55 @@ describe('UsersService.resetMfa', () => {
     assert.strictEqual(stored?.mfaEnabled, true);
   });
 });
+
+describe('UsersService.getSecurityOverview', () => {
+  test('composes the counters and the latest session activity', async () => {
+    const user = await fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('security-overview+'),
+      password: DEFAULT_USER.password,
+      verified: true,
+      mfaEnabled: true,
+      loginAttempts: 3,
+      lockoutUntil: new Date('2026-01-01T00:00:00.000Z'),
+      mfaLockoutUntil: new Date('2026-01-02T00:00:00.000Z'),
+    });
+    const service = new UsersService(User, new CryptoService());
+    service.setSessionManager({
+      listSessions: async () => [
+        {
+          id: 'session-a',
+          device: null,
+          application: 'app',
+          ipAddress: null,
+          createdAt: null,
+          lastActivityAt: new Date('2026-01-03T00:00:00.000Z'),
+          expiresAt: new Date('2026-02-01T00:00:00.000Z'),
+        },
+        {
+          id: 'session-b',
+          device: null,
+          application: 'app',
+          ipAddress: null,
+          createdAt: null,
+          lastActivityAt: new Date('2026-01-05T00:00:00.000Z'),
+          expiresAt: new Date('2026-02-01T00:00:00.000Z'),
+        },
+      ],
+      revokeSession: async () => true,
+      revokeAllSessions: async () => ({ sessionIds: [], complete: true }),
+    });
+
+    const overview = await service.getSecurityOverview(user._id.toString());
+
+    assert.deepStrictEqual(overview, {
+      verified: true,
+      mfaEnabled: true,
+      loginAttempts: 3,
+      lockoutUntil: new Date('2026-01-01T00:00:00.000Z'),
+      mfaLockoutUntil: new Date('2026-01-02T00:00:00.000Z'),
+      lastLoginAt: new Date('2026-01-05T00:00:00.000Z'),
+      activeSessions: 2,
+    });
+  });
+});

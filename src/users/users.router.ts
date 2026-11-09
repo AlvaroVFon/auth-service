@@ -59,6 +59,11 @@ export class UsersRouter {
       this.userController.listUserSessions.bind(this.userController),
     );
 
+    this.app.get(
+      '/users/:id/security',
+      this.userController.getSecurityOverview.bind(this.userController),
+    );
+
     this.app.patch(
       '/users/:id',
       this.userController.updateOneById.bind(this.userController),
