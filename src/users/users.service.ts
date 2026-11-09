@@ -65,7 +65,7 @@ const USER_LIST_PROJECTION = [
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
   private sessionRevoker?: UserSessionRevokerPort;
-  private sessionLister?: UserSessionsPort;
+  private sessionManager?: UserSessionsPort;
 
   constructor(
     private readonly usersModel: Model<UserInterface>,
@@ -337,9 +337,11 @@ export class UsersService implements UsersPort {
     event:
       | AuditEvent.USER_UNLOCKED
       | AuditEvent.USER_VERIFIED
+      | AuditEvent.SESSION_REVOKED_BY_ADMIN
       | AuditEvent.USER_MFA_RESET,
     targetUserId: string,
     context: UserSupportActionContext,
+    sessionId?: string,
   ): Promise<void> {
     if (!this.auditService) {
       return;
@@ -356,6 +358,7 @@ export class UsersService implements UsersPort {
       ...(context.userAgent === undefined
         ? {}
         : { userAgent: context.userAgent }),
+      ...(sessionId === undefined ? {} : { sessionId }),
     });
   }
 
@@ -375,8 +378,8 @@ export class UsersService implements UsersPort {
     this.sessionRevoker = revoker;
   }
 
-  setSessionLister(lister: UserSessionsPort): void {
-    this.sessionLister = lister;
+  setSessionManager(manager: UserSessionsPort): void {
+    this.sessionManager = manager;
   }
 
   /**
@@ -384,12 +387,80 @@ export class UsersService implements UsersPort {
    * missing, like an unknown id, so the support surface never exposes it.
    */
   async listSessions(id: string): Promise<UserSessionView[]> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
+    await this.assertSessionTarget(id);
+
+    return this.requireSessionPort().listSessions(id);
+  }
+
+  /** Revokes one session of the target and audits the session id. */
+  async revokeSession(
+    id: string,
+    sessionId: string,
+    context: UserSupportActionContext = {},
+  ): Promise<void> {
+    await this.assertSessionTarget(id);
+
+    const revoked = await this.requireSessionPort().revokeSession(
+      id,
+      sessionId,
+    );
+
+    if (revoked) {
+      await this.recordSupportEvent(
+        AuditEvent.SESSION_REVOKED_BY_ADMIN,
+        id,
+        context,
+        sessionId,
+      );
     }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
+  }
+
+  /** Revokes every session of the target across audiences, auditing each one. */
+  async revokeAllSessions(
+    id: string,
+    context: UserSupportActionContext = {},
+  ): Promise<void> {
+    await this.assertSessionTarget(id);
+
+    // Audit exactly the sessions the revocation reported, not a pre-list
+    // snapshot that concurrent logins could make stale.
+    const { sessionIds, complete } =
+      await this.requireSessionPort().revokeAllSessions(id);
+
+    if (this.auditService) {
+      const events = [...new Set(sessionIds)].map((sessionId) => ({
+        event: AuditEvent.SESSION_REVOKED_BY_ADMIN,
+        result: AuditResult.SUCCESS,
+        targetUserId: id,
+        ...(context.actorId === undefined ? {} : { actorId: context.actorId }),
+        ...(context.ipAddress === undefined
+          ? {}
+          : { ipAddress: context.ipAddress }),
+        ...(context.userAgent === undefined
+          ? {}
+          : { userAgent: context.userAgent }),
+        sessionId,
+      }));
+
+      if (this.auditService.recordMany) {
+        await this.auditService.recordMany(events);
+      } else {
+        for (const event of events) {
+          await this.auditService.record(event);
+        }
+      }
     }
+
+    // Surface the incompleteness after auditing: a token that survived the
+    // bounded passes must not be reported as a successful revoke-all.
+    if (!complete) {
+      throw new Error('Session revocation incomplete');
+    }
+  }
+
+  /** Validates the id and resolves the target, excluding the owner. */
+  private async assertSessionTarget(id: string): Promise<void> {
+    this.assertValidId(id);
 
     const user = await this.usersModel
       .findOne({ _id: id, role: { $ne: Roles.OWNER } })
@@ -398,12 +469,14 @@ export class UsersService implements UsersPort {
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
+  }
 
-    if (!this.sessionLister) {
-      throw new Error('Session lister is not configured');
+  private requireSessionPort(): UserSessionsPort {
+    if (!this.sessionManager) {
+      throw new Error('Session manager is not configured');
     }
 
-    return this.sessionLister.listSessions(id);
+    return this.sessionManager;
   }
 
   async updateOneById(

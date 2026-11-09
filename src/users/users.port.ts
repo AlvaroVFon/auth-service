@@ -66,9 +66,18 @@ export interface UserSessionView {
   expiresAt: Date;
 }
 
-/** Lists the active sessions of a user, implemented by the auth domain. */
+/** Lists and revokes the sessions of a user, implemented by the auth domain. */
 export interface UserSessionsPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
+  /** Returns true when the session existed and was revoked by this call. */
+  revokeSession(userId: string, sessionId: string): Promise<boolean>;
+  /**
+   * Revokes every session and returns the identifiers it actually revoked.
+   * `complete` is false when active tokens survived the bounded revocation.
+   */
+  revokeAllSessions(
+    userId: string,
+  ): Promise<{ sessionIds: string[]; complete: boolean }>;
 }
 
 /** Management counters used by the admin overview. */
@@ -108,5 +117,5 @@ export interface UsersPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
   setGrantsCleaner(cleaner: UserGrantsCleanerPort): void;
   setSessionRevoker(revoker: UserSessionRevokerPort): void;
-  setSessionLister(lister: UserSessionsPort): void;
+  setSessionManager(manager: UserSessionsPort): void;
 }

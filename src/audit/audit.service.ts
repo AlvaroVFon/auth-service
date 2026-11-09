@@ -10,10 +10,12 @@ import {
 } from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
 import { LoggerInterface } from '../libs/logger';
-import { AuditEvent, AuditEventRecord } from './audit.interface';
+import { AuditEvent, AuditEventRecord, AuditResult } from './audit.interface';
 import {
   AuditEventFilter,
+  AuditExportFilter,
   AuditPort,
+  LoginCount,
   RecordAuditEventInput,
 } from './audit.port';
 
@@ -25,41 +27,53 @@ export class AuditService implements AuditPort {
 
   async record(input: RecordAuditEventInput): Promise<void> {
     try {
-      await this.auditModel.create({
-        event: input.event,
-        result: input.result,
-        ...(input.userId === undefined
-          ? {}
-          : { userId: new Types.ObjectId(input.userId) }),
-        ...(input.email === undefined
-          ? {}
-          : { email: normalizeEmail(input.email) }),
-        ...(input.sessionId === undefined
-          ? {}
-          : { sessionId: input.sessionId }),
-        ...(input.applicationId === undefined
-          ? {}
-          : { applicationId: new Types.ObjectId(input.applicationId) }),
-        ...(input.audience === undefined ? {} : { audience: input.audience }),
-        ...(input.role === undefined ? {} : { role: input.role }),
-        ...(input.actorId === undefined
-          ? {}
-          : { actorId: new Types.ObjectId(input.actorId) }),
-        ...(input.targetUserId === undefined
-          ? {}
-          : { targetUserId: new Types.ObjectId(input.targetUserId) }),
-        ...(input.ipAddress === undefined
-          ? {}
-          : { ipAddress: input.ipAddress }),
-        ...(input.userAgent === undefined
-          ? {}
-          : { userAgent: input.userAgent }),
-        ...(input.fields === undefined ? {} : { fields: input.fields }),
-      });
+      await this.auditModel.create(this.toRecord(input));
     } catch (error) {
       // Auditing is best effort: a write failure must never break the auth flow.
       this.logger.warn(`Failed to record audit event ${input.event}`, error);
     }
+  }
+
+  async recordMany(inputs: RecordAuditEventInput[]): Promise<void> {
+    if (inputs.length === 0) {
+      return;
+    }
+
+    try {
+      await this.auditModel.insertMany(
+        inputs.map((input) => this.toRecord(input)),
+      );
+    } catch (error) {
+      this.logger.warn(`Failed to record ${inputs.length} audit events`, error);
+    }
+  }
+
+  private toRecord(input: RecordAuditEventInput): Record<string, unknown> {
+    return {
+      event: input.event,
+      result: input.result,
+      ...(input.userId === undefined
+        ? {}
+        : { userId: new Types.ObjectId(input.userId) }),
+      ...(input.email === undefined
+        ? {}
+        : { email: normalizeEmail(input.email) }),
+      ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
+      ...(input.applicationId === undefined
+        ? {}
+        : { applicationId: new Types.ObjectId(input.applicationId) }),
+      ...(input.audience === undefined ? {} : { audience: input.audience }),
+      ...(input.role === undefined ? {} : { role: input.role }),
+      ...(input.actorId === undefined
+        ? {}
+        : { actorId: new Types.ObjectId(input.actorId) }),
+      ...(input.targetUserId === undefined
+        ? {}
+        : { targetUserId: new Types.ObjectId(input.targetUserId) }),
+      ...(input.ipAddress === undefined ? {} : { ipAddress: input.ipAddress }),
+      ...(input.userAgent === undefined ? {} : { userAgent: input.userAgent }),
+      ...(input.fields === undefined ? {} : { fields: input.fields }),
+    };
   }
 
   /**
@@ -70,6 +84,41 @@ export class AuditService implements AuditPort {
   async list(
     filter: AuditEventFilter,
   ): Promise<PaginatedResult<AuditEventRecord>> {
+    const query = this.buildQuery(filter);
+
+    const [items, total] = await Promise.all([
+      this.auditModel
+        .find(query)
+        .sort(buildSortObject(filter.sort))
+        .skip((filter.page - 1) * filter.limit)
+        .limit(filter.limit)
+        // The audit collection is the highest-volume one; a sort over a field
+        // without a matching `_id` tie-break index must not fail at 32 MB.
+        .allowDiskUse(true),
+      this.auditModel.countDocuments(query),
+    ]);
+
+    return buildPaginatedResult(items, total, filter);
+  }
+
+  async countForExport(filter: AuditExportFilter): Promise<number> {
+    return this.auditModel.countDocuments(this.buildQuery(filter));
+  }
+
+  streamForExport(
+    filter: AuditExportFilter,
+    limit?: number,
+  ): AsyncIterable<AuditEventRecord> {
+    const query = this.auditModel
+      .find(this.buildQuery(filter))
+      .sort({ createdAt: 1, _id: 1 });
+
+    return (limit === undefined ? query : query.limit(limit)).cursor();
+  }
+
+  private buildQuery(
+    filter: AuditExportFilter | AuditEventFilter,
+  ): Record<string, unknown> {
     const query: Record<string, unknown> = {};
 
     if (filter.userId !== undefined) {
@@ -115,18 +164,49 @@ export class AuditService implements AuditPort {
       ];
     }
 
-    const [items, total] = await Promise.all([
-      this.auditModel
-        .find(query)
-        .sort(buildSortObject(filter.sort))
-        .skip((filter.page - 1) * filter.limit)
-        .limit(filter.limit)
-        // The audit collection is the highest-volume one; a sort over a field
-        // without a matching `_id` tie-break index must not fail at 32 MB.
-        .allowDiskUse(true),
-      this.auditModel.countDocuments(query),
+    return query;
+  }
+
+  /**
+   * Counts login outcomes from `since` onwards. The aggregation uses the
+   * `event + createdAt` index to bound the scan; the group still reads the
+   * matching documents because the index does not carry `result`.
+   */
+  async countLogins(since: Date): Promise<LoginCount> {
+    if (!(since instanceof Date) || Number.isNaN(since.getTime())) {
+      throw new InvalidArgumentError('since must be a valid date');
+    }
+
+    const rows = await this.auditModel.aggregate<{
+      _id: AuditResult;
+      count: number;
+    }>([
+      {
+        $match: {
+          event: {
+            $in: [
+              AuditEvent.LOGIN_SUCCEEDED,
+              AuditEvent.LOGIN_FAILED,
+              // A lockout-denied attempt is still a failed login outcome.
+              AuditEvent.ACCOUNT_LOCKED,
+            ],
+          },
+          createdAt: { $gte: since },
+        },
+      },
+      { $group: { _id: '$result', count: { $sum: 1 } } },
     ]);
 
-    return buildPaginatedResult(items, total, filter);
+    const counts: LoginCount = { succeeded: 0, failed: 0 };
+
+    for (const row of rows) {
+      if (row._id === AuditResult.SUCCESS) {
+        counts.succeeded = row.count;
+      } else if (row._id === AuditResult.FAILURE) {
+        counts.failed = row.count;
+      }
+    }
+
+    return counts;
   }
 }

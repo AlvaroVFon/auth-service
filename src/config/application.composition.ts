@@ -29,6 +29,7 @@ import { ApplicationAuthorizationMiddleware } from '../common/middlewares/applic
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { GrantsPort } from '../grants';
+import type { GrantsRateLimitConfig } from '../grants';
 import { GrantsModule } from '../grants/grants.module';
 import { GrantModel } from '../grants/grants.schema';
 import { HealthModule, isHealthProbe } from '../health';
@@ -103,6 +104,7 @@ export interface ApplicationCompositionOptions {
   lockoutDurationMs?: number;
   publicAppUrl?: string;
   rateLimitConfig?: AuthRateLimitConfig;
+  grantsRateLimit?: GrantsRateLimitConfig;
   corsOrigins?: string[];
   trustProxy?: boolean | number;
   telegram?: TelegramPort | null;
@@ -133,6 +135,23 @@ const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
   mfaVerify: {
     windowMs: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_WINDOW_MS', 900000),
     max: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_MAX', 10),
+  },
+  sessionRevoke: {
+    windowMs: getNumberEnvVariable(
+      'RATE_LIMIT_SESSION_REVOKE_WINDOW_MS',
+      900000,
+    ),
+    max: getNumberEnvVariable('RATE_LIMIT_SESSION_REVOKE_MAX', 60),
+  },
+});
+
+const getDefaultGrantsRateLimitConfig = (): GrantsRateLimitConfig => ({
+  membersWrite: {
+    windowMs: getNumberEnvVariable(
+      'RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS',
+      900000,
+    ),
+    max: getNumberEnvVariable('RATE_LIMIT_MEMBERS_WRITE_MAX', 30),
   },
 });
 
@@ -252,6 +271,7 @@ export const createApplicationComposition = (
     mfaCipher ?? undefined,
     auditService,
     (options.rateLimitConfig ?? getDefaultRateLimitConfig()).login,
+    (options.rateLimitConfig ?? getDefaultRateLimitConfig()).sessionRevoke,
   );
   const grantsModule = new GrantsModule(
     GrantModel,
@@ -260,6 +280,7 @@ export const createApplicationComposition = (
     authenticationMiddleware,
     auditService,
     logger,
+    options.grantsRateLimit ?? getDefaultGrantsRateLimitConfig(),
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
   // Single authorization policy shared by the applications, grants and links
@@ -304,8 +325,11 @@ export const createApplicationComposition = (
     getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
   );
   usersModule.service.setSessionRevoker(sessionService);
-  usersModule.service.setSessionLister({
+  usersModule.service.setSessionManager({
     listSessions: (userId) => sessionService.list(userId),
+    revokeSession: (userId, sessionId) =>
+      sessionService.revoke(userId, sessionId),
+    revokeAllSessions: (userId) => sessionService.revokeAllWithIds(userId),
   });
   const mfaService = new MfaService(
     usersModule.service,
@@ -383,10 +407,23 @@ export const createApplicationComposition = (
     auditService,
     authenticationMiddleware,
     authorizationMiddleware,
+    applicationAuthorizationMiddleware,
     logger,
   });
+  const configuredExportMax = getNumberEnvVariable(
+    'AUDIT_EXPORT_MAX_ROWS',
+    10_000,
+  );
+  const auditExportMaxRows =
+    Number.isInteger(configuredExportMax) && configuredExportMax > 0
+      ? configuredExportMax
+      : 10_000;
   const auditModule = new AuditModule({
-    auditController: new AuditController(auditService),
+    auditController: new AuditController(
+      auditService,
+      auditExportMaxRows,
+      logger,
+    ),
     authenticationMiddleware,
     authorizationMiddleware,
     logger,

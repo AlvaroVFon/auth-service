@@ -259,18 +259,22 @@ describe('RefreshTokenService', () => {
       );
     });
 
-    test('should revoke all active tokens for a user', async () => {
+    test('should revoke all active tokens and return the revoked session ids', async () => {
       const userId = new Types.ObjectId();
       const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+      const sessionA = '6f1c2a2e-5555-4555-a555-555555555555';
+      const sessionB = '6f1c2a2e-6666-4666-a666-666666666666';
 
       const tokensData = [
         RefreshTokenFactory.generate({
           userId,
+          sessionId: sessionA,
           jti: '550e8400-e29b-41d4-a716-446655440008',
           expiresAt,
         }),
         RefreshTokenFactory.generate({
           userId,
+          sessionId: sessionB,
           jti: '550e8400-e29b-41d4-a716-446655440009',
           expiresAt,
         }),
@@ -280,7 +284,15 @@ describe('RefreshTokenService', () => {
         RefreshTokenModel.modelName,
         tokensData,
       );
-      await refreshTokenService.revokeAllByUserId(userId.toString());
+      const result = await refreshTokenService.revokeAllByUserId(
+        userId.toString(),
+      );
+
+      assert.strictEqual(result.complete, true);
+      assert.deepStrictEqual(
+        result.sessions.map((session) => session.sessionId).sort(),
+        [sessionA, sessionB],
+      );
 
       const activeTokens = await fixture.find<RefreshToken>(
         RefreshTokenModel.modelName,
@@ -295,6 +307,41 @@ describe('RefreshTokenService', () => {
       assert.strictEqual(allTokens.length, 2);
       assert.ok(allTokens[0]?.revokedAt instanceof Date);
       assert.ok(allTokens[1]?.revokedAt instanceof Date);
+    });
+
+    test('should exclude expired tokens from revoked ids and leave them untouched', async () => {
+      const userId = new Types.ObjectId();
+      const activeSession = '6f1c2a2e-7777-4777-a777-777777777777';
+      const expiredSession = '6f1c2a2e-8888-4888-a888-888888888888';
+
+      await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: activeSession,
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: expiredSession,
+          expiresAt: new Date(Date.now() - 60_000),
+        }),
+      ]);
+
+      const result = await refreshTokenService.revokeAllByUserId(
+        userId.toString(),
+      );
+
+      assert.strictEqual(result.complete, true);
+      assert.deepStrictEqual(
+        result.sessions.map((session) => session.sessionId),
+        [activeSession],
+      );
+
+      const expired = await fixture.findOne<RefreshToken>(
+        RefreshTokenModel.modelName,
+        { userId, sessionId: expiredSession },
+      );
+      assert.strictEqual(expired?.revokedAt, null);
     });
   });
 
@@ -386,9 +433,18 @@ describe('RefreshTokenService', () => {
 
     test('should revoke only the requested session', async () => {
       const userId = new Types.ObjectId();
+      const expiresAt = new Date(Date.now() + 60_000);
       await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
-        RefreshTokenFactory.generate({ userId, sessionId: sessionA }),
-        RefreshTokenFactory.generate({ userId, sessionId: sessionB }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionA,
+          expiresAt,
+        }),
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionB,
+          expiresAt,
+        }),
       ]);
 
       await refreshTokenService.revokeBySessionId(userId.toString(), sessionA);
@@ -455,8 +511,17 @@ describe('RefreshTokenService', () => {
         }),
       );
 
-      await refreshTokenService.revokeBySessionId(userId.toString(), sessionA);
-      await refreshTokenService.revokeBySessionId(userId.toString(), sessionA);
+      const first = await refreshTokenService.revokeBySessionId(
+        userId.toString(),
+        sessionA,
+      );
+      const repeated = await refreshTokenService.revokeBySessionId(
+        userId.toString(),
+        sessionA,
+      );
+
+      assert.strictEqual(first, true);
+      assert.strictEqual(repeated, false);
     });
 
     test('should revoke the oldest sessions beyond the cap', async () => {
@@ -495,6 +560,23 @@ describe('RefreshTokenService', () => {
       assert.deepStrictEqual(
         new Set(active.map((token) => token.sessionId)),
         new Set([sessionB, '6f1c2a2e-3333-4333-a333-333333333333']),
+      );
+    });
+
+    test('should reject revoking an expired session', async () => {
+      const userId = new Types.ObjectId();
+      await fixture.create<RefreshToken>(
+        RefreshTokenModel.modelName,
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionA,
+          expiresAt: new Date(Date.now() - 60_000),
+        }),
+      );
+
+      await assert.rejects(
+        refreshTokenService.revokeBySessionId(userId.toString(), sessionA),
+        new EntityNotFoundError('Session not found'),
       );
     });
 
