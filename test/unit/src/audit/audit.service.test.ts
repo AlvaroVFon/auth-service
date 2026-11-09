@@ -232,7 +232,11 @@ describe('AuditService', () => {
       assert.deepStrictEqual(pipeline[0], {
         $match: {
           event: {
-            $in: [AuditEvent.LOGIN_SUCCEEDED, AuditEvent.LOGIN_FAILED],
+            $in: [
+              AuditEvent.LOGIN_SUCCEEDED,
+              AuditEvent.LOGIN_FAILED,
+              AuditEvent.ACCOUNT_LOCKED,
+            ],
           },
           createdAt: { $gte: since },
         },

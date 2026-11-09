@@ -148,7 +148,12 @@ export class AuditService implements AuditPort {
       {
         $match: {
           event: {
-            $in: [AuditEvent.LOGIN_SUCCEEDED, AuditEvent.LOGIN_FAILED],
+            $in: [
+              AuditEvent.LOGIN_SUCCEEDED,
+              AuditEvent.LOGIN_FAILED,
+              // A lockout-denied attempt is still a failed login outcome.
+              AuditEvent.ACCOUNT_LOCKED,
+            ],
           },
           createdAt: { $gte: since },
         },

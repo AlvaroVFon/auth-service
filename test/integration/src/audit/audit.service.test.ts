@@ -39,6 +39,11 @@ describe('AuditService.countLogins', () => {
       new Date(now - 2 * hour),
     );
     await seed(
+      AuditEvent.ACCOUNT_LOCKED,
+      AuditResult.FAILURE,
+      new Date(now - 3 * hour),
+    );
+    await seed(
       AuditEvent.LOGIN_FAILED,
       AuditResult.FAILURE,
       new Date(now - 2 * day),
@@ -57,11 +62,11 @@ describe('AuditService.countLogins', () => {
 
     assert.deepStrictEqual(await service.countLogins(new Date(now - day)), {
       succeeded: 1,
-      failed: 1,
+      failed: 2,
     });
     assert.deepStrictEqual(await service.countLogins(new Date(now - 7 * day)), {
       succeeded: 1,
-      failed: 2,
+      failed: 3,
     });
   });
 
