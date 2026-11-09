@@ -310,17 +310,17 @@ describe('LinksService.listInvitations', () => {
     const service = new LinksService(LinkModel, 60_000, 30_000);
     const now = Date.now();
     const pending = await seed({ tokenHash: 'pending' });
-    await seed({
+    const used = await seed({
       tokenHash: 'used',
       usedAt: new Date(now - 1000),
       expiresAt: new Date(now - 60_000),
     });
-    await seed({
+    const invalidated = await seed({
       tokenHash: 'invalidated',
       invalidatedAt: new Date(now - 1000),
       expiresAt: new Date(now - 60_000),
     });
-    await seed({
+    const expired = await seed({
       tokenHash: 'expired',
       expiresAt: new Date(now - 60_000),
     });
@@ -346,6 +346,31 @@ describe('LinksService.listInvitations', () => {
     });
     assert.strictEqual(filtered.total, 1);
     assert.strictEqual(filtered.items[0]?.id, pending._id.toString());
+
+    for (const [state, expected] of [
+      ['used', used],
+      ['invalidated', invalidated],
+      ['expired', expired],
+    ] as const) {
+      const page = await service.listInvitations(applicationId, {
+        page: 1,
+        limit: 20,
+        sort: { field: 'createdAt', direction: -1 },
+        state,
+      });
+      assert.strictEqual(page.total, 1);
+      assert.strictEqual(page.items[0]?.id, expected._id.toString());
+    }
+
+    await assert.rejects(
+      service.listInvitations(applicationId, {
+        page: 1,
+        limit: 20,
+        sort: { field: 'createdAt', direction: -1 },
+        state: 'unknown' as never,
+      }),
+      new InvalidArgumentError('Invalid invitation state'),
+    );
   });
 
   test('does not leak the token hash or the telegram chat id', async () => {
