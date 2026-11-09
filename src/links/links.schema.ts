@@ -32,6 +32,8 @@ const linkSchema = new Schema<OneTimeLink>(
 
 linkSchema.index({ type: 1, email: 1, applicationId: 1, invalidatedAt: 1 });
 linkSchema.index({ type: 1, userId: 1, invalidatedAt: 1 });
+// Invitation listing is scoped to one application and ordered by creation.
+linkSchema.index({ type: 1, applicationId: 1, createdAt: -1, _id: -1 });
 linkSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const LinkModel = model<OneTimeLink>('Link', linkSchema);
