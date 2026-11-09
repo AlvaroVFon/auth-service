@@ -448,4 +448,31 @@ describe('LinksService.resendInvitation', () => {
       EntityNotFoundError,
     );
   });
+
+  test('rejects an admin invitation unless the owner resends it', async () => {
+    const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId,
+      email: 'admin-resend@example.com',
+      role: GrantRoles.ADMIN,
+      tokenHash: 'admin-resend-hash',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const service = new LinksService(LinkModel);
+
+    await assert.rejects(
+      service.resendInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      ForbiddenError,
+    );
+    assert.strictEqual(
+      await LinkModel.countDocuments({
+        email: 'admin-resend@example.com',
+        invalidatedAt: null,
+      }),
+      1,
+    );
+  });
 });
