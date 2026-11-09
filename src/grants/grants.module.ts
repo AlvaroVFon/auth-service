@@ -23,9 +23,7 @@ export class GrantsModule {
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     auditService: AuditPort,
     private readonly logger: LoggerInterface,
-    private readonly rateLimitConfig: GrantsRateLimitConfig = {
-      membersWrite: { windowMs: 900_000, max: 30 },
-    },
+    private readonly rateLimitConfig: GrantsRateLimitConfig,
   ) {
     this.service = new GrantsService(
       grantModel,

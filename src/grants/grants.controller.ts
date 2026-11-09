@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 
+import { resolveGlobalActorRole } from '../common/actor-role';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
@@ -17,14 +18,7 @@ export class GrantsController {
       role: GrantRoles;
     };
     const user = req.user;
-    // Only a global owner token can grant the admin role; an application
-    // audience token is always treated as a grant role.
-    const actorRole =
-      user !== undefined &&
-      user.audience === undefined &&
-      (Object.values(Roles) as string[]).includes(user.role)
-        ? (user.role as Roles)
-        : undefined;
+    const actorRole = resolveGlobalActorRole(user);
 
     const member = await this.grantsService.grantMemberByEmail({
       email,
