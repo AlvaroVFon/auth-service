@@ -50,66 +50,27 @@ export class ApplicationAuthorizationMiddleware {
    * an archived or unknown application, so the route never reveals whether an
    * inactive application exists.
    */
-  allowApplicationSettingsReader =
-    this.createApplicationSettingsReader('applicationId');
+  allowApplicationSettingsReader = this.createApplicationReader(
+    'applicationId',
+    { requireActiveForOwner: true, malformedIsNotFound: true },
+  );
 
-  private createApplicationSettingsReader(param: string) {
-    return async (req: Request, _res: Response, next: NextFunction) => {
-      try {
-        const user = req.user;
-
-        if (!user) {
-          throw new UnauthorizedError('Authentication required');
-        }
-
-        const applicationId = req.params[param];
-        const application =
-          typeof applicationId === 'string' &&
-          OBJECTID_REGEX.test(applicationId)
-            ? await this.applicationsService.findAssignableById(applicationId)
-            : null;
-
-        if (!application) {
-          throw new EntityNotFoundError('Application not found');
-        }
-
-        if (user.role === Roles.OWNER) {
-          next();
-          return;
-        }
-
-        if (
-          typeof applicationId !== 'string' ||
-          (user.audience !== undefined &&
-            application.audience !== user.audience)
-        ) {
-          throw new EntityNotFoundError('Application not found');
-        }
-
-        const grant = await this.grantsService.findByUserAndApplication(
-          user.id,
-          applicationId,
-          { application },
-        );
-
-        if (!grant || grant.role !== GrantRoles.ADMIN) {
-          throw new EntityNotFoundError('Application not found');
-        }
-
-        next();
-      } catch (error) {
-        next(error);
-      }
-    };
-  }
-
-  private createApplicationReader(param: string) {
+  private createApplicationReader(
+    param: string,
+    options: {
+      /** Also resolve and require an active application for the owner. */
+      requireActiveForOwner?: boolean;
+      /** Hide a malformed id as 404 instead of surfacing a 400. */
+      malformedIsNotFound?: boolean;
+    } = {},
+  ) {
     return async (req: Request, _res: Response, next: NextFunction) => {
       try {
         await this.authorizeApplicationAdmin(
           req,
           req.params[param],
           () => new EntityNotFoundError('Application not found'),
+          options,
         );
         next();
       } catch (error) {
@@ -119,15 +80,20 @@ export class ApplicationAuthorizationMiddleware {
   }
 
   /**
-   * Shared policy for both application surfaces: the owner always passes;
+   * Shared policy for every application surface: the owner passes (optionally
+   * after the application is resolved and required to be active), while
    * everybody else needs the `admin` grant on an active application whose
-   * audience matches the token. The only per-route difference is the error
-   * used to hide the resource, which the caller supplies.
+   * audience matches the token. The caller supplies the error used to hide the
+   * resource.
    */
   private async authorizeApplicationAdmin(
     req: Request,
     applicationId: unknown,
     deny: () => Error,
+    options: {
+      requireActiveForOwner?: boolean;
+      malformedIsNotFound?: boolean;
+    } = {},
   ): Promise<void> {
     const user = req.user;
 
@@ -135,7 +101,7 @@ export class ApplicationAuthorizationMiddleware {
       throw new UnauthorizedError('Authentication required');
     }
 
-    if (user.role === Roles.OWNER) {
+    if (!options.requireActiveForOwner && user.role === Roles.OWNER) {
       return;
     }
 
@@ -143,13 +109,22 @@ export class ApplicationAuthorizationMiddleware {
       throw deny();
     }
 
+    if (options.malformedIsNotFound && !OBJECTID_REGEX.test(applicationId)) {
+      throw deny();
+    }
+
     const application =
       await this.applicationsService.findAssignableById(applicationId);
 
-    if (
-      !application ||
-      (user.audience !== undefined && application.audience !== user.audience)
-    ) {
+    if (!application) {
+      throw deny();
+    }
+
+    if (user.role === Roles.OWNER) {
+      return;
+    }
+
+    if (user.audience !== undefined && application.audience !== user.audience) {
       throw deny();
     }
 
