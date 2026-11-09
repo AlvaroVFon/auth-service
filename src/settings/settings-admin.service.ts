@@ -39,16 +39,14 @@ export class SettingsAdminService {
   async getApplication(
     applicationId: string,
   ): Promise<ApplicationSettingsView> {
-    const [resolved, global] = await Promise.all([
-      this.settingsService.resolveForApplication(applicationId),
-      this.settingsService.resolveGlobal(),
-    ]);
-    const view = this.toView(resolved);
+    const resolved =
+      await this.settingsService.resolveApplicationWithGlobal(applicationId);
+    const view = this.toView(resolved.application);
 
     return {
       settings: view.settings,
       sources: view.sources,
-      global: this.toView(global),
+      global: this.toView(resolved.global),
     };
   }
 

@@ -121,6 +121,30 @@ export class SettingsService implements SettingsPort {
     return resolved;
   }
 
+  async resolveApplicationWithGlobal(
+    applicationId: string,
+  ): Promise<{ application: ResolvedSettings; global: ResolvedSettings }> {
+    const key = applicationCacheKey(applicationId);
+    const cached = this.cache.get(key);
+    if (cached !== undefined) {
+      return { application: cached, global: await this.resolveGlobal() };
+    }
+
+    const generation = this.writeGeneration;
+    const [application, global] = await Promise.all([
+      this.findApplication(applicationId),
+      this.globalSettings.get(),
+    ]);
+    const applicationResolved = this.resolve(application?.settings, global);
+    const globalResolved = this.resolve(undefined, global);
+
+    if (application !== null && this.writeGeneration === generation) {
+      this.cache.set(key, applicationResolved);
+    }
+
+    return { application: applicationResolved, global: globalResolved };
+  }
+
   async resolveGlobal(): Promise<ResolvedSettings> {
     const cached = this.cache.get(GLOBAL_CACHE_KEY);
     if (cached !== undefined) {
