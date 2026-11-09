@@ -104,6 +104,8 @@
 | `RATE_LIMIT_REFRESH_MAX`               | Refresh requests per window                         | `60`                        | No                     |
 | `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification window (ms)                        | `900000`                    | No                     |
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window                | `10`                        | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation window (ms)                | `900000`                    | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window        | `60`                        | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS`   | Window for POST application members                 | `900000`                    | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_MAX`         | Member writes per window                            | `30`                        | No                     |
 | `INVITATION_LINK_EXPIRATION_MS`        | Invitation link TTL (ms)                            | `604800000`                 | No                     |

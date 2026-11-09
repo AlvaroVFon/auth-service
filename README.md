@@ -136,6 +136,8 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `RATE_LIMIT_REFRESH_MAX`               | Refresh requests allowed per window.            | `60`      | No                     |
 | `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification rate-limit window.             | `900000`  | No                     |
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window.           | `10`      | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation rate-limit window.     | `900000`  | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window.   | `60`      | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS`   | Window for POST application members.            | `900000`  | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_MAX`         | Member writes per window.                       | `30`      | No                     |
 
@@ -203,41 +205,40 @@ Every route is declared in a module router and mounted by
 
 ### Links
 
-| Method | Route                                      | Access    | Notes                                        |
-| ------ | ------------------------------------------ | --------- | -------------------------------------------- |
-| `POST` | `/applications/:applicationId/invitations` | App admin | Single-use invitation for an email and role. |
-| `POST` | `/auth/invitations/accept`                 | Public    | Sets the password and grants the role.       |
-| `POST` | `/auth/password-reset-links`               | Owner     | Generates a shareable reset link.            |
-| `POST` | `/auth/password-reset-links/accept`        | Public    | Consumes the link and rotates the password.  |
+| Method | Route                                      | Access           | Notes                                                                                  |
+| ------ | ------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------- |
+| `POST` | `/applications/:applicationId/invitations` | App admin        | Single-use invitation for an email and role.                                           |
+| `GET`  | `/applications/:applicationId/invitations` | Owner, app admin | Paginated invitation history with the computed `state` and an optional `state` filter. |
+| `POST` | `/auth/invitations/accept`                 | Public           | Sets the password and grants the role.                                                 |
+| `POST` | `/auth/password-reset-links`               | Owner            | Generates a shareable reset link.                                                      |
+| `POST` | `/auth/password-reset-links/accept`        | Public           | Consumes the link and rotates the password.                                            |
 
 ### Users, applications and grants
 
-| Method       | Route                                  | Access           | Notes                                                           |
-| ------------ | -------------------------------------- | ---------------- | --------------------------------------------------------------- |
-| `POST`       | `/users`                               | Owner            | Creates a verified user directly.                               |
-| `GET`        | `/users`                               | Owner            | Lists users; paginated envelope (see below).                    |
-| `GET`        | `/users/:id`                           | Owner            | Reads one user.                                                 |
-| `GET`        | `/users/:id/sessions`                  | Owner            | Lists the active sessions of a user.                            |
-| `PATCH`      | `/users/:id`                           | Owner            | Updates profile fields only; any other field returns `400`.     |
-| `DELETE`     | `/users/:id`                           | Owner            | Deletes the user and cascades its grants; not the owner.        |
-| `POST`       | `/users/:id/unlock`                    | Owner            | Clears login and MFA lockout counters; audited.                 |
-| `POST`       | `/users/:id/verify`                    | Owner            | Marks the account as verified; audited.                         |
-| `POST`       | `/users/:id/mfa/reset`                 | Owner            | Removes every MFA artefact and closes all sessions; audited.    |
-| `POST`       | `/applications`                        | Owner            | Creates an application (name, slug, audience).                  |
-| `GET`        | `/applications`                        | Owner            | Lists applications; paginated envelope (see below).             |
-| `GET`        | `/applications/:id`                    | Owner, app admin | Reads one application; anyone else gets `404`.                  |
-| `PATCH`      | `/applications/:id`                    | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
-| `DELETE`     | `/applications/:id`                    | Owner            | Archives the application (`active=false`); it is never deleted. |
-| <<<<<<< HEAD |
-| `GET`        | `/applications/:applicationId/members` | Owner, app admin | Paginated member listing with readable user data.               |
-| =======      |
-| `POST`       | `/applications/:applicationId/members` | Owner, app admin | Grants by email or invites; neutral `{ email, role }` response. |
-
-> > > > > > > origin/main
-> > > > > > > | `PUT` | `/applications/:applicationId/grants` | Owner, app admin | Upserts the role of a user in the application. |
-> > > > > > > | `GET` | `/applications/:applicationId/grants` | Owner, app admin | Lists the application grants. |
-> > > > > > > | `GET` | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant. |
-> > > > > > > | `DELETE` | `/applications/:applicationId/grants/:userId` | Owner, app admin | Revokes a grant. |
+| Method   | Route                                         | Access           | Notes                                                           |
+| -------- | --------------------------------------------- | ---------------- | --------------------------------------------------------------- |
+| `POST`   | `/users`                                      | Owner            | Creates a verified user directly.                               |
+| `GET`    | `/users`                                      | Owner            | Lists users; paginated envelope (see below).                    |
+| `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
+| `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
+| `DELETE` | `/users/:id/sessions/:sessionId`              | Owner            | Revokes one session of the user; audited.                       |
+| `DELETE` | `/users/:id/sessions`                         | Owner            | Revokes every session of the user; audited per session.         |
+| `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
+| `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
+| `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |
+| `POST`   | `/users/:id/verify`                           | Owner            | Marks the account as verified; audited.                         |
+| `POST`   | `/users/:id/mfa/reset`                        | Owner            | Removes every MFA artefact and closes all sessions; audited.    |
+| `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                  |
+| `GET`    | `/applications`                               | Owner            | Lists applications; paginated envelope (see below).             |
+| `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
+| `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
+| `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
+| `POST`   | `/applications/:applicationId/members`        | Owner, app admin | Grants by email or invites; neutral `{ email, role }` response. |
+| `GET`    | `/applications/:applicationId/members`        | Owner, app admin | Paginated member listing with readable user data.               |
+| `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                  |
+| `GET`    | `/applications/:applicationId/grants`         | Owner, app admin | Lists the application grants.                                   |
+| `GET`    | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant.                                                |
+| `DELETE` | `/applications/:applicationId/grants/:userId` | Owner, app admin | Revokes a grant.                                                |
 
 `PATCH /users/:id` only accepts the profile allowlist: `username`, `email`,
 `password` and `telegramChatId` (use `null` to unregister the chat). Any other
@@ -270,10 +271,9 @@ email cannot be changed through this endpoint.
 
 `GET /users`, `GET /applications`, `GET /audit-events` and
 `GET /applications/:applicationId/members` share one listing contract. The
-member listing counts only members whose user still exists: an orphan grant is
-excluded from both `items` and `total`. The member listing is the documented
-exception to the shared contract: it rejects `q` with `400` and accepts only
-`createdAt` and `role` as sortable fields, defaulting to `createdAt` descending.
+member listing counts only members whose user still exists (an orphan grant is
+excluded from both `items` and `total`), rejects `q` with `400`, and accepts only
+`createdAt` and `role` as sortable fields.
 
 | Parameter | Meaning                                                                                                                                              |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -318,6 +318,8 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 | `GET`  | `/audit-events/export` | Owner  | CSV stream with the same filters, capped at `AUDIT_EXPORT_MAX_ROWS`; exceeding the cap returns `400`. |
 
 ## Deployment
+
+After deploying the invitation-history retention change, run `pnpm migrate:link-ttl --apply` once so the existing `expiresAt_1` TTL index is recreated with the 30-day retention.
 
 ### Production image
 
@@ -481,7 +483,10 @@ POST /applications/:applicationId/invitations   { "email": "...", "role": "edito
 ```
 
 The response contains a link like `https://<PUBLIC_APP_URL>/invitations/accept?token=...`
-that the owner shares through any channel. The guest sets a password at
+that the owner shares through any channel. `GET /applications/:applicationId/invitations`
+returns the `{ items, total, page, limit }` envelope with each invitation's computed
+`state` (`used` > `invalidated` > `expired` > `pending`); `?state=pending` filters the
+same set. The guest sets a password at
 `POST /auth/invitations/accept` and gets the granted role. Existing users and holders
 cannot be invited: use grants to give them access to another application.
 

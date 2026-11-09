@@ -13,6 +13,7 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { InvalidLinkError } from '../common/exceptions/links.exceptions';
+import type { PaginatedResult } from '../common/pagination';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import type { GrantsPort } from '../grants';
 import { GrantRoles } from '../grants';
@@ -31,7 +32,11 @@ import {
 } from './link-notifications.service';
 import { buildInvitationLink } from './link-urls';
 import { LinkType } from './link.interface';
-import type { LinksPort } from './links.port';
+import type {
+  InvitationListItem,
+  InvitationListQuery,
+  LinksPort,
+} from './links.port';
 
 export interface CreateInvitationInput {
   email: string;
@@ -72,6 +77,25 @@ export class InvitationsService {
     private readonly settingsService?: SettingsPort,
     private readonly auditService?: AuditPort,
   ) {}
+
+  /** Lists the invitations of an application the caller already administers. */
+  async list(
+    applicationId: string,
+    query: InvitationListQuery,
+    includeArchived = false,
+  ): Promise<PaginatedResult<InvitationListItem>> {
+    const application = includeArchived
+      ? OBJECTID_REGEX.test(applicationId)
+        ? await this.applicationsService.findById(applicationId)
+        : null
+      : await this.findApplication(applicationId);
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    return this.linksService.listInvitations(application._id.toString(), query);
+  }
 
   /**
    * Revokes one pending invitation of an application without deleting it.

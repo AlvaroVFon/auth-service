@@ -11,6 +11,7 @@ export type {
   AuditEventFilter,
   AuditExportFilter,
   AuditPort,
+  LoginCount,
   RecordAuditEventInput,
 } from './audit.port';
 export {

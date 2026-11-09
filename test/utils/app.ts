@@ -62,6 +62,13 @@ export const createBaseTestOptions = (): ApplicationCompositionOptions => ({
       windowMs: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_WINDOW_MS', 5000),
       max: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_MAX', 20),
     },
+    sessionRevoke: {
+      windowMs: getNumberEnvVariable(
+        'RATE_LIMIT_SESSION_REVOKE_WINDOW_MS',
+        5000,
+      ),
+      max: getNumberEnvVariable('RATE_LIMIT_SESSION_REVOKE_MAX', 20),
+    },
   },
   grantsRateLimit: {
     membersWrite: {
