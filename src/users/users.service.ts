@@ -94,7 +94,9 @@ export class UsersService implements UsersPort {
     return {
       total,
       verified,
-      unverified: total - verified,
+      // Two independent counts can race with a verification/delete; never
+      // expose an impossible negative bucket.
+      unverified: Math.max(total - verified, 0),
       locked,
     };
   }
