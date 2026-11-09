@@ -340,42 +340,44 @@ export class GrantsService implements GrantsPort {
       },
     };
 
-    const [page, totalRows] = await Promise.all([
-      this.grantModel.aggregate<{
+    // One shared lookup feeds both the page and the count: `$facet` splits the
+    // hydratable grants after the index-backed sort and the orphan filter.
+    const [facet] = await this.grantModel.aggregate<{
+      items: Array<{
         userId: string;
         role: GrantRoles;
         createdAt?: Date;
-      }>(
-        [
-          { $match: { applicationId: applicationObjectId } },
-          { $sort: buildSortObject(query.sort) },
-          userLookup,
-          { $unwind: '$user' },
-          { $skip: (query.page - 1) * query.limit },
-          { $limit: query.limit },
-          {
-            $project: {
-              _id: 0,
-              userId: { $toString: '$userId' },
-              role: 1,
-              // The membership date, matching the `createdAt` ordering.
-              createdAt: 1,
-            },
-          },
-        ],
-        { allowDiskUse: true },
-      ),
-      // `total` is the hydratable member count on purpose: it uses the same
-      // existence filter as the page, never the raw grant count. An orphan
-      // grant is not a member and must not be advertised by the envelope.
-      this.grantModel.aggregate<{ value: number }>([
+      }>;
+      total: Array<{ value: number }>;
+    }>(
+      [
         { $match: { applicationId: applicationObjectId } },
+        { $sort: buildSortObject(query.sort) },
         userLookup,
         { $unwind: '$user' },
-        { $count: 'value' },
-      ]),
-    ]);
+        {
+          $facet: {
+            items: [
+              { $skip: (query.page - 1) * query.limit },
+              { $limit: query.limit },
+              {
+                $project: {
+                  _id: 0,
+                  userId: { $toString: '$userId' },
+                  role: 1,
+                  // The membership date, matching the `createdAt` ordering.
+                  createdAt: 1,
+                },
+              },
+            ],
+            total: [{ $count: 'value' }],
+          },
+        },
+      ],
+      { allowDiskUse: true },
+    );
 
+    const page = facet?.items ?? [];
     const summaries = await this.usersService.findSummariesByIds(
       page.map((grant) => grant.userId),
     );
@@ -404,7 +406,7 @@ export class GrantsService implements GrantsPort {
       ];
     });
 
-    return buildPaginatedResult(items, totalRows[0]?.value ?? 0, query);
+    return buildPaginatedResult(items, facet?.total[0]?.value ?? 0, query);
   }
 
   async listByApplication(
