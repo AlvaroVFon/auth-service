@@ -11,14 +11,13 @@ import mongoose from 'mongoose';
  *
  *   pnpm tsx scripts/migrate-link-ttl.ts --apply
  */
-const LINK_TTL_SECONDS = 30 * 24 * 60 * 60;
-
 const run = async () => {
   if (fs.existsSync('.env')) {
     process.loadEnvFile('.env');
   }
 
-  const { LinkModel } = await import('../src/links/links.schema');
+  const { LINK_TTL_SECONDS, LinkModel } =
+    await import('../src/links/links.schema');
   const uri = process.env.MONGO_URI;
 
   if (!uri) {

@@ -26,7 +26,10 @@ export interface InvalidateLinksFilter {
   userId?: string;
 }
 
-/** Invitation links split by whether their expiry has passed. */
+/**
+ * Invitation links split by whether their expiry has passed. Expired links are
+ * retained for 30 days (the links TTL), so `expired` is a rolling 30-day count.
+ */
 export interface InvitationCounts {
   pending: number;
   expired: number;
