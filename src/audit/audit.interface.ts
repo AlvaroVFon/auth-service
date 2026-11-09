@@ -46,6 +46,7 @@ export const AUDIT_EVENT_DESCRIPTIONS: Readonly<Record<AuditEvent, string>> =
     [AuditEvent.APPLICATION_ARCHIVED]: 'An application was archived.',
     [AuditEvent.MEMBER_GRANTED]: 'A member was granted access.',
     [AuditEvent.INVITATION_REVOKED]: 'An invitation was revoked.',
+    [AuditEvent.INVITATION_RESENT]: 'An invitation was resent.',
     [AuditEvent.SETTINGS_UPDATED]: 'Policy settings were updated.',
     [AuditEvent.USER_UNLOCKED]: 'An owner cleared an account lockout.',
     [AuditEvent.USER_VERIFIED]: 'An owner marked an account as verified.',

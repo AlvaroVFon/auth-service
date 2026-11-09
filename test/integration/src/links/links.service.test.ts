@@ -449,6 +449,26 @@ describe('LinksService.resendInvitation', () => {
     );
   });
 
+  test('rejects an already revoked invitation', async () => {
+    const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId,
+      email: 'revoked-resend@example.com',
+      role: GrantRoles.VIEWER,
+      tokenHash: 'revoked-resend-hash',
+      invalidatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await assert.rejects(
+      new LinksService(LinkModel).resendInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      new ConflictError('Invitation already revoked'),
+    );
+  });
+
   test('rejects an admin invitation unless the owner resends it', async () => {
     const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
       type: LinkType.INVITATION,

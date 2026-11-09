@@ -137,8 +137,8 @@ describe('E2E invitation resend', () => {
     const invitationId = invitation._id.toString();
 
     await resend(applicationId, invitationId).expect(201);
-    await resend(applicationId, invitationId).expect(201);
-    await resend(applicationId, invitationId).expect(201);
+    await resend(applicationId, invitationId).expect(409);
+    await resend(applicationId, invitationId).expect(409);
     await resend(applicationId, invitationId).expect(429);
   });
 });

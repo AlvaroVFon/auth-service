@@ -51,6 +51,9 @@ export class LinksService implements LinksPort {
     if (existing.usedAt !== null) {
       throw new ConflictError('Invitation already used');
     }
+    if (existing.invalidatedAt !== null) {
+      throw new ConflictError('Invitation already revoked');
+    }
     if (!existing.email || !existing.role) {
       throw new EntityNotFoundError('Invitation not found');
     }
