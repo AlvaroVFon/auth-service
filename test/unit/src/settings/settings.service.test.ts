@@ -718,3 +718,21 @@ describe('SettingsService.resolveApplicationWithGlobal cache', () => {
     assert.strictEqual(stats().findByIdCalls, 2);
   });
 });
+
+describe('SettingsService archived write propagation', () => {
+  test('propagates the writer rejection for an archived application', async () => {
+    const service = buildService({
+      application: buildApplication(),
+      writer: {
+        updateSettings: async () => {
+          throw new EntityNotFoundError('Application not found');
+        },
+      },
+    });
+
+    await assert.rejects(
+      service.updateApplicationSettings(APP_ID, { appName: 'Panel' }),
+      new EntityNotFoundError('Application not found'),
+    );
+  });
+});
