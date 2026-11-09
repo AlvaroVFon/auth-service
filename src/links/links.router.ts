@@ -34,7 +34,7 @@ export class LinksRouter {
       undefined,
       undefined,
       (req) =>
-        `${req.params.applicationId}:${req.params.invitationId}`.toLowerCase(),
+        `${req.params.applicationId}:${req.user?.id ?? 'anonymous'}`.toLowerCase(),
     );
 
     this.app.get(

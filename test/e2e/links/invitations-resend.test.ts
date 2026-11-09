@@ -9,12 +9,13 @@ import { LinkType, type OneTimeLink } from '../../../src/links/link.interface';
 import { LinkModel } from '../../../src/links/links.schema';
 import fixture from '../../fixtures';
 import {
+  DEFAULT_OWNER_ID,
   DEFAULT_OWNER_TOKEN,
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
 import { ApplicationFactory } from '../../helpers/factories/application.factory';
-import { getTestAppInstance } from '../../utils/app';
+import { getTestAppInstance, telegramMock } from '../../utils/app';
 
 const bearer = (token: string) => `Bearer ${token}`;
 
@@ -59,6 +60,7 @@ describe('E2E invitation resend', () => {
     const invitation = await seedInvitation(application._id, {
       tokenHash: hashLinkToken(oldToken),
     });
+    telegramMock.sendMessage.mock.resetCalls();
 
     const response = await resend(
       application._id.toString(),
@@ -102,10 +104,13 @@ describe('E2E invitation resend', () => {
       .expect(200);
     const items = (
       Array.isArray(events.body) ? events.body : events.body.items
-    ) as Array<{ applicationId?: string }>;
-    assert.ok(
-      items.some((event) => event.applicationId === application._id.toString()),
+    ) as Array<{ applicationId?: string; actorId?: string }>;
+    const resent = items.find(
+      (event) => event.applicationId === application._id.toString(),
     );
+    assert.ok(resent);
+    assert.strictEqual(resent?.actorId, DEFAULT_OWNER_ID.toString());
+    assert.strictEqual(telegramMock.sendMessage.mock.callCount(), 1);
   });
 
   test('AC-2: refuses to resend a used invitation without creating a link', async () => {
@@ -117,6 +122,7 @@ describe('E2E invitation resend', () => {
     const before = await LinkModel.countDocuments({
       applicationId: application._id,
     });
+    telegramMock.sendMessage.mock.resetCalls();
 
     await resend(application._id.toString(), invitation._id.toString()).expect(
       409,
@@ -126,6 +132,7 @@ describe('E2E invitation resend', () => {
       await LinkModel.countDocuments({ applicationId: application._id }),
       before,
     );
+    assert.strictEqual(telegramMock.sendMessage.mock.callCount(), 0);
   });
 
   test('AC-3: rate limits repeated resends for the same invitation', async () => {
