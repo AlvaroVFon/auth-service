@@ -10,6 +10,7 @@ import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
 import {
   buildPaginatedResult,
+  buildSearchRegex,
   buildSortObject,
   type ListQuery,
   type PaginatedResult,
@@ -29,9 +30,10 @@ export class HoldersService implements HoldersPort {
   async list(
     query: ListQuery<HolderSortField>,
   ): Promise<PaginatedResult<HolderListItem>> {
+    const filter = query.q ? { email: buildSearchRegex(query.q) } : {};
     const [holders, total] = await Promise.all([
       this.holderModel
-        .find()
+        .find(filter)
         .select('email createdAt expiresAt')
         .sort(buildSortObject(query.sort))
         .skip((query.page - 1) * query.limit)
@@ -44,7 +46,7 @@ export class HoldersService implements HoldersPort {
             expiresAt: Date;
           }>
         >(),
-      this.holderModel.countDocuments(),
+      this.holderModel.countDocuments(filter),
     ]);
 
     return buildPaginatedResult(
