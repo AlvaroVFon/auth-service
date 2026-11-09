@@ -46,6 +46,17 @@ export class LinksController {
   }
 
   @Catch()
+  async revokeInvitation(req: Request, res: Response): Promise<void> {
+    await this.invitationsService.revoke(
+      req.params.applicationId as string,
+      req.params.invitationId as string,
+      req.user?.id,
+    );
+
+    res.status(204).send();
+  }
+
+  @Catch()
   async createInvitation(req: Request, res: Response): Promise<void> {
     const { email, role, telegramChatId } = req.body as {
       email: string;

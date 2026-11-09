@@ -121,4 +121,12 @@ export class UsersController {
 
     res.status(200).json(user);
   }
+
+  @Catch()
+  async resetMfa(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    await this.userService.resetMfa(id, supportContext(req));
+
+    res.status(204).send();
+  }
 }

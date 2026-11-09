@@ -25,6 +25,13 @@ export class LinksRouter {
       this.linksController.listInvitations.bind(this.linksController),
     );
 
+    this.app.delete(
+      '/applications/:applicationId/invitations/:invitationId',
+      this.authenticationMiddleware.authenticateAny,
+      this.applicationAuthorizationMiddleware.allowApplicationAdmin,
+      this.linksController.revokeInvitation.bind(this.linksController),
+    );
+
     this.app.post(
       '/applications/:applicationId/invitations',
       this.authenticationMiddleware.authenticateAny,

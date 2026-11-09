@@ -14,6 +14,7 @@ import {
   TokenClaims,
   TokenPair,
   TokenRole,
+  TokenSignOptions,
   VerifyTokenOptions,
 } from './jwt.interfaces';
 import { TokenTypes } from './token-types.enum';
@@ -52,29 +53,45 @@ export class JwtService {
     this.mfaChallengeExpiresIn = options.mfaChallengeExpiresIn ?? 300;
   }
 
-  signTokenPair(userId: string, role: TokenRole, audience?: string): TokenPair {
+  signTokenPair(
+    userId: string,
+    role: TokenRole,
+    audience?: string,
+    options: TokenSignOptions = {},
+  ): TokenPair {
     const scope = audience ? { aud: audience } : {};
     const refreshTokenId = randomUUID();
+    const accessExpiresIn = this.resolveTtl(
+      options.accessExpiresIn,
+      this.expiresIn,
+    );
+    const refreshExpiresIn = this.resolveTtl(
+      options.refreshExpiresIn,
+      this.refreshTokenExpiresIn,
+    );
     const accessToken = this.signUserToken(
       { userId, role, type: TokenTypes.ACCESS, ...scope },
-      this.expiresIn,
+      accessExpiresIn,
     );
     const refreshToken = this.signUserToken(
       { userId, role, type: TokenTypes.REFRESH, jti: refreshTokenId, ...scope },
-      this.refreshTokenExpiresIn,
+      refreshExpiresIn,
     );
 
     return {
       accessToken,
       refreshToken,
       refreshTokenId,
-      refreshExpiresAt: new Date(
-        Date.now() + this.refreshTokenExpiresIn * 1000,
-      ),
+      refreshExpiresAt: new Date(Date.now() + refreshExpiresIn * 1000),
     };
   }
 
-  signAccessToken(userId: string, role: TokenRole, audience: string): string {
+  signAccessToken(
+    userId: string,
+    role: TokenRole,
+    audience: string,
+    options: Pick<TokenSignOptions, 'accessExpiresIn'> = {},
+  ): string {
     if (!audience) {
       throw new InvalidArgumentError(
         'InvalidArgumentError: Audience is required for application tokens',
@@ -83,7 +100,7 @@ export class JwtService {
 
     return this.signUserToken(
       { userId, role, type: TokenTypes.ACCESS, aud: audience },
-      this.expiresIn,
+      this.resolveTtl(options.accessExpiresIn, this.expiresIn),
     );
   }
 
@@ -194,6 +211,23 @@ export class JwtService {
     }
 
     return payload as unknown as TokenClaims;
+  }
+
+  /**
+   * A TTL override must be a positive integer: jsonwebtoken would otherwise
+   * mint an already-expired token for `0`/negative values or fail with its raw
+   * error for a float.
+   */
+  private resolveTtl(value: number | undefined, fallback: number): number {
+    const ttl = value ?? fallback;
+
+    if (!Number.isInteger(ttl) || ttl <= 0) {
+      throw new InvalidArgumentError(
+        'InvalidArgumentError: Token TTL must be a positive integer',
+      );
+    }
+
+    return ttl;
   }
 
   private signUserToken(payload: Payload, expiresIn: number): string {
