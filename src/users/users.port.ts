@@ -89,8 +89,19 @@ export interface UserCounts {
   locked: number;
 }
 
+/** Readable member projection; never includes credentials or MFA secrets. */
+export interface UserSummary {
+  userId: string;
+  email: string;
+  username?: string;
+  verified: boolean;
+  mfaEnabled: boolean;
+  lastLoginAt?: Date | null;
+}
+
 export interface UsersPort {
   countUsers(): Promise<UserCounts>;
+  findSummariesByIds(ids: string[]): Promise<UserSummary[]>;
   findAll(
     query: ListQuery<UserSortField>,
   ): Promise<PaginatedResult<UserListItem>>;

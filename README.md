@@ -220,6 +220,7 @@ Every route is declared in a module router and mounted by
 | `POST`   | `/users`                                      | Owner            | Creates a verified user directly.                               |
 | `GET`    | `/users`                                      | Owner            | Lists users; paginated envelope (see below).                    |
 | `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
+| `GET`    | `/users/:id/security`                         | Owner            | Aggregate security state and active session count.              |
 | `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
 | `DELETE` | `/users/:id/sessions/:sessionId`              | Owner            | Revokes one session of the user; audited.                       |
 | `DELETE` | `/users/:id/sessions`                         | Owner            | Revokes every session of the user; audited per session.         |
@@ -234,6 +235,7 @@ Every route is declared in a module router and mounted by
 | `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
 | `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
 | `POST`   | `/applications/:applicationId/members`        | Owner, app admin | Grants by email or invites; neutral `{ email, role }` response. |
+| `GET`    | `/applications/:applicationId/members`        | Owner, app admin | Paginated member listing with readable user data.               |
 | `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                  |
 | `GET`    | `/applications/:applicationId/grants`         | Owner, app admin | Lists the application grants.                                   |
 | `GET`    | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant.                                                |
@@ -268,8 +270,11 @@ email cannot be changed through this endpoint.
 
 ### Listing contract
 
-`GET /users`, `GET /applications` and `GET /audit-events` share one listing
-contract:
+`GET /users`, `GET /applications`, `GET /audit-events` and
+`GET /applications/:applicationId/members` share one listing contract. The
+member listing counts only members whose user still exists (an orphan grant is
+excluded from both `items` and `total`), rejects `q` with `400`, and accepts only
+`createdAt` and `role` as sortable fields.
 
 | Parameter | Meaning                                                                                                                                              |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
