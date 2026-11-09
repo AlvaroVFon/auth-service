@@ -59,6 +59,8 @@ export type AuditExportFilter = Omit<
 
 export interface AuditPort {
   record(input: RecordAuditEventInput): Promise<void>;
+  /** Best-effort batch write, used for one event per revoked session. */
+  recordMany?(inputs: RecordAuditEventInput[]): Promise<void>;
   list(filter: AuditEventFilter): Promise<PaginatedResult<AuditEventRecord>>;
   /** Counts the rows a CSV export would contain. */
   countForExport(filter: AuditExportFilter): Promise<number>;

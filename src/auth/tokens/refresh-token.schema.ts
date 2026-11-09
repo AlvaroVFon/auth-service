@@ -37,7 +37,10 @@ RefreshTokenSchema.index({ userId: 1, sessionId: 1, revokedAt: 1 });
 RefreshTokenSchema.index({ userId: 1, revokedAt: 1, lastActivityAt: -1 });
 RefreshTokenSchema.index({ audience: 1, revokedAt: 1, expiresAt: 1 });
 RefreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-RefreshTokenSchema.index({ revocationBatchId: 1 });
+RefreshTokenSchema.index(
+  { revocationBatchId: 1 },
+  { partialFilterExpression: { revocationBatchId: { $exists: true } } },
+);
 
 export const RefreshTokenModel = model<RefreshToken>(
   'RefreshToken',

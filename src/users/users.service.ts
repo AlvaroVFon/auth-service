@@ -401,13 +401,28 @@ export class UsersService implements UsersPort {
     const { sessionIds, complete } =
       await this.requireSessionPort().revokeAllSessions(id);
 
-    for (const sessionId of sessionIds) {
-      await this.recordSupportEvent(
-        AuditEvent.SESSION_REVOKED_BY_ADMIN,
-        id,
-        context,
+    if (this.auditService) {
+      const events = [...new Set(sessionIds)].map((sessionId) => ({
+        event: AuditEvent.SESSION_REVOKED_BY_ADMIN,
+        result: AuditResult.SUCCESS,
+        targetUserId: id,
+        ...(context.actorId === undefined ? {} : { actorId: context.actorId }),
+        ...(context.ipAddress === undefined
+          ? {}
+          : { ipAddress: context.ipAddress }),
+        ...(context.userAgent === undefined
+          ? {}
+          : { userAgent: context.userAgent }),
         sessionId,
-      );
+      }));
+
+      if (this.auditService.recordMany) {
+        await this.auditService.recordMany(events);
+      } else {
+        for (const event of events) {
+          await this.auditService.record(event);
+        }
+      }
     }
 
     // Surface the incompleteness after auditing: a token that survived the
