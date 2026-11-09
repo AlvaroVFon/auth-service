@@ -82,7 +82,7 @@ export class MfaService {
       application._id.toString(),
     );
 
-    return resolved.appName.value || this.issuer;
+    return resolved.appName.value;
   }
 
   async activate(userId: string, code: string): Promise<MfaActivation> {

@@ -82,7 +82,9 @@ export class InvitationsService {
       application,
       role: input.role,
       ...(telegramChatId === undefined ? {} : { telegramChatId }),
-      ...policy,
+      ...(policy.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: policy.expiresInMs }),
       allowHolder: false,
     });
 
@@ -120,7 +122,9 @@ export class InvitationsService {
       email,
       application,
       role: input.role,
-      ...policy,
+      ...(policy.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: policy.expiresInMs }),
       allowHolder: true,
     });
 
@@ -178,7 +182,6 @@ export class InvitationsService {
     role: GrantRoles;
     telegramChatId?: string;
     expiresInMs?: number;
-    appName?: string;
     allowHolder: boolean;
   }) {
     const existingUser = await this.usersService.findByEmail(input.email);
