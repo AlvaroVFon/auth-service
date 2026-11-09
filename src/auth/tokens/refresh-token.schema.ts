@@ -19,6 +19,7 @@ const RefreshTokenSchema = new Schema<RefreshToken>(
     expiresAt: { type: Date, required: true },
     lastActivityAt: { type: Date, default: () => new Date() },
     revokedAt: { type: Date, default: null },
+    revocationBatchId: { type: String },
     replacedByJti: { type: String, default: null },
     ipAddress: { type: String, default: null },
     userAgent: { type: String, default: null },
@@ -36,6 +37,7 @@ RefreshTokenSchema.index({ userId: 1, sessionId: 1, revokedAt: 1 });
 RefreshTokenSchema.index({ userId: 1, revokedAt: 1, lastActivityAt: -1 });
 RefreshTokenSchema.index({ audience: 1, revokedAt: 1, expiresAt: 1 });
 RefreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+RefreshTokenSchema.index({ revocationBatchId: 1 });
 
 export const RefreshTokenModel = model<RefreshToken>(
   'RefreshToken',

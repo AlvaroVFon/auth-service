@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Model, Types } from 'mongoose';
 
 import { OBJECTID_REGEX, UUID_REGEX } from '../../common/constants/regex';
@@ -198,23 +200,6 @@ export class RefreshTokenService {
     );
   }
 
-  /** Fast path for callers that do not need the revoked session ids. */
-  async revokeAllBulk(userId: string, audience?: string): Promise<void> {
-    if (!OBJECTID_REGEX.test(userId)) {
-      throw new InvalidArgumentError('userId is not a valid ObjectId');
-    }
-
-    await this.refreshTokenModel.updateMany(
-      {
-        userId,
-        revokedAt: null,
-        expiresAt: { $gt: new Date() },
-        ...(audience === undefined ? {} : { audience }),
-      },
-      { revokedAt: new Date() },
-    );
-  }
-
   /**
    * Revokes every active refresh token of an audience, listing them first so the
    * caller can audit session by session and exclude users (the owner) upstream.
@@ -323,22 +308,22 @@ export class RefreshTokenService {
         break;
       }
 
-      // Update one token at a time so the reported set is exactly the set this
-      // call transitioned from active to revoked. A timestamp marker would
-      // confuse a concurrent revocation in the same millisecond.
-      for (const activeToken of active) {
-        const revokedNow = await this.refreshTokenModel
-          .findOneAndUpdate(
-            { _id: activeToken._id, revokedAt: null },
-            { revokedAt: new Date() },
-            { returnDocument: 'after' },
-          )
-          .select(select)
-          .lean<RevocableToken>();
+      // A unique batch marker makes the reported set exactly the tokens this
+      // call transitioned, with two bounded commands per pass instead of one
+      // write per token.
+      const batchId = randomUUID();
+      await this.refreshTokenModel.updateMany(
+        { _id: { $in: active.map((token) => token._id) }, revokedAt: null },
+        { $set: { revokedAt: new Date(), revocationBatchId: batchId } },
+      );
 
-        if (revokedNow) {
-          items.push(map(revokedNow));
-        }
+      const revokedNow = await this.refreshTokenModel
+        .find({ revocationBatchId: batchId })
+        .select(select)
+        .lean<RevocableToken[]>();
+
+      for (const token of revokedNow) {
+        items.push(map(token));
       }
     }
 
