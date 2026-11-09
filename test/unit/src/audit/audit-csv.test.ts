@@ -5,6 +5,7 @@ import {
 } from '../../../../src/audit/audit-csv';
 import { AuditController } from '../../../../src/audit/audit.controller';
 import {
+  AUDIT_EVENT_DESCRIPTIONS,
   AuditEvent,
   AuditResult,
   type AuditEventRecord,
@@ -20,6 +21,17 @@ const buildRecord = (): AuditEventRecord => ({
   applicationId: '507f191e810c19729de860ed' as never,
   audience: 'app,with-comma',
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
+});
+
+describe('audit event catalog', () => {
+  test('describes every enum member', () => {
+    for (const event of Object.values(AuditEvent)) {
+      assert.ok(
+        AUDIT_EVENT_DESCRIPTIONS[event]?.length > 0,
+        `missing description for ${event}`,
+      );
+    }
+  });
 });
 
 describe('audit CSV', () => {
@@ -101,6 +113,36 @@ describe('AuditController.exportCsv', () => {
 
     assert.strictEqual(res.write.mock.callCount(), 2);
     assert.strictEqual(res.end.mock.callCount(), 1);
+  });
+
+  test('aborts the response when the cursor fails after writing', async () => {
+    const controller = new AuditController(
+      {
+        countForExport: async () => 1,
+        streamForExport: async function* () {
+          yield buildRecord();
+          throw new Error('cursor failed');
+        },
+      } as never,
+      10,
+    );
+    const next = mock.fn();
+    const destroy = mock.fn();
+    const res = {
+      status: mock.fn(() => res),
+      setHeader: mock.fn(),
+      write: mock.fn(),
+      end: mock.fn(),
+      destroy,
+      headersSent: true,
+    };
+
+    await (
+      controller.exportCsv as unknown as (...args: unknown[]) => Promise<void>
+    )({ query: {} }, res, next);
+
+    assert.strictEqual(destroy.mock.callCount(), 1);
+    assert.strictEqual(next.mock.callCount(), 0);
   });
 
   test('streams the header and the rows when the cap is not exceeded', async () => {

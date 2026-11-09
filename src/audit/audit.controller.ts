@@ -111,7 +111,9 @@ export class AuditController {
       if (!res.headersSent) {
         throw error;
       }
-      res.end();
+      // Never finish a committed CSV with a silent 200: abort the socket so
+      // the client sees a failed download instead of a truncated file.
+      res.destroy(error as Error);
       return;
     }
 
