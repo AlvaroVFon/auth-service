@@ -1848,18 +1848,26 @@ describe('Auth Service', () => {
 
   describe('application session policy', () => {
     const resolvedApplicationIds: string[] = [];
+    let secondApplicationId: string | undefined;
 
     beforeEach(() => {
       resolvedApplicationIds.length = 0;
+      secondApplicationId = undefined;
     });
     const settings = {
       resolveForApplication: async (id: string) => {
         resolvedApplicationIds.push(id);
-        return {
-          accessTokenTtlSeconds: { value: 600, source: 'application' },
-          refreshTokenTtlSeconds: { value: 7200, source: 'application' },
-          maxSessionsPerUser: { value: 2, source: 'application' },
-        };
+        return id === secondApplicationId
+          ? {
+              accessTokenTtlSeconds: { value: 300, source: 'application' },
+              refreshTokenTtlSeconds: { value: 3600, source: 'application' },
+              maxSessionsPerUser: { value: 2, source: 'application' },
+            }
+          : {
+              accessTokenTtlSeconds: { value: 600, source: 'application' },
+              refreshTokenTtlSeconds: { value: 7200, source: 'application' },
+              maxSessionsPerUser: { value: 2, source: 'application' },
+            };
       },
     } as never;
 
@@ -1902,6 +1910,24 @@ describe('Auth Service', () => {
       const rotatedRefresh = jwtService.verifyToken(rotated.refreshToken);
       assert.strictEqual(rotatedAccess.exp - (rotatedAccess.iat ?? 0), 600);
       assert.strictEqual(rotatedRefresh.exp - (rotatedRefresh.iat ?? 0), 7200);
+
+      const second = await createApplication();
+      secondApplicationId = second._id.toString();
+      await grantRole(
+        DEFAULT_USER._id.toString(),
+        secondApplicationId,
+        GrantRoles.VIEWER,
+      );
+      const secondResult = await policyAuth.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: second.slug,
+      });
+      const secondTokens = asTokens(secondResult);
+      const secondAccess = jwtService.verifyToken(secondTokens.accessToken);
+      const secondRefresh = jwtService.verifyToken(secondTokens.refreshToken);
+      assert.strictEqual(secondAccess.exp - (secondAccess.iat ?? 0), 300);
+      assert.strictEqual(secondRefresh.exp - (secondRefresh.iat ?? 0), 3600);
     });
 
     test('falls back to the instance TTLs when the resolver fails', async () => {
