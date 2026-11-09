@@ -34,13 +34,21 @@ const buildModel = (
       },
     }),
   });
-  const updateMany = async (filter: unknown) => {
-    calls.filters.push(filter);
+  const findOneAndUpdate = (filter: { _id: Types.ObjectId }) => ({
+    select: () => ({
+      lean: async () => {
+        calls.filters.push(filter);
+        return {
+          ...token(0),
+          _id: filter._id,
+          sessionId: 'session-1',
+          jti: 'jti-1',
+        };
+      },
+    }),
+  });
 
-    return { modifiedCount: 0 };
-  };
-
-  return { find, updateMany } as unknown as Model<RefreshToken>;
+  return { find, findOneAndUpdate } as unknown as Model<RefreshToken>;
 };
 
 const newCalls = (): ModelCalls => ({ limits: [], filters: [] });
@@ -60,13 +68,14 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
       assert.strictEqual(typeof session.sessionId, 'string');
     }
     assert.deepStrictEqual(calls.limits, [500, 500, 500, 500, 500, 1]);
-    assert.strictEqual(calls.filters.length, 5);
+    // One exact conditional update per listed token.
+    assert.strictEqual(calls.filters.length, 2_500);
     for (const filter of calls.filters) {
       const parsed = filter as {
-        _id: { $in: unknown[] };
+        _id: Types.ObjectId;
         revokedAt: null;
       };
-      assert.strictEqual(parsed._id.$in.length, 500);
+      assert.ok(parsed._id instanceof Types.ObjectId);
       // A concurrently revoked token must not be overwritten.
       assert.strictEqual(parsed.revokedAt, null);
     }
@@ -93,10 +102,10 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
     assert.strictEqual(result.complete, true);
     assert.strictEqual(result.sessions.length, 2);
     assert.deepStrictEqual(calls.limits, [500, 500]);
-    assert.strictEqual(calls.filters.length, 1);
-    assert.strictEqual(
-      (calls.filters[0] as { _id: { $in: unknown[] } })._id.$in.length,
-      2,
-    );
+    assert.strictEqual(calls.filters.length, 2);
+    for (const filter of calls.filters) {
+      assert.ok((filter as { _id: unknown })._id instanceof Types.ObjectId);
+      assert.strictEqual((filter as { revokedAt: null }).revokedAt, null);
+    }
   });
 });

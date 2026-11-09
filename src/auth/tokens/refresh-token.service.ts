@@ -323,22 +323,22 @@ export class RefreshTokenService {
         break;
       }
 
-      const revokedAt = new Date();
-      const ids = active.map((token) => token._id);
+      // Update one token at a time so the reported set is exactly the set this
+      // call transitioned from active to revoked. A timestamp marker would
+      // confuse a concurrent revocation in the same millisecond.
+      for (const activeToken of active) {
+        const revokedNow = await this.refreshTokenModel
+          .findOneAndUpdate(
+            { _id: activeToken._id, revokedAt: null },
+            { revokedAt: new Date() },
+            { returnDocument: 'after' },
+          )
+          .select(select)
+          .lean<RevocableToken>();
 
-      await this.refreshTokenModel.updateMany(
-        { _id: { $in: ids }, revokedAt: null },
-        { revokedAt },
-      );
-
-      // The timestamp marks the tokens this call actually revoked.
-      const revokedNow = await this.refreshTokenModel
-        .find({ _id: { $in: ids }, revokedAt })
-        .select(select)
-        .lean<RevocableToken[]>();
-
-      for (const token of revokedNow) {
-        items.push(map(token));
+        if (revokedNow) {
+          items.push(map(revokedNow));
+        }
       }
     }
 
