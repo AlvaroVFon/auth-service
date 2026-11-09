@@ -8,6 +8,7 @@ import { LinkType, type OneTimeLink } from '../../../src/links/link.interface';
 import { LinkModel } from '../../../src/links/links.schema';
 import fixture from '../../fixtures';
 import {
+  DEFAULT_OWNER_TOKEN,
   DEFAULT_USER,
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
@@ -141,6 +142,23 @@ describe('E2E application invitations listing', () => {
         (item) => item.state === 'pending',
       ),
     );
+  });
+
+  test('the owner can list the invitations of an archived application', async () => {
+    const application = await createApplication();
+    await fixture.updateOne<ApplicationInterface>(
+      'Application',
+      { _id: application._id },
+      { $set: { active: false } } as never,
+    );
+    await seedInvitation(application._id, { tokenHash: 'archived-list' });
+
+    const response = await request(app)
+      .get(`/applications/${application._id.toString()}/invitations`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(200);
+
+    assert.strictEqual(response.body.total, 1);
   });
 
   test('AC-3: an app admin cannot read another application and data stays isolated', async () => {

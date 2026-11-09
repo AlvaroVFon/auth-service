@@ -80,8 +80,17 @@ export class InvitationsService {
   async list(
     applicationId: string,
     query: InvitationListQuery,
+    includeArchived = false,
   ): Promise<PaginatedResult<InvitationListItem>> {
-    const application = await this.findApplication(applicationId);
+    const application = includeArchived
+      ? OBJECTID_REGEX.test(applicationId)
+        ? await this.applicationsService.findById(applicationId)
+        : null
+      : await this.findApplication(applicationId);
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
 
     return this.linksService.listInvitations(application._id.toString(), query);
   }

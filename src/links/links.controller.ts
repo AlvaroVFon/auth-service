@@ -40,6 +40,7 @@ export class LinksController {
           ? {}
           : { state: req.query.state as InvitationState }),
       },
+      req.user?.role === Roles.OWNER,
     );
 
     res.status(200).json(invitations);
