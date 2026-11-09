@@ -49,6 +49,7 @@ describe('LockoutService', () => {
           lockoutUntil: new Date(Date.now() - 60_000),
         },
       },
+      { upsert: true },
     );
 
     const status = await service.incrementFailure(USER_ID, APP_A);

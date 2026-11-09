@@ -30,15 +30,29 @@ export class LockoutService implements LockoutPort {
       { $set: { failedAttempts: 0, lockoutUntil: null } },
     );
 
-    let counter = await this.lockoutModel.findOneAndUpdate(
-      { userId: id, scope },
-      {
-        $inc: { failedAttempts: 1 },
-        $set: { lastFailureAt: now },
-        $setOnInsert: { userId: id, scope },
-      },
-      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
-    );
+    let counter;
+    try {
+      counter = await this.lockoutModel.findOneAndUpdate(
+        { userId: id, scope },
+        {
+          $inc: { failedAttempts: 1 },
+          $set: { lastFailureAt: now },
+          $setOnInsert: { userId: id, scope },
+        },
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+      );
+    } catch (error) {
+      // Two concurrent first failures can race the unique index; the loser
+      // simply increments the document the winner created.
+      if ((error as { code?: number }).code !== 11000) {
+        throw error;
+      }
+      counter = await this.lockoutModel.findOneAndUpdate(
+        { userId: id, scope },
+        { $inc: { failedAttempts: 1 }, $set: { lastFailureAt: now } },
+        { returnDocument: 'after' },
+      );
+    }
 
     if (!counter) {
       throw new Error('Failed to persist the lockout counter');

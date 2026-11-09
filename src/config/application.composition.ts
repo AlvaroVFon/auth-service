@@ -60,7 +60,11 @@ import {
   SettingsService,
   type SettingsPort,
 } from '../settings';
-import { LockoutModel, LockoutService } from '../users/lockout';
+import {
+  LockoutModel,
+  LockoutService,
+  type LockoutPort,
+} from '../users/lockout';
 import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
 import { USER_SUPPORT_BODYLESS_PATHS } from '../users/users.router';
@@ -82,7 +86,7 @@ export interface ApplicationComposition {
   readonly applications: ApplicationsPort;
   readonly grants: GrantsPort;
   readonly settings: SettingsPort;
-  readonly lockout: LockoutService;
+  readonly lockout: LockoutPort;
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
   readonly linksModule: LinksModule;
@@ -252,8 +256,9 @@ export const createApplicationComposition = (
   const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
   const lockoutService = new LockoutService(
     LockoutModel,
-    getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
-    getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
+    options.maxLoginAttempts ?? getNumberEnvVariable('MAX_LOGIN_ATTEMPTS', 5),
+    options.lockoutDurationMs ??
+      getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
   );
   const holdersService = new HoldersService(HoldersModel, cryptoService);
   const applicationsModule = new ApplicationsModule(
