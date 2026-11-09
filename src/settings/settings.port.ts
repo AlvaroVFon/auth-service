@@ -29,6 +29,11 @@ export interface SettingsChanges {
 
 /** Persists the overrides of one application. */
 export interface ApplicationSettingsWriterPort {
+  /**
+   * Applies the changes to an **active** application. Rejects an unknown or
+   * archived application with `EntityNotFoundError`; the update must be
+   * conditional on `active: true` so an archive racing the write wins.
+   */
   updateSettings(
     applicationId: string,
     changes: SettingsChanges,

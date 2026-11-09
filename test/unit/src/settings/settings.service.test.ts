@@ -2,7 +2,10 @@ import { Types } from 'mongoose';
 
 import type { ApplicationsPort } from '../../../../src/applications';
 import type { Application } from '../../../../src/applications/applications.interface';
-import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
+import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../../../../src/common/exceptions/base.exception';
 import {
   MfaPolicy,
   SETTINGS_CODE_DEFAULTS,
