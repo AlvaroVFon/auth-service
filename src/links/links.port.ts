@@ -1,5 +1,45 @@
+import type {
+  ListQuery,
+  ListQueryOptions,
+  PaginatedResult,
+} from '../common/pagination';
 import { GrantRoles } from '../grants';
 import { LinkType, OneTimeLink } from './link.interface';
+
+/** Computed state of an invitation, in precedence order. */
+export const INVITATION_STATES = [
+  'used',
+  'invalidated',
+  'expired',
+  'pending',
+] as const;
+
+export type InvitationState = (typeof INVITATION_STATES)[number];
+
+export const INVITATION_SORTABLE_FIELDS = ['createdAt'] as const;
+
+export type InvitationSortField = (typeof INVITATION_SORTABLE_FIELDS)[number];
+
+export const INVITATION_LIST_OPTIONS: ListQueryOptions<InvitationSortField> = {
+  sortableFields: INVITATION_SORTABLE_FIELDS,
+  defaultSort: { field: 'createdAt', direction: -1 },
+};
+
+/** Invitation fields exposed by the management listing. */
+export interface InvitationListItem {
+  id: string;
+  email?: string;
+  role?: GrantRoles;
+  state: InvitationState;
+  expiresAt: Date;
+  usedAt: Date | null;
+  invalidatedAt: Date | null;
+  createdAt?: Date;
+}
+
+export interface InvitationListQuery extends ListQuery<InvitationSortField> {
+  state?: InvitationState;
+}
 
 export interface CreateInvitationLinkInput {
   email: string;
@@ -27,6 +67,10 @@ export interface InvalidateLinksFilter {
 }
 
 export interface LinksPort {
+  listInvitations(
+    applicationId: string,
+    query: InvitationListQuery,
+  ): Promise<PaginatedResult<InvitationListItem>>;
   /**
    * Revokes one invitation of an application. Returns false when it was
    * already invalidated (idempotent no-op), throws `EntityNotFoundError` when

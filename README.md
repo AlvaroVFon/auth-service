@@ -203,12 +203,13 @@ Every route is declared in a module router and mounted by
 
 ### Links
 
-| Method | Route                                      | Access    | Notes                                        |
-| ------ | ------------------------------------------ | --------- | -------------------------------------------- |
-| `POST` | `/applications/:applicationId/invitations` | App admin | Single-use invitation for an email and role. |
-| `POST` | `/auth/invitations/accept`                 | Public    | Sets the password and grants the role.       |
-| `POST` | `/auth/password-reset-links`               | Owner     | Generates a shareable reset link.            |
-| `POST` | `/auth/password-reset-links/accept`        | Public    | Consumes the link and rotates the password.  |
+| Method | Route                                      | Access           | Notes                                                                                  |
+| ------ | ------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------- |
+| `POST` | `/applications/:applicationId/invitations` | App admin        | Single-use invitation for an email and role.                                           |
+| `GET`  | `/applications/:applicationId/invitations` | Owner, app admin | Paginated invitation history with the computed `state` and an optional `state` filter. |
+| `POST` | `/auth/invitations/accept`                 | Public           | Sets the password and grants the role.                                                 |
+| `POST` | `/auth/password-reset-links`               | Owner            | Generates a shareable reset link.                                                      |
+| `POST` | `/auth/password-reset-links/accept`        | Public           | Consumes the link and rotates the password.                                            |
 
 ### Users, applications and grants
 
@@ -309,6 +310,8 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 | `GET`  | `/audit-events/export` | Owner  | CSV stream with the same filters, capped at `AUDIT_EXPORT_MAX_ROWS`; exceeding the cap returns `400`. |
 
 ## Deployment
+
+After deploying the invitation-history retention change, run `pnpm migrate:link-ttl --apply` once so the existing `expiresAt_1` TTL index is recreated with the 30-day retention.
 
 ### Production image
 
@@ -472,7 +475,10 @@ POST /applications/:applicationId/invitations   { "email": "...", "role": "edito
 ```
 
 The response contains a link like `https://<PUBLIC_APP_URL>/invitations/accept?token=...`
-that the owner shares through any channel. The guest sets a password at
+that the owner shares through any channel. `GET /applications/:applicationId/invitations`
+returns the `{ items, total, page, limit }` envelope with each invitation's computed
+`state` (`used` > `invalidated` > `expired` > `pending`); `?state=pending` filters the
+same set. The guest sets a password at
 `POST /auth/invitations/accept` and gets the granted role. Existing users and holders
 cannot be invited: use grants to give them access to another application.
 
