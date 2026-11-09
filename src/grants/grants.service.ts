@@ -322,10 +322,10 @@ export class GrantsService implements GrantsPort {
     await this.resolveApplication(applicationId, scope);
 
     const applicationObjectId = new Types.ObjectId(applicationId);
-    // Sort and page the grants on the base collection so the compound indexes
-    // can serve the ordering, then keep only the ids of users that still exist.
-    // The count runs the same existence filter, so `total` always describes the
-    // set the pages are drawn from even when an orphan grant is present.
+    // Match and sort on the base collection so the compound indexes serve the
+    // ordering, then join users to drop orphan grants and finally skip/limit on
+    // that hydratable set. The count runs the same existence filter, so `total`
+    // always describes the set the pages are drawn from even with orphans.
     const userLookup = {
       $lookup: {
         from: 'users',
