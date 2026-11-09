@@ -335,8 +335,19 @@ export class GrantsService implements GrantsPort {
         {
           $lookup: {
             from: 'users',
-            localField: 'userId',
-            foreignField: '_id',
+            let: { userId: '$userId' },
+            pipeline: [
+              { $match: { $expr: { $eq: ['$_id', '$$userId'] } } },
+              {
+                $project: {
+                  email: 1,
+                  username: 1,
+                  verified: 1,
+                  mfaEnabled: 1,
+                  lastLoginAt: 1,
+                },
+              },
+            ],
             as: 'user',
           },
         },

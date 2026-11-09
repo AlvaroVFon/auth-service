@@ -1087,6 +1087,23 @@ describe('GrantsService.listMembers', () => {
     assert.strictEqual('mfaSecret' in admin!, false);
   });
 
+  test('orders by role with the stable tie break', async () => {
+    const application = await createApplication();
+    await createMember(application._id, GrantRoles.VIEWER);
+    await createMember(application._id, GrantRoles.ADMIN);
+    await createMember(application._id, GrantRoles.EDITOR);
+
+    const result = await grantsService.listMembers(
+      application._id.toString(),
+      query({ sort: { field: 'role', direction: 1 } }),
+    );
+
+    assert.deepStrictEqual(
+      result.items.map((member) => member.role),
+      [GrantRoles.ADMIN, GrantRoles.EDITOR, GrantRoles.VIEWER],
+    );
+  });
+
   test('drops orphan grants whose user no longer exists', async () => {
     const application = await createApplication();
     await createMember(application._id, GrantRoles.VIEWER);

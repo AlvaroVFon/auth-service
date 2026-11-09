@@ -24,8 +24,8 @@ const grantSchema = new Schema<Grant>(
 );
 
 grantSchema.index({ userId: 1, applicationId: 1 }, { unique: true });
-// The member listing filters by application and sorts by membership date or
-// role; each order ends in `_id` for stable pagination.
+// The member listing filters by application; these indexes serve that match.
+// Its join-and-sort runs as an aggregation, so it cannot use them for the sort.
 grantSchema.index({ applicationId: 1, createdAt: 1, _id: 1 });
 grantSchema.index({ applicationId: 1, role: 1, _id: 1 });
 
