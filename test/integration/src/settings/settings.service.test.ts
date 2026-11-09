@@ -1,3 +1,5 @@
+import { Types } from 'mongoose';
+
 import type { Application } from '../../../../src/applications/applications.interface';
 import { ApplicationModel } from '../../../../src/applications/applications.schema';
 import { ApplicationsService } from '../../../../src/applications/applications.service';
@@ -75,6 +77,112 @@ describe('SettingsService persistence', () => {
     assert.deepStrictEqual(resolved.maxSessionsPerUser, {
       value: 9,
       source: 'global',
+    });
+  });
+});
+
+describe('SettingsService persistence of writes', () => {
+  test('persists the subdocument and reflects the change in the next read', async () => {
+    const application = await fixture.create<Application>(
+      'Application',
+      ApplicationFactory.generate(),
+    );
+    const applications = new ApplicationsService(ApplicationModel);
+    const service = new SettingsService(
+      applications,
+      { get: async () => ({}) },
+      applications,
+    );
+    const applicationId = application._id.toString();
+
+    const before = await service.resolveForApplication(applicationId);
+    assert.strictEqual(before.appName.source, 'default');
+
+    const updated = await service.updateApplicationSettings(applicationId, {
+      accessTokenTtlSeconds: 120,
+      appName: 'Panel',
+    });
+
+    assert.deepStrictEqual(updated.accessTokenTtlSeconds, {
+      value: 120,
+      source: 'application',
+    });
+    assert.deepStrictEqual(updated.appName, {
+      value: 'Panel',
+      source: 'application',
+    });
+
+    const persisted = await ApplicationModel.findById(application._id);
+    assert.strictEqual(persisted?.settings?.accessTokenTtlSeconds, 120);
+    assert.strictEqual(persisted?.settings?.appName, 'Panel');
+
+    const after = await service.resolveForApplication(applicationId);
+    assert.deepStrictEqual(after.appName, {
+      value: 'Panel',
+      source: 'application',
+    });
+  });
+
+  test('removes an override when the patch sends null', async () => {
+    const application = await fixture.create<Application>(
+      'Application',
+      ApplicationFactory.generate({ settings: { appName: 'Own' } }),
+    );
+    const applications = new ApplicationsService(ApplicationModel);
+    const service = new SettingsService(
+      applications,
+      { get: async () => ({ maxSessionsPerUser: 7 }) },
+      applications,
+    );
+
+    const resolved = await service.updateApplicationSettings(
+      application._id.toString(),
+      { appName: null },
+    );
+
+    assert.strictEqual(resolved.appName.source, 'default');
+
+    const persisted = await ApplicationModel.findById(application._id);
+    assert.strictEqual(persisted?.settings?.appName, undefined);
+    assert.strictEqual(persisted?.settings?.maxSessionsPerUser, undefined);
+  });
+});
+
+describe('SettingsService empty patches', () => {
+  test('an empty patch still reports a missing application', async () => {
+    const applications = new ApplicationsService(ApplicationModel);
+    const service = new SettingsService(
+      applications,
+      { get: async () => ({}) },
+      applications,
+    );
+
+    await assert.rejects(
+      service.updateApplicationSettings(new Types.ObjectId().toString(), {}),
+      { name: 'EntityNotFoundError' },
+    );
+  });
+
+  test('an empty patch on an existing application is a no-op', async () => {
+    const application = await fixture.create<Application>(
+      'Application',
+      ApplicationFactory.generate({ settings: { appName: 'Kept' } }),
+    );
+    const applications = new ApplicationsService(ApplicationModel);
+    const service = new SettingsService(
+      applications,
+      { get: async () => ({}) },
+      applications,
+    );
+
+    const resolved = await service.updateApplicationSettings(
+      application._id.toString(),
+      {},
+    );
+
+    assert.deepStrictEqual(resolved.appName, {
+      value: 'Kept',
+      source: 'application',
     });
   });
 });

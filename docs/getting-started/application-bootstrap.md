@@ -182,8 +182,27 @@ from the invitation.
 
 ### 4b. Grant an existing account
 
-If the person already has an account, the owner (or an app admin) writes the
-grant directly:
+If the person already has an account, look it up first. The listing is
+paginated, so read the identifier from `items`:
+
+```bash
+curl -s "http://localhost:3000/users?q=editor@example.com" \
+  -H "Authorization: Bearer $OWNER_TOKEN"
+```
+
+```json
+{
+  "items": [
+    { "_id": "65f1c0a2b7d4e90012a3b4c6", "email": "editor@example.com" }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20
+}
+```
+
+`q` is a prefix search, so pick the item whose `email` matches exactly before
+reading `_id`. The owner (or an app admin) then writes the grant directly:
 
 ```bash
 curl -s -X PUT "http://localhost:3000/applications/$APP_ID/grants" \
@@ -242,7 +261,8 @@ token belongs to that application and carries its role:
 | Symptom                                                                                   | Cause                                                                                             |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Startup fails with `Password does not meet complexity requirements`                       | `OWNER_PASSWORD` lacks an uppercase letter, a lowercase letter, a digit, a symbol or 8 characters |
-| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`             | The account exists but has no grant on that application, or the application is inactive           |
+| `403 {"message":"User has no access to this application","code":"FORBIDDEN"}`             | The account exists but has no grant on that active application                                    |
+| `401 {"message":"Invalid email or password","code":"INVALID_CREDENTIALS"}`                | The application is unknown or inactive: the password is verified first and the response collapses |
 | `401 {"message":"Invalid token payload","code":"INVALID_CREDENTIALS"}` on `/applications` | You sent an application token: those routes need the owner token                                  |
 | `429` on `/auth/login`                                                                    | `RATE_LIMIT_LOGIN_MAX` attempts per window; restart the stack or wait out the window              |
 | `400 {"message":"The link is invalid, used or expired","code":"INVALID_LINK"}`            | The link was already used, expired or the token was altered; create a new invitation              |

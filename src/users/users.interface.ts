@@ -9,6 +9,7 @@ export interface User {
   password: string;
   role: Roles;
   verified: boolean;
+  lastLoginAt?: Date | null;
   loginAttempts?: number;
   lockoutUntil?: Date | null;
   telegramChatId?: string;
@@ -19,4 +20,6 @@ export interface User {
   mfaFailedAttempts?: number;
   mfaLockoutUntil?: Date | null;
   mfaLastUsedStep?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 }

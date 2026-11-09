@@ -53,8 +53,15 @@ import {
   LinkNotificationsService,
   PasswordResetLinksService,
 } from '../links';
+import {
+  GlobalSettingsRepository,
+  SettingsModule,
+  SettingsService,
+  type SettingsPort,
+} from '../settings';
 import { OwnerBootstrapService } from '../users/owner-bootstrap.service';
 import { UsersModule } from '../users/users.module';
+import { USER_SUPPORT_BODYLESS_PATHS } from '../users/users.router';
 import { normalizeCorsOrigins, resolveCorsOrigins } from './cors.config';
 import { Database } from './database.config';
 import {
@@ -72,6 +79,7 @@ export interface ApplicationComposition {
   readonly database: Database;
   readonly applications: ApplicationsPort;
   readonly grants: GrantsPort;
+  readonly settings: SettingsPort;
   readonly usersModule: UsersModule;
   readonly authModule: AuthModule;
   readonly linksModule: LinksModule;
@@ -228,6 +236,11 @@ export const createApplicationComposition = (
     logger,
     auditService,
   );
+  const settingsService = new SettingsService(
+    applicationsModule.service,
+    new GlobalSettingsRepository(),
+    applicationsModule.service,
+  );
   const usersModule = new UsersModule(
     cryptoService,
     authenticationMiddleware,
@@ -237,6 +250,8 @@ export const createApplicationComposition = (
     options.lockoutDurationMs ??
       getNumberEnvVariable('LOCKOUT_DURATION_MS', 900000),
     mfaCipher ?? undefined,
+    auditService,
+    (options.rateLimitConfig ?? getDefaultRateLimitConfig()).login,
   );
   const grantsModule = new GrantsModule(
     GrantModel,
@@ -333,7 +348,9 @@ export const createApplicationComposition = (
     publicAppUrl,
     linkNotifications,
     logger,
+    authMailer,
   );
+  grantsModule.service.setInvitationsPort(invitationsService);
   const passwordResetLinksService = new PasswordResetLinksService(
     linksService,
     usersModule.service,
@@ -357,6 +374,13 @@ export const createApplicationComposition = (
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
     logger,
   });
+  const settingsModule = new SettingsModule({
+    settingsService,
+    auditService,
+    authenticationMiddleware,
+    authorizationMiddleware,
+    logger,
+  });
   const auditModule = new AuditModule({
     auditController: new AuditController(auditService),
     authenticationMiddleware,
@@ -369,6 +393,7 @@ export const createApplicationComposition = (
     database,
     applications: applicationsModule.service,
     grants: grantsModule.service,
+    settings: settingsService,
     usersModule,
     authModule,
     linksModule,
@@ -399,7 +424,11 @@ export const createApplicationComposition = (
       HttpLoggerInterceptor.initialize(app, requestLogger, (request) =>
         isHealthProbe(request.path),
       );
-      GlobalMiddlewares.initialize(app, ['/auth/logout'], corsOrigins);
+      GlobalMiddlewares.initialize(
+        app,
+        ['/auth/logout', ...USER_SUPPORT_BODYLESS_PATHS],
+        corsOrigins,
+      );
       healthModule.initialize(app);
       jwksModule.initialize(app);
       applicationsModule.initialize(app, applicationAuthorizationMiddleware);
@@ -408,6 +437,7 @@ export const createApplicationComposition = (
       authModule.initialize(app);
       linksModule.initialize(app, applicationAuthorizationMiddleware);
       auditModule.initialize(app);
+      settingsModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },
   };

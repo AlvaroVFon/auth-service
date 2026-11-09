@@ -240,6 +240,36 @@ describe('E2E invitations', () => {
     await loginToApplication(email, application.slug).expect(401);
   });
 
+  test('an application admin cannot invite an admin', async () => {
+    const application = await createApplication();
+    const admin = await createUser();
+    await fixture.create<Grant>(
+      'Grant',
+      GrantFactory.generate({
+        userId: admin._id,
+        applicationId: application._id,
+        role: GrantRoles.ADMIN,
+      }),
+    );
+    const login = await loginToApplication(
+      admin.email,
+      application.slug,
+    ).expect(200);
+    const path = `/applications/${application._id.toString()}/invitations`;
+
+    await request(app)
+      .post(path)
+      .set('Authorization', bearer(login.body.accessToken as string))
+      .send({ email: generateRandomEmail('guest'), role: GrantRoles.ADMIN })
+      .expect(403);
+
+    await request(app)
+      .post(path)
+      .set('Authorization', bearer(login.body.accessToken as string))
+      .send({ email: generateRandomEmail('guest'), role: GrantRoles.VIEWER })
+      .expect(201);
+  });
+
   test('validates the invitation input', async () => {
     const application = await createApplication();
     const path = `/applications/${application._id.toString()}/invitations`;

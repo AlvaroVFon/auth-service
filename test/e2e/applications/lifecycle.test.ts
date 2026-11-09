@@ -83,7 +83,7 @@ describe('E2E Applications lifecycle', () => {
       .query({ applicationId, event })
       .expect(200);
 
-    return response.body as AuditResponse[];
+    return response.body.items as AuditResponse[];
   };
 
   test('AC-1: the owner renames an application and the change is persisted', async () => {
@@ -182,11 +182,8 @@ describe('E2E Applications lifecycle', () => {
       .expect(200)
       .expect(({ body }) => assert.strictEqual(body.active, false));
 
-    const denied = await login(user.email, application.slug).expect(403);
-    assert.strictEqual(
-      denied.body.message,
-      'User has no access to this application',
-    );
+    const denied = await login(user.email, application.slug).expect(401);
+    assert.strictEqual(denied.body.message, 'Invalid email or password');
     assert.strictEqual(denied.body.accessToken, undefined);
 
     await request(app)

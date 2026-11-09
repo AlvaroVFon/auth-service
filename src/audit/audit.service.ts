@@ -2,6 +2,12 @@ import { Model, Types } from 'mongoose';
 
 import { normalizeEmail } from '../common/email';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import {
+  buildPaginatedResult,
+  buildSearchRegex,
+  buildSortObject,
+  type PaginatedResult,
+} from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
 import { LoggerInterface } from '../libs/logger';
 import { AuditEvent, AuditEventRecord } from './audit.interface';
@@ -10,9 +16,6 @@ import {
   AuditPort,
   RecordAuditEventInput,
 } from './audit.port';
-
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
 
 export class AuditService implements AuditPort {
   constructor(
@@ -51,6 +54,7 @@ export class AuditService implements AuditPort {
         ...(input.userAgent === undefined
           ? {}
           : { userAgent: input.userAgent }),
+        ...(input.fields === undefined ? {} : { fields: input.fields }),
       });
     } catch (error) {
       // Auditing is best effort: a write failure must never break the auth flow.
@@ -58,7 +62,14 @@ export class AuditService implements AuditPort {
     }
   }
 
-  async list(filter: AuditEventFilter = {}): Promise<AuditEventRecord[]> {
+  /**
+   * Offset pagination over an append-only log. The order is stable for a given
+   * snapshot; an event written or pruned between two page requests can shift
+   * the window, so a de-duplicated walk is only guaranteed on a static view.
+   */
+  async list(
+    filter: AuditEventFilter,
+  ): Promise<PaginatedResult<AuditEventRecord>> {
     const query: Record<string, unknown> = {};
 
     if (filter.userId !== undefined) {
@@ -96,11 +107,26 @@ export class AuditService implements AuditPort {
       query.createdAt = range;
     }
 
-    const limit = Math.min(
-      Math.max(filter.limit ?? DEFAULT_LIMIT, 1),
-      MAX_LIMIT,
-    );
+    if (filter.q !== undefined) {
+      query.$or = [
+        { email: buildSearchRegex(filter.q) },
+        { event: buildSearchRegex(filter.q) },
+        { audience: buildSearchRegex(filter.q) },
+      ];
+    }
 
-    return this.auditModel.find(query).sort({ createdAt: -1 }).limit(limit);
+    const [items, total] = await Promise.all([
+      this.auditModel
+        .find(query)
+        .sort(buildSortObject(filter.sort))
+        .skip((filter.page - 1) * filter.limit)
+        .limit(filter.limit)
+        // The audit collection is the highest-volume one; a sort over a field
+        // without a matching `_id` tie-break index must not fail at 32 MB.
+        .allowDiskUse(true),
+      this.auditModel.countDocuments(query),
+    ]);
+
+    return buildPaginatedResult(items, total, filter);
   }
 }

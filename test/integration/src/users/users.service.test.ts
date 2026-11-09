@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 
+import { AuditEvent, AuditResult, type AuditPort } from '../../../../src/audit';
 import { Roles } from '../../../../src/common/enums/roles.enum';
 import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
@@ -7,8 +8,10 @@ import {
   EntityNotFoundError,
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
+import type { ListQuery } from '../../../../src/common/pagination';
 import { CryptoService } from '../../../../src/libs/crypto/crypto.service';
 import { User as UserInterface } from '../../../../src/users/users.interface';
+import type { UserSortField } from '../../../../src/users/users.port';
 import { User } from '../../../../src/users/users.schema';
 import { UsersService } from '../../../../src/users/users.service';
 import fixture from '../../../fixtures';
@@ -430,13 +433,25 @@ describe('UsersService', () => {
     });
 
     describe('FindAll()', () => {
-      test('should return an empty array if no users exist', async () => {
-        const users = await usersService.findAll();
-        assert.ok(Array.isArray(users));
-        assert.strictEqual(users.length, 0);
+      const query = (
+        overrides: Partial<ListQuery<UserSortField>> = {},
+      ): ListQuery<UserSortField> => ({
+        page: 1,
+        limit: 20,
+        sort: { field: 'createdAt', direction: -1 },
+        ...overrides,
       });
 
-      test('should return all users', async () => {
+      test('should return an empty page if no users exist', async () => {
+        const result = await usersService.findAll(query());
+
+        assert.deepStrictEqual(result.items, []);
+        assert.strictEqual(result.total, 0);
+        assert.strictEqual(result.page, 1);
+        assert.strictEqual(result.limit, 20);
+      });
+
+      test('should paginate the users and report the total', async () => {
         const users = await fixture.createMany<UserInterface>('User', [
           {
             email: generateRandomEmail('findall1+'),
@@ -448,17 +463,111 @@ describe('UsersService', () => {
             username: 'findalluser2',
             password: 'hashedpassword123',
           },
+          {
+            email: generateRandomEmail('findall3+'),
+            username: 'findalluser3',
+            password: 'hashedpassword123',
+          },
         ]);
 
-        const foundUsers = await usersService.findAll();
-        assert.ok(Array.isArray(foundUsers));
-        assert.strictEqual(foundUsers.length, users.length);
-        assert.strictEqual(foundUsers[0]!.email, users[0]!.email);
-        assert.strictEqual(foundUsers[1]!.email, users[1]!.email);
-        assert.ok(foundUsers[0]!._id);
-        assert.ok(foundUsers[1]!._id);
-        assert.ok(foundUsers[0]!.password);
-        assert.ok(foundUsers[1]!.password);
+        const firstPage = await usersService.findAll(
+          query({ page: 1, limit: 2 }),
+        );
+        assert.strictEqual(firstPage.items.length, 2);
+        assert.strictEqual(firstPage.total, users.length);
+        assert.strictEqual(firstPage.page, 1);
+        assert.strictEqual(firstPage.limit, 2);
+
+        const secondPage = await usersService.findAll(
+          query({ page: 2, limit: 2 }),
+        );
+        assert.strictEqual(secondPage.items.length, 1);
+        assert.strictEqual(secondPage.total, users.length);
+        assert.strictEqual(secondPage.page, 2);
+
+        const ids = [...firstPage.items, ...secondPage.items].map((user) =>
+          user._id.toString(),
+        );
+        assert.deepStrictEqual(
+          [...new Set(ids)].sort(),
+          users.map((user) => user._id.toString()).sort(),
+        );
+      });
+
+      test('should filter by email or username prefix and reflect it in the total', async () => {
+        await fixture.createMany<UserInterface>('User', [
+          {
+            email: generateRandomEmail('alice+'),
+            username: 'alice-user',
+            password: 'hashedpassword123',
+          },
+          {
+            email: generateRandomEmail('bob+'),
+            username: 'ali-baba',
+            password: 'hashedpassword123',
+          },
+          {
+            email: generateRandomEmail('carol+'),
+            username: 'carol-user',
+            password: 'hashedpassword123',
+          },
+        ]);
+
+        const byEmail = await usersService.findAll(query({ q: 'alice' }));
+        assert.strictEqual(byEmail.total, 1);
+        assert.match(byEmail.items[0]!.email, /^alice/);
+
+        const byUsername = await usersService.findAll(query({ q: 'ali' }));
+        assert.strictEqual(byUsername.total, 2);
+        assert.deepStrictEqual(
+          byUsername.items
+            .map((user) => user.username)
+            .sort((a, b) => (a ?? '').localeCompare(b ?? '')),
+          ['ali-baba', 'alice-user'],
+        );
+      });
+
+      test('should treat the search term literally', async () => {
+        await fixture.create<UserInterface>('User', {
+          email: generateRandomEmail('literal+'),
+          username: 'literal-user',
+          password: 'hashedpassword123',
+        });
+
+        const result = await usersService.findAll(query({ q: '.*' }));
+
+        assert.strictEqual(result.total, 0);
+        assert.deepStrictEqual(result.items, []);
+      });
+
+      test('should order by the requested field and hide secrets', async () => {
+        await fixture.createMany<UserInterface>('User', [
+          {
+            email: generateRandomEmail('zeta+'),
+            username: 'zeta-user',
+            password: 'hashedpassword123',
+          },
+          {
+            email: generateRandomEmail('alpha+'),
+            username: 'alpha-user',
+            password: 'hashedpassword123',
+          },
+        ]);
+
+        const result = await usersService.findAll(
+          query({ sort: { field: 'email', direction: 1 } }),
+        );
+
+        assert.deepStrictEqual(
+          result.items.map((user) => user.username),
+          ['alpha-user', 'zeta-user'],
+        );
+        for (const user of result.items) {
+          assert.strictEqual('password' in user, false);
+          assert.strictEqual('loginAttempts' in user, false);
+          assert.strictEqual('lockoutUntil' in user, false);
+          assert.strictEqual('mfaSecret' in user, false);
+        }
       });
     });
 
@@ -889,6 +998,124 @@ describe('UsersService email normalization', () => {
   });
 });
 
+describe('UsersService support actions', () => {
+  const buildService = (record: ReturnType<typeof mock.fn>) => {
+    const audit = { record } satisfies Pick<AuditPort, 'record'>;
+
+    return new UsersService(
+      User,
+      new CryptoService(),
+      5,
+      900000,
+      undefined,
+      audit as AuditPort,
+    );
+  };
+
+  const createBlockedUser = () =>
+    fixture.create<UserInterface>('User', {
+      email: generateRandomEmail('support+'),
+      password: 'hashedpassword123',
+      verified: false,
+      loginAttempts: 5,
+      lockoutUntil: new Date(Date.now() + 60_000),
+      mfaFailedAttempts: 3,
+      mfaLockoutUntil: new Date(Date.now() + 60_000),
+    });
+
+  test('unlock clears every lockout counter and audits the action', async () => {
+    const record = mock.fn(async () => {});
+    const user = await createBlockedUser();
+    const service = buildService(record);
+
+    const unlocked = await service.unlock(user._id.toString(), {
+      actorId: DEFAULT_USER._id.toString(),
+      ipAddress: '127.0.0.1',
+      userAgent: 'integration-test',
+    });
+
+    assert.strictEqual(unlocked.loginAttempts, 0);
+    assert.strictEqual(unlocked.lockoutUntil, null);
+    assert.strictEqual(unlocked.mfaFailedAttempts, 0);
+    assert.strictEqual(unlocked.mfaLockoutUntil, null);
+    assert.strictEqual(record.mock.callCount(), 1);
+    assert.deepStrictEqual(record.mock.calls[0]?.arguments[0], {
+      event: AuditEvent.USER_UNLOCKED,
+      result: AuditResult.SUCCESS,
+      targetUserId: user._id.toString(),
+      actorId: DEFAULT_USER._id.toString(),
+      ipAddress: '127.0.0.1',
+      userAgent: 'integration-test',
+    });
+  });
+
+  test('unlock answers 404 for the owner and for an unknown id', async () => {
+    const record = mock.fn(async () => {});
+    const service = buildService(record);
+    const owner = await fixture.create<UserInterface>('User', {
+      email: generateRandomEmail('owner+'),
+      role: Roles.OWNER,
+      password: 'hashedpassword123',
+      verified: true,
+    });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.unlock(id),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('markVerified sets the flag and audits the action', async () => {
+    const record = mock.fn(async () => {});
+    const user = await createBlockedUser();
+    const service = buildService(record);
+
+    const verified = await service.markVerified(user._id.toString(), {
+      actorId: DEFAULT_USER._id.toString(),
+    });
+
+    assert.strictEqual(verified.verified, true);
+    assert.strictEqual(record.mock.callCount(), 1);
+    const args = record.mock.calls[0]?.arguments[0] as
+      | { event: AuditEvent }
+      | undefined;
+    assert.strictEqual(args?.event, AuditEvent.USER_VERIFIED);
+  });
+
+  test('markVerified answers 404 for the owner and for an unknown id', async () => {
+    const record = mock.fn(async () => {});
+    const service = buildService(record);
+    const owner = await fixture.create<UserInterface>('User', {
+      email: generateRandomEmail('owner+'),
+      role: Roles.OWNER,
+      password: 'hashedpassword123',
+      verified: true,
+    });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.markVerified(id),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('works without an audit port', async () => {
+    const user = await createBlockedUser();
+    const service = new UsersService(User, new CryptoService());
+
+    const unlocked = await service.unlock(user._id.toString());
+    const verified = await service.markVerified(user._id.toString());
+
+    assert.strictEqual(unlocked.loginAttempts, 0);
+    assert.strictEqual(verified.verified, true);
+  });
+});
+
 describe('UsersService session listing', () => {
   const createUser = () =>
     fixture.create<UserInterface>('User', {
@@ -947,6 +1174,39 @@ describe('UsersService session listing', () => {
 
     await assert.rejects(
       service.listSessions('bad-id'),
+      new InvalidArgumentError('Invalid ID format'),
+    );
+  });
+});
+
+describe('UsersService.recordLogin', () => {
+  let service: UsersService;
+
+  before(() => {
+    service = new UsersService(User, new CryptoService());
+  });
+
+  test('updates lastLoginAt without touching credentials or flags', async () => {
+    const user = await service.create({
+      email: generateRandomEmail('lastlogin+'),
+      password: 'hashedpassword123',
+      verified: true,
+    });
+    const before = await service.findById(user._id.toString());
+
+    await service.recordLogin(user._id.toString());
+
+    const after = await service.findById(user._id.toString());
+    assert.ok(after?.lastLoginAt instanceof Date);
+    assert.strictEqual(after?.password, before?.password);
+    assert.strictEqual(after?.role, before?.role);
+    assert.strictEqual(after?.verified, before?.verified);
+    assert.strictEqual(after?.mfaEnabled, before?.mfaEnabled);
+  });
+
+  test('rejects a malformed id', async () => {
+    await assert.rejects(
+      service.recordLogin('bad-id'),
       new InvalidArgumentError('Invalid ID format'),
     );
   });

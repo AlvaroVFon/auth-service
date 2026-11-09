@@ -98,7 +98,10 @@ the bootstrap always comes first.
 The bootstrap page ends with a user that can log in. If you prefer the
 self-service path, run the signup flow first, then grant that account access with
 step 4b of the bootstrap page; you will need its `_id`, which the owner can read
-from `GET /users`. The login page assumes both prerequisites are done.
+from `GET /users?q=<email>` by finding the exact address among `items` and
+reading its `_id` (the listing returns the shared `{ items, total, page, limit }`
+envelope, not a bare array; `q` is a prefix search, so filter the items by exact
+email). The login page assumes both prerequisites are done.
 
 After the three flows you have everything a frontend or backend needs to
 authenticate users. The rest of the surface (MFA, device sessions, invitations,

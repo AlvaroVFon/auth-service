@@ -170,7 +170,7 @@ describe('E2E login against an application', () => {
     assert.strictEqual(response.body.message, 'Invalid email or password');
   });
 
-  test('rejects an unknown application without tokens', async () => {
+  test('collapses an unknown application into invalid credentials', async () => {
     const user = await createUser();
 
     const response = await request(app)
@@ -180,12 +180,15 @@ describe('E2E login against an application', () => {
         password: DEFAULT_USER_PLAIN_PASSWORD,
         application: 'unknown-application',
       })
-      .expect(403);
+      .expect(401);
 
+    assert.strictEqual(response.body.message, 'Invalid email or password');
+    assert.strictEqual(response.body.code, 'INVALID_CREDENTIALS');
     assert.strictEqual(response.body.accessToken, undefined);
+    assert.strictEqual(response.body.refreshToken, undefined);
   });
 
-  test('rejects an inactive application', async () => {
+  test('collapses an inactive application like wrong credentials', async () => {
     const user = await createUser();
     const { application } = await createApplicationAccess(user._id.toString());
     await fixture.updateOne<ApplicationInterface>(
@@ -194,14 +197,26 @@ describe('E2E login against an application', () => {
       { active: false },
     );
 
-    await request(app)
+    const inactive = await request(app)
       .post('/auth/login')
       .send({
         email: user.email,
         password: DEFAULT_USER_PLAIN_PASSWORD,
         application: application.slug,
       })
-      .expect(403);
+      .expect(401);
+
+    const wrongPassword = await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: 'WrongPassword123!',
+        application: application.slug,
+      })
+      .expect(401);
+
+    assert.strictEqual(inactive.body.message, wrongPassword.body.message);
+    assert.strictEqual(inactive.body.code, wrongPassword.body.code);
   });
 
   test('rejects a non-string application instead of dropping it', async () => {

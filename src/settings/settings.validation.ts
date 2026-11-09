@@ -100,7 +100,7 @@ export const SETTINGS_FIELDS = Object.freeze(
   Object.keys(SETTINGS_FIELD_DESCRIPTORS) as SettingsField[],
 );
 
-const isSettingsField = (key: string): key is SettingsField =>
+export const isSettingsField = (key: string): key is SettingsField =>
   (SETTINGS_FIELDS as readonly string[]).includes(key);
 
 const normalizeValue = (

@@ -1,12 +1,29 @@
 import { NextFunction, Request, Response } from 'express';
 
+/** Exact path or pattern of a route that takes no request body. */
+export type BodylessPath = string | RegExp;
+
+const matches = (path: BodylessPath, requestPath: string): boolean => {
+  if (typeof path === 'string') {
+    return path === requestPath;
+  }
+
+  // `test` advances `lastIndex` on global or sticky expressions; reset it so a
+  // pattern cannot alternate between matching and skipping across requests.
+  path.lastIndex = 0;
+  const matched = path.test(requestPath);
+  path.lastIndex = 0;
+
+  return matched;
+};
+
 export class RequiredBodyMiddleware {
-  static create(excludedPaths: string[] = []) {
+  static create(excludedPaths: BodylessPath[] = []) {
     return (req: Request, res: Response, next: NextFunction) => {
       if (
         req.method === 'GET' ||
         req.method === 'DELETE' ||
-        excludedPaths.includes(req.path)
+        excludedPaths.some((path) => matches(path, req.path))
       ) {
         return next();
       }
