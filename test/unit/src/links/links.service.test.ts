@@ -22,11 +22,23 @@ describe('LinksService.countInvitations', () => {
       $match: Record<string, unknown>;
       $group: { _id: unknown };
     }>;
-    assert.deepStrictEqual(pipeline[0]!.$match, {
-      type: LinkType.INVITATION,
-      usedAt: null,
-      invalidatedAt: null,
+    const match = pipeline[0]!.$match as {
+      type: LinkType;
+      usedAt: null;
+      $or: Array<Record<string, unknown>>;
+    };
+    assert.strictEqual(match.type, LinkType.INVITATION);
+    assert.strictEqual(match.usedAt, null);
+    assert.strictEqual(match.$or.length, 2);
+    assert.deepStrictEqual(match.$or[0], {
+      expiresAt: { $lte: (match.$or[0]!.expiresAt as { $lte: Date }).$lte },
     });
+    assert.deepStrictEqual(match.$or[1], {
+      invalidatedAt: null,
+      expiresAt: { $gt: (match.$or[1]!.expiresAt as { $gt: Date }).$gt },
+    });
+    assert.ok((match.$or[0]!.expiresAt as { $lte: Date }).$lte instanceof Date);
+    assert.ok((match.$or[1]!.expiresAt as { $gt: Date }).$gt instanceof Date);
     const cond = pipeline[1]!.$group._id as {
       $cond: [{ $gt: [string, Date] }, string, string];
     };

@@ -32,9 +32,9 @@ export class LinksService implements LinksPort {
   ) {}
 
   /**
-   * Counts unused and non-invalidated invitation links, splitting them by
-   * whether they are still usable. Used or revoked links belong to neither
-   * bucket, so pending and expired never overlap.
+   * Counts unused invitation links. `pending` requires an unexpired and
+   * non-invalidated link; `expired` counts every unused link past its expiry,
+   * even if a later reissue invalidated it during the retention window.
    */
   async countInvitations(): Promise<InvitationCounts> {
     const now = new Date();
