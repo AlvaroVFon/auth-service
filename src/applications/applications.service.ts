@@ -316,7 +316,7 @@ export class ApplicationsService implements ApplicationsPort {
 
     // Conditional on active so an application archived between the facade
     // guard and this write cannot receive overrides.
-    const updated = await this.applicationModel.findByIdAndUpdate(
+    const updated = await this.applicationModel.findOneAndUpdate(
       { _id: id, active: true },
       {
         ...(Object.keys($set).length === 0 ? {} : { $set }),
