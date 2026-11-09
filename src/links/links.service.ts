@@ -2,7 +2,11 @@ import { Model, Types } from 'mongoose';
 
 import { EMAIL_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
-import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import {
+  ConflictError,
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../common/exceptions/base.exception';
 import { InvalidLinkError } from '../common/exceptions/links.exceptions';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { assertObjectId } from '../common/validators/object-id';
@@ -25,6 +29,52 @@ export class LinksService implements LinksPort {
     private readonly invitationExpirationMs: number = 7 * 24 * 60 * 60 * 1000,
     private readonly passwordResetExpirationMs: number = 60 * 60 * 1000,
   ) {}
+
+  async revokeInvitation(
+    applicationId: string,
+    invitationId: string,
+  ): Promise<boolean> {
+    assertObjectId(applicationId, 'applicationId');
+    assertObjectId(invitationId, 'invitationId');
+
+    const filter = {
+      _id: new Types.ObjectId(invitationId),
+      applicationId: new Types.ObjectId(applicationId),
+      type: LinkType.INVITATION,
+    };
+    const link = await this.linkModel.findOne(filter);
+
+    if (!link) {
+      throw new EntityNotFoundError('Invitation not found');
+    }
+    if (link.usedAt !== null) {
+      throw new ConflictError('Invitation already used');
+    }
+    if (link.invalidatedAt !== null) {
+      return false;
+    }
+
+    const result = await this.linkModel.updateOne(
+      { ...filter, usedAt: null, invalidatedAt: null },
+      { $set: { invalidatedAt: new Date() } },
+    );
+
+    if (result.modifiedCount > 0) {
+      return true;
+    }
+
+    // A concurrent acceptance or revocation won the write: re-read to tell the
+    // used conflict apart from an idempotent repeated revocation.
+    const current = await this.linkModel.findOne(filter);
+    if (!current) {
+      throw new EntityNotFoundError('Invitation not found');
+    }
+    if (current.usedAt !== null) {
+      throw new ConflictError('Invitation already used');
+    }
+
+    return false;
+  }
 
   async createInvitation(
     input: CreateInvitationLinkInput,

@@ -1,4 +1,5 @@
 import type { ApplicationsPort } from '../applications';
+import { AuditEvent, AuditPort, AuditResult } from '../audit';
 import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
 import { Roles } from '../common/enums/roles.enum';
@@ -63,7 +64,35 @@ export class InvitationsService {
     private readonly notifications: LinkNotificationsService,
     private readonly logger: LoggerInterface,
     private readonly invitationMailer?: InvitationMailerPort,
+    private readonly auditService?: AuditPort,
   ) {}
+
+  /**
+   * Revokes one pending invitation of an application without deleting it.
+   * A repeated revocation is an idempotent no-op and is not audited again.
+   */
+  async revoke(
+    applicationId: string,
+    invitationId: string,
+    actorId?: string,
+  ): Promise<void> {
+    const application = await this.findApplication(applicationId);
+    const revoked = await this.linksService.revokeInvitation(
+      application._id.toString(),
+      invitationId,
+    );
+
+    if (!revoked) {
+      return;
+    }
+
+    await this.auditService?.record({
+      event: AuditEvent.INVITATION_REVOKED,
+      result: AuditResult.SUCCESS,
+      applicationId: application._id.toString(),
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+  }
 
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
     if (input.role === GrantRoles.ADMIN && input.actorRole !== Roles.OWNER) {
