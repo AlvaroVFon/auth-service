@@ -54,7 +54,7 @@ export class LinksService implements LinksPort {
         role: input.role,
         ...(telegramChatId === undefined ? {} : { telegramChatId }),
       },
-      this.invitationExpirationMs,
+      input.expiresInMs ?? this.invitationExpirationMs,
     );
   }
 

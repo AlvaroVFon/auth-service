@@ -312,6 +312,8 @@ export const createApplicationComposition = (
     cryptoService,
     sessionService,
     getStringEnvVariable('APP_NAME', 'Auth Service'),
+    settingsService,
+    applicationsModule.service,
   );
   const authService = new AuthService(
     usersModule.service,
@@ -349,6 +351,7 @@ export const createApplicationComposition = (
     linkNotifications,
     logger,
     authMailer,
+    settingsService,
   );
   grantsModule.service.setInvitationsPort(invitationsService);
   const passwordResetLinksService = new PasswordResetLinksService(

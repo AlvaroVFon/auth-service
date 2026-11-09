@@ -468,6 +468,12 @@ that the owner shares through any channel. The guest sets a password at
 `POST /auth/invitations/accept` and gets the granted role. Existing users and holders
 cannot be invited: use grants to give them access to another application.
 
+The link lifetime and the branding in the email come from the application settings:
+`invitationTtlMs` overrides the global TTL and `appName` replaces `APP_NAME` in the
+invitation email. Applications without overrides inherit the global values. The same
+`appName` brands the authenticator entry when MFA is enrolled from an application token.
+The API response always reports the effective `expiresAt`.
+
 Password resets can be generated and shared the same way:
 
 ```
