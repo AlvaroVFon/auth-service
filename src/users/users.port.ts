@@ -107,5 +107,5 @@ export interface UsersPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
   setGrantsCleaner(cleaner: UserGrantsCleanerPort): void;
   setSessionRevoker(revoker: UserSessionRevokerPort): void;
-  setSessionManager(lister: UserSessionsPort): void;
+  setSessionManager(manager: UserSessionsPort): void;
 }

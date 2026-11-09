@@ -121,7 +121,14 @@ export class SessionService {
   async revokeAll(userId: string, audience?: string): Promise<void> {
     // Re-list until no active token remains: a rotation that lands during the
     // bulk update must not leave the account with a live session.
-    await this.refreshTokenService.revokeAllByUserId(userId, audience);
+    const result = await this.refreshTokenService.revokeAllByUserId(
+      userId,
+      audience,
+    );
+
+    if (!result.complete) {
+      throw new Error('Session revocation incomplete');
+    }
   }
 
   async revokeByRefreshToken(

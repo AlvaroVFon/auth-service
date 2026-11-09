@@ -25,10 +25,10 @@ export interface RevokedAudienceSession {
 
 export interface RevokeAllByAudienceResult {
   /**
-   * Tokens observed before each update. A token issued between a listing and
-   * its update is picked up (and listed) by the next pass while passes remain;
-   * once the pass cap is reached, `complete` is false and the caller must
-   * retry. `revoked` is the authoritative count.
+   * Exactly the tokens this call transitioned from active to revoked, tagged
+   * with the unique per-pass `revocationBatchId`. A concurrent revocation is
+   * never reported here. Once the pass cap is reached, `complete` is false and
+   * the caller must retry.
    */
   sessions: RevokedAudienceSession[];
   revoked: number;

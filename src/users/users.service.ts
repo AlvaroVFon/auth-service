@@ -352,8 +352,8 @@ export class UsersService implements UsersPort {
     this.sessionRevoker = revoker;
   }
 
-  setSessionManager(lister: UserSessionsPort): void {
-    this.sessionManager = lister;
+  setSessionManager(manager: UserSessionsPort): void {
+    this.sessionManager = manager;
   }
 
   /**
