@@ -17,6 +17,7 @@ import { HoldersService } from '../../../../src/holders/holders.service';
 import { CryptoService } from '../../../../src/libs/crypto';
 import { InvitationsService } from '../../../../src/links/invitations.service';
 import { LinkNotificationsService } from '../../../../src/links/link-notifications.service';
+import type { OneTimeLink } from '../../../../src/links/link.interface';
 import { LinkModel } from '../../../../src/links/links.schema';
 import { LinksService } from '../../../../src/links/links.service';
 import { User } from '../../../../src/users/users.schema';
@@ -529,6 +530,49 @@ describe('InvitationsService.inviteMember', () => {
     assert.strictEqual(to, email);
     assert.match(link, /\/invitations\/accept\?token=/);
     assert.strictEqual(await users.findByEmail(email), null);
+  });
+
+  test('applies the application TTL and branding to the invitation', async () => {
+    const settings = {
+      resolveForApplication: async () => ({
+        invitationTtlMs: { value: 120_000, source: 'application' },
+        appName: { value: 'Custom Panel', source: 'application' },
+      }),
+    };
+    const service = new InvitationsService(
+      links,
+      users,
+      holders,
+      grants,
+      applications,
+      new CryptoService(),
+      'https://app.test',
+      notifications,
+      silentLogger,
+      invitationMailer,
+      settings as never,
+    );
+    const application = await createApplication();
+    const email = `branded-${Date.now()}@example.com`;
+    const before = Date.now();
+
+    await service.inviteMember({
+      email,
+      applicationId: application._id.toString(),
+      role: GrantRoles.VIEWER,
+    });
+
+    const stored = await fixture.findOne<OneTimeLink>('Link', { email });
+    if (!stored) {
+      throw new Error('Invitation link was not persisted');
+    }
+    const ttl = stored.expiresAt.getTime() - before;
+    assert.ok(ttl >= 119_000 && ttl <= 121_000);
+    const [to, link, appName] = invitationMailer.sendInvitationEmail.mock
+      .calls[0]!.arguments as [string, string, string];
+    assert.strictEqual(to, email);
+    assert.match(link, /\/invitations\/accept\?token=/);
+    assert.strictEqual(appName, 'Custom Panel');
   });
 
   test('rejects an admin invitation from a non-owner through the member port', async () => {

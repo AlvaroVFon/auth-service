@@ -85,6 +85,42 @@ describe('MfaService', () => {
     assert.ok(first.otpauthUrl.startsWith('otpauth://totp/'));
   });
 
+  test('should brand the authenticator issuer with the application name', async () => {
+    const branded = new MfaService(
+      users,
+      new CryptoService(),
+      {} as never,
+      'Auth Service',
+      {
+        resolveForApplication: async () => ({
+          appName: { value: 'Panel Pro', source: 'application' },
+        }),
+      } as never,
+      {
+        findByAudience: async () => ({
+          _id: { toString: () => 'app-id' },
+        }),
+      } as never,
+    );
+    const user = await createUser();
+
+    const enrollment = await branded.enroll(
+      user._id.toString(),
+      PASSWORD,
+      'panel-audience',
+    );
+
+    assert.match(enrollment.otpauthUrl, /issuer=Panel%20Pro/);
+  });
+
+  test('should keep the service issuer when the token has no audience', async () => {
+    const user = await createUser();
+
+    const enrollment = await service.enroll(user._id.toString(), PASSWORD);
+
+    assert.match(enrollment.otpauthUrl, /issuer=Auth%20Service/);
+  });
+
   test('should activate with a valid code and return recovery codes', async () => {
     const user = await createUser();
     const enrollment = await service.enroll(user._id.toString(), PASSWORD);

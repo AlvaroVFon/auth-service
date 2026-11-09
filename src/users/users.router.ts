@@ -17,6 +17,7 @@ export interface UsersSupportRateLimitConfig {
  */
 export const USER_SUPPORT_BODYLESS_PATHS: readonly RegExp[] = [
   /^\/users\/[^/]+\/(unlock|verify)\/?$/i,
+  /^\/users\/[^/]+\/mfa\/reset\/?$/i,
 ];
 
 export class UsersRouter {
@@ -68,8 +69,8 @@ export class UsersRouter {
     );
 
     // The support actions use the login window and budget numbers, but their
-    // own limiter store: the two routes share a budget with each other, not
-    // with /auth/login.
+    // own limiter store: unlock, verify and mfa/reset share a budget with each
+    // other, not with /auth/login.
     const supportRateLimiter = createRateLimiter(
       this.supportRateLimit.windowMs,
       this.supportRateLimit.max,
@@ -85,6 +86,12 @@ export class UsersRouter {
       '/users/:id/verify',
       supportRateLimiter,
       this.userController.verify.bind(this.userController),
+    );
+
+    this.app.post(
+      '/users/:id/mfa/reset',
+      supportRateLimiter,
+      this.userController.resetMfa.bind(this.userController),
     );
   }
 }
