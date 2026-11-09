@@ -69,6 +69,28 @@ export class LinksService implements LinksPort {
       ],
     };
 
+    // Plain predicates express the same precedence as the computed state, so
+    // the leading match + top-level sort can use the application index instead
+    // of materialising every invitation for a blocking sort inside $facet.
+    const stateFilter: Record<string, unknown> =
+      query.state === 'used'
+        ? { usedAt: { $ne: null } }
+        : query.state === 'invalidated'
+          ? { usedAt: null, invalidatedAt: { $ne: null } }
+          : query.state === 'expired'
+            ? {
+                usedAt: null,
+                invalidatedAt: null,
+                expiresAt: { $lte: now },
+              }
+            : query.state === 'pending'
+              ? {
+                  usedAt: null,
+                  invalidatedAt: null,
+                  expiresAt: { $gt: now },
+                }
+              : {};
+
     const [facet] = await this.linkModel.aggregate<{
       items: InvitationListItem[];
       total: Array<{ value: number }>;
@@ -77,18 +99,16 @@ export class LinksService implements LinksPort {
         $match: {
           type: LinkType.INVITATION,
           applicationId: new Types.ObjectId(applicationId),
+          ...stateFilter,
         },
       },
-      { $addFields: { state: stateExpression } },
-      ...(query.state === undefined
-        ? []
-        : [{ $match: { state: query.state } }]),
+      { $sort: buildSortObject(query.sort) },
       {
         $facet: {
           items: [
-            { $sort: buildSortObject(query.sort) },
             { $skip: (query.page - 1) * query.limit },
             { $limit: query.limit },
+            { $addFields: { state: stateExpression } },
             {
               $project: {
                 _id: 0,
