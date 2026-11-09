@@ -1955,6 +1955,33 @@ describe('Auth Service', () => {
         lastEvent()?.applicationId,
         application._id.toString(),
       );
+      assert.strictEqual(lastEvent()?.audience, application.audience);
+    });
+
+    test('does not audit a generic session-store failure', async () => {
+      const user = await createOwner();
+      mockMfaService.verify = mock.fn(() => Promise.resolve());
+      const record = mockAuditService.record as unknown as {
+        mock: { callCount: () => number };
+      };
+      const before = record.mock.callCount();
+      const originalCreate = sessionService.create;
+      sessionService.create = mock.fn(() =>
+        Promise.reject(new Error('database is down')),
+      ) as never;
+
+      try {
+        await assert.rejects(
+          authService.verifyMfa(
+            jwtService.signMfaChallenge(user._id.toString()),
+            '123456',
+          ),
+          /database is down/,
+        );
+        assert.strictEqual(record.mock.callCount(), before);
+      } finally {
+        sessionService.create = originalCreate;
+      }
     });
 
     test('records a post-verification denial as a login failure', async () => {
