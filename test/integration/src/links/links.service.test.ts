@@ -282,7 +282,7 @@ describe('LinksService', () => {
     await LinkModel.create(base);
     await assert.rejects(LinkModel.create(base));
 
-    await assertTtlIndex(LinkModel, 'expiresAt');
+    await assertTtlIndex(LinkModel, 'expiresAt', 30 * 24 * 60 * 60);
   });
 });
 

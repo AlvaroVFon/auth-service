@@ -34,6 +34,8 @@ linkSchema.index({ type: 1, email: 1, applicationId: 1, invalidatedAt: 1 });
 linkSchema.index({ type: 1, userId: 1, invalidatedAt: 1 });
 // Invitation listing is scoped to one application and ordered by creation.
 linkSchema.index({ type: 1, applicationId: 1, createdAt: -1, _id: -1 });
-linkSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Expired links stay for 30 days so the invitation history can report the
+// "expired" bucket; `consume` already rejects them by date.
+linkSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 
 export const LinkModel = model<OneTimeLink>('Link', linkSchema);

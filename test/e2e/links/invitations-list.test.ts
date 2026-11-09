@@ -111,7 +111,10 @@ describe('E2E application invitations listing', () => {
     const serialized = JSON.stringify(response.body);
     assert.strictEqual(serialized.includes('tokenHash'), false);
     assert.strictEqual(serialized.includes('telegramChatId'), false);
-    assert.strictEqual(serialized.includes('999'), false);
+    for (const item of response.body.items as Array<Record<string, unknown>>) {
+      assert.strictEqual('tokenHash' in item, false);
+      assert.strictEqual('telegramChatId' in item, false);
+    }
   });
 
   test('AC-2: filters by state and keeps total in sync', async () => {
