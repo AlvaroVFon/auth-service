@@ -2,6 +2,7 @@ import { Model, Types } from 'mongoose';
 
 import { EMAIL_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
+import { ForbiddenError } from '../common/exceptions/auth.exceptions';
 import {
   ConflictError,
   EntityNotFoundError,
@@ -33,6 +34,7 @@ export class LinksService implements LinksPort {
   async resendInvitation(
     applicationId: string,
     invitationId: string,
+    allowAdminInvitation = false,
   ): Promise<CreatedLink> {
     assertObjectId(applicationId, 'applicationId');
     assertObjectId(invitationId, 'invitationId');
@@ -51,6 +53,9 @@ export class LinksService implements LinksPort {
     }
     if (!existing.email || !existing.role) {
       throw new EntityNotFoundError('Invitation not found');
+    }
+    if (existing.role === GrantRoles.ADMIN && !allowAdminInvitation) {
+      throw new ForbiddenError('Only the owner can resend an admin invitation');
     }
 
     // createInvitation invalidates every active link of this email and

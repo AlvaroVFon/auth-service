@@ -119,9 +119,12 @@ export class InvitationsService {
     applicationId: string,
     invitationId: string,
     actorId?: string,
+    actorRole?: Roles,
   ): Promise<ResentInvitation> {
+    // Resend follows the creation policy: archived applications are not
+    // redeemable, so they must not receive a new link.
     const application = OBJECTID_REGEX.test(applicationId)
-      ? await this.applicationsService.findById(applicationId)
+      ? await this.applicationsService.findAssignableById(applicationId)
       : null;
 
     if (!application) {
@@ -131,6 +134,7 @@ export class InvitationsService {
     const created = await this.linksService.resendInvitation(
       application._id.toString(),
       invitationId,
+      actorRole === Roles.OWNER,
     );
     const link = buildInvitationLink(this.publicAppUrl, created.token);
 

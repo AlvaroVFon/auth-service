@@ -33,7 +33,8 @@ export class LinksRouter {
       INVITATION_RESEND_RATE_LIMIT_MAX,
       undefined,
       undefined,
-      (req) => `${req.params.applicationId}:${req.params.invitationId}`,
+      (req) =>
+        `${req.params.applicationId}:${req.params.invitationId}`.toLowerCase(),
     );
 
     this.app.post(

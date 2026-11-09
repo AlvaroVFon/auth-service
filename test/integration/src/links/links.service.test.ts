@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 
+import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
   ConflictError,
   EntityNotFoundError,

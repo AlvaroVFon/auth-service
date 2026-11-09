@@ -25,10 +25,18 @@ export class LinksController {
 
   @Catch()
   async resendInvitation(req: Request, res: Response): Promise<void> {
+    const user = req.user;
+    const actorRole =
+      user !== undefined &&
+      user.audience === undefined &&
+      (Object.values(Roles) as string[]).includes(user.role)
+        ? (user.role as Roles)
+        : undefined;
     const result = await this.invitationsService.resend(
       req.params.applicationId as string,
       req.params.invitationId as string,
-      req.user?.id,
+      user?.id,
+      actorRole,
     );
 
     res.status(201).json(result);
