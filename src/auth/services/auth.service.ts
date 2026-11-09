@@ -17,6 +17,7 @@ import {
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
 import { AlreadyGeneratedCodeError } from '../../common/exceptions/codes.exceptions';
+import { InvalidMfaCodeError } from '../../common/exceptions/mfa.exceptions';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
 import { JwtService, TokenTypes } from '../../libs/jwt';
@@ -329,21 +330,47 @@ export class AuthService {
     try {
       await this.mfaService.verify(user, code);
     } catch (error) {
-      // The password step already succeeded, so the second-factor outcome is
-      // the login outcome the overview must count.
-      await this.auditService.record({
-        event:
-          error instanceof AccountLockedError
-            ? AuditEvent.ACCOUNT_LOCKED
-            : AuditEvent.LOGIN_FAILED,
-        result: AuditResult.FAILURE,
-        userId,
-        email: user.email,
-        ...(claims.targetAudience === undefined
-          ? {}
-          : { audience: claims.targetAudience }),
-        ...this.auditContext(ctx),
-      });
+      // Only credential outcomes are audit events; an infrastructure failure
+      // must not be labelled as a login attempt.
+      if (
+        error instanceof AccountLockedError ||
+        error instanceof InvalidMfaCodeError
+      ) {
+        let applicationId: string | undefined;
+        if (claims.app !== undefined) {
+          try {
+            const resolved = await this.applicationTokens.resolveApplication(
+              claims.app,
+            );
+            applicationId = resolved?.application._id.toString();
+          } catch (resolveError) {
+            this.logger.warn(
+              'Failed to resolve the application of an MFA failure',
+              resolveError,
+            );
+          }
+        }
+
+        await this.auditService.record({
+          event:
+            error instanceof AccountLockedError
+              ? AuditEvent.ACCOUNT_LOCKED
+              : AuditEvent.LOGIN_FAILED,
+          result: AuditResult.FAILURE,
+          userId,
+          email: user.email,
+          ...(applicationId === undefined ? {} : { applicationId }),
+          ...(claims.targetAudience === undefined
+            ? {}
+            : { audience: claims.targetAudience }),
+          ...this.auditContext(ctx),
+        });
+      } else {
+        this.logger.warn(
+          `Unexpected MFA verification failure for ${userId}`,
+          error,
+        );
+      }
       throw error;
     }
 

@@ -23,6 +23,8 @@ import { RefreshTokenService } from '../../../../../src/auth/tokens/refresh-toke
 import { SessionService } from '../../../../../src/auth/tokens/session.service';
 import { JWT_REGEX } from '../../../../../src/common/constants/regex';
 import { Roles } from '../../../../../src/common/enums/roles.enum';
+import { AccountLockedError } from '../../../../../src/common/exceptions/auth.exceptions';
+import { InvalidMfaCodeError } from '../../../../../src/common/exceptions/mfa.exceptions';
 import { Grant, GrantRoles } from '../../../../../src/grants/grants.interface';
 import { GrantModel } from '../../../../../src/grants/grants.schema';
 import { GrantsService } from '../../../../../src/grants/grants.service';
@@ -1843,6 +1845,94 @@ describe('Auth Service', () => {
       assert.strictEqual(allTokens.length, 2);
       assert.ok(allTokens[0]!.revokedAt);
       assert.ok(allTokens[1]!.revokedAt);
+    });
+  });
+
+  describe('verifyMfa audit outcomes', () => {
+    const createOwner = () =>
+      fixture.create<UserInterface>('User', {
+        email: generateRandomEmail('mfa-audit+'),
+        password: DEFAULT_USER.password,
+        role: Roles.OWNER,
+        verified: true,
+        mfaEnabled: true,
+      });
+
+    const lastEvent = () => {
+      const record = mockAuditService.record as unknown as {
+        mock: { calls: Array<{ arguments: [Record<string, unknown>] }> };
+      };
+      return record.mock.calls.at(-1)?.arguments[0];
+    };
+
+    test('records LOGIN_SUCCEEDED after a valid second factor', async () => {
+      const user = await createOwner();
+      mockMfaService.verify = mock.fn(() => Promise.resolve());
+
+      const result = await authService.verifyMfa(
+        jwtService.signMfaChallenge(user._id.toString()),
+        '123456',
+      );
+
+      assert.ok(result.accessToken);
+      assert.strictEqual(lastEvent()?.event, AuditEvent.LOGIN_SUCCEEDED);
+      assert.strictEqual(lastEvent()?.userId, user._id.toString());
+    });
+
+    test('records LOGIN_FAILED for a wrong code', async () => {
+      const user = await createOwner();
+      mockMfaService.verify = mock.fn(() =>
+        Promise.reject(new InvalidMfaCodeError()),
+      );
+
+      await assert.rejects(
+        authService.verifyMfa(
+          jwtService.signMfaChallenge(user._id.toString()),
+          '000000',
+        ),
+        InvalidMfaCodeError,
+      );
+
+      assert.strictEqual(lastEvent()?.event, AuditEvent.LOGIN_FAILED);
+      assert.strictEqual(lastEvent()?.result, 'failure');
+    });
+
+    test('records ACCOUNT_LOCKED when the second factor is locked out', async () => {
+      const user = await createOwner();
+      mockMfaService.verify = mock.fn(() =>
+        Promise.reject(new AccountLockedError('locked')),
+      );
+
+      await assert.rejects(
+        authService.verifyMfa(
+          jwtService.signMfaChallenge(user._id.toString()),
+          '000000',
+        ),
+        AccountLockedError,
+      );
+
+      assert.strictEqual(lastEvent()?.event, AuditEvent.ACCOUNT_LOCKED);
+    });
+
+    test('logs unexpected failures without recording a login outcome', async () => {
+      const user = await createOwner();
+      mockMfaService.verify = mock.fn(() =>
+        Promise.reject(new Error('database is down')),
+      );
+      const record = mockAuditService.record as unknown as {
+        mock: { callCount: () => number };
+      };
+      const before = record.mock.callCount();
+
+      await assert.rejects(
+        authService.verifyMfa(
+          jwtService.signMfaChallenge(user._id.toString()),
+          '123456',
+        ),
+        /database is down/,
+      );
+
+      assert.strictEqual(record.mock.callCount(), before);
     });
   });
 });
