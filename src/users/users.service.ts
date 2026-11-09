@@ -51,6 +51,15 @@ export interface UserSupportActionContext extends RequestAuditContext {
  * Inclusion projection: a path added to the schema later is not shipped until
  * it is listed here, so the listing fails closed instead of leaking a secret.
  */
+const USER_SUMMARY_PROJECTION = [
+  'email',
+  'username',
+  'verified',
+  'mfaEnabled',
+  'createdAt',
+  'lastLoginAt',
+].join(' ');
+
 const USER_LIST_PROJECTION = [
   'username',
   'email',
@@ -226,7 +235,7 @@ export class UsersService implements UsersPort {
 
     const users = await this.usersModel
       .find({ _id: { $in: ids } })
-      .select('email username verified mfaEnabled createdAt lastLoginAt')
+      .select(USER_SUMMARY_PROJECTION)
       .lean<
         Array<{
           _id: { toString(): string };

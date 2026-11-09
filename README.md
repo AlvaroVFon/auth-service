@@ -256,7 +256,9 @@ email still does not trigger a verification flow: the account keeps its current
 `GET /users`, `GET /applications`, `GET /audit-events` and
 `GET /applications/:applicationId/members` share one listing contract. The
 member listing counts only members whose user still exists: an orphan grant is
-excluded from both `items` and `total`.
+excluded from both `items` and `total`. The member listing is the documented
+exception to the shared contract: it rejects `q` with `400` and accepts only
+`createdAt` and `role` as sortable fields, defaulting to `createdAt` descending.
 
 | Parameter | Meaning                                                                                                                                              |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
