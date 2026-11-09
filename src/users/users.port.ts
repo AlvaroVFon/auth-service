@@ -71,8 +71,13 @@ export interface UserSessionsPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
   /** Returns true when the session existed and was revoked by this call. */
   revokeSession(userId: string, sessionId: string): Promise<boolean>;
-  /** Revokes every session and returns the identifiers it actually revoked. */
-  revokeAllSessions(userId: string): Promise<string[]>;
+  /**
+   * Revokes every session and returns the identifiers it actually revoked.
+   * `complete` is false when active tokens survived the bounded revocation.
+   */
+  revokeAllSessions(
+    userId: string,
+  ): Promise<{ sessionIds: string[]; complete: boolean }>;
 }
 
 export interface UsersPort {

@@ -397,7 +397,8 @@ export class UsersService implements UsersPort {
 
     // Audit exactly the sessions the revocation reported, not a pre-list
     // snapshot that concurrent logins could make stale.
-    const sessionIds = await this.requireSessionPort().revokeAllSessions(id);
+    const { sessionIds, complete } =
+      await this.requireSessionPort().revokeAllSessions(id);
 
     for (const sessionId of sessionIds) {
       await this.recordSupportEvent(
@@ -406,6 +407,12 @@ export class UsersService implements UsersPort {
         context,
         sessionId,
       );
+    }
+
+    // Surface the incompleteness after auditing: a token that survived the
+    // bounded passes must not be reported as a successful revoke-all.
+    if (!complete) {
+      throw new Error('Session revocation incomplete');
     }
   }
 

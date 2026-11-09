@@ -34,6 +34,13 @@ export interface RevokeAllByAudienceResult {
   complete: boolean;
 }
 
+export interface RevokeAllByUserResult {
+  /** Identifiers of the sessions this call actually revoked, for auditing. */
+  sessions: Array<{ sessionId: string; jti: string }>;
+  /** False when active tokens remain after the bounded passes. */
+  complete: boolean;
+}
+
 const MAX_REVOCATION_PASSES = 5;
 const REVOCATION_BATCH_SIZE = 500;
 
@@ -129,14 +136,16 @@ export class RefreshTokenService {
 
     // Tokens created before sessionId existed are listed with their jti as the
     // session id, so the revoke path must keep that fallback.
+    const now = new Date();
     const sessionFilter = {
       userId,
+      expiresAt: { $gt: now },
       $or: [{ sessionId }, { jti: sessionId, sessionId: null }],
     };
 
     const result = await this.refreshTokenModel.updateMany(
       { ...sessionFilter, revokedAt: null },
-      { revokedAt: new Date() },
+      { revokedAt: now },
     );
 
     if (result.matchedCount > 0) {
@@ -144,7 +153,8 @@ export class RefreshTokenService {
     }
 
     // Revoking an already revoked session is a successful no-op; only an
-    // unknown session is a 404.
+    // unknown or expired session is a 404. Expired tokens are never listed as
+    // active, so they must not produce a success audit event either.
     const exists = await this.refreshTokenModel.exists(sessionFilter);
 
     if (!exists) {
@@ -289,12 +299,13 @@ export class RefreshTokenService {
 
   /**
    * Revokes every active token of a user and returns the session identifiers it
-   * listed, so the caller can audit exactly what this call revoked.
+   * actually revoked, plus whether the bounded passes drained every token. The
+   * caller audits the returned sessions even when `complete` is false.
    */
   async revokeAllByUserId(
     userId: string,
     audience?: string,
-  ): Promise<Array<{ sessionId: string; jti: string }>> {
+  ): Promise<RevokeAllByUserResult> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
     }
@@ -348,11 +359,9 @@ export class RefreshTokenService {
       .limit(1)
       .lean<Array<{ _id: Types.ObjectId }>>();
 
-    if (remaining.length > 0) {
-      // Never report a complete revocation while a session can still refresh.
-      throw new Error('Session revocation incomplete');
-    }
-
-    return revoked;
+    // Return what was revoked even when a token survived the bounded passes:
+    // the caller can audit every real revocation and still surface that the
+    // bulk operation was incomplete.
+    return { sessions: revoked, complete: remaining.length === 0 };
   }
 }

@@ -1100,7 +1100,7 @@ describe('UsersService session listing', () => {
     service.setSessionManager({
       listSessions,
       revokeSession: async () => true,
-      revokeAllSessions: async () => [],
+      revokeAllSessions: async () => ({ sessionIds: [], complete: true }),
     });
 
     const sessions = await service.listSessions(user._id.toString());
@@ -1134,7 +1134,7 @@ describe('UsersService session listing', () => {
     service.setSessionManager({
       listSessions,
       revokeSession: async () => true,
-      revokeAllSessions: async () => [],
+      revokeAllSessions: async () => ({ sessionIds: [], complete: true }),
     });
 
     for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
@@ -1167,7 +1167,9 @@ describe('UsersService session revocation', () => {
   const buildService = (overrides: {
     listSessions?: (userId: string) => Promise<never[]>;
     revokeSession?: (userId: string, sessionId: string) => Promise<boolean>;
-    revokeAllSessions?: (userId: string) => Promise<string[]>;
+    revokeAllSessions?: (
+      userId: string,
+    ) => Promise<{ sessionIds: string[]; complete: boolean }>;
     record?: ReturnType<typeof mock.fn>;
   }) => {
     const record = overrides.record ?? mock.fn(async () => {});
@@ -1182,7 +1184,9 @@ describe('UsersService session revocation', () => {
     service.setSessionManager({
       listSessions: overrides.listSessions ?? (async () => []),
       revokeSession: overrides.revokeSession ?? (async () => true),
-      revokeAllSessions: overrides.revokeAllSessions ?? (async () => []),
+      revokeAllSessions:
+        overrides.revokeAllSessions ??
+        (async () => ({ sessionIds: [], complete: true })),
     });
 
     return { service, record };
@@ -1222,7 +1226,10 @@ describe('UsersService session revocation', () => {
 
   test('revokes every session and audits each one', async () => {
     const user = await createUser();
-    const revokeAllSessions = mock.fn(async () => ['session-a', 'session-b']);
+    const revokeAllSessions = mock.fn(async () => ({
+      sessionIds: ['session-a', 'session-b'],
+      complete: true,
+    }));
     const { service, record } = buildService({ revokeAllSessions });
 
     await service.revokeAllSessions(user._id.toString());
@@ -1234,6 +1241,22 @@ describe('UsersService session revocation', () => {
     }>;
     const ids = calls.map((call) => call.arguments[0].sessionId);
     assert.deepStrictEqual(ids.sort(), ['session-a', 'session-b']);
+  });
+
+  test('audits the revoked sessions before surfacing an incomplete revocation', async () => {
+    const user = await createUser();
+    const revokeAllSessions = mock.fn(async () => ({
+      sessionIds: ['session-a'],
+      complete: false,
+    }));
+    const { service, record } = buildService({ revokeAllSessions });
+
+    await assert.rejects(
+      service.revokeAllSessions(user._id.toString()),
+      new Error('Session revocation incomplete'),
+    );
+
+    assert.strictEqual(record.mock.callCount(), 1);
   });
 
   test('does not revoke or audit the owner, an unknown id or a malformed id', async () => {
