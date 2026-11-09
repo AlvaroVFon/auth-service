@@ -561,8 +561,11 @@ export class UsersService implements UsersPort {
       throw new Error('Session revoker is not configured');
     }
 
-    await this.disableMfa(id);
+    // Close the sessions first: if this fails, MFA stays enabled and the
+    // account is still protected instead of losing its second factor while
+    // old refresh tokens remain usable.
     await this.sessionRevoker.revokeAll(id);
+    await this.disableMfa(id);
     await this.recordSupportEvent(AuditEvent.USER_MFA_RESET, id, context);
   }
 
