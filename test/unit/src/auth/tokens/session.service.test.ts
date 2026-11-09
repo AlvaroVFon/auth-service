@@ -57,7 +57,7 @@ describe('SessionService', () => {
     assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists
       refreshTokenService.pruneActiveSessions.mock.calls[0].arguments,
-      [claims.userId, 50],
+      [claims.userId, 50, null],
     );
   });
 
@@ -76,11 +76,44 @@ describe('SessionService', () => {
     assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists
       jwtService.signTokenPair.mock.calls[0].arguments,
-      [claims.userId, claims.role, 'app-aud'],
+      [claims.userId, claims.role, 'app-aud', {}],
     );
     // @ts-expect-error mock.calls exists
     const args = refreshTokenService.create.mock.calls[0].arguments;
     assert.strictEqual(args[4].audience, 'app-aud');
+  });
+
+  test('forwards the application policy TTLs and session cap', async () => {
+    const jwtService = {
+      signTokenPair: mock.fn(() => pair),
+    } as unknown as JwtService;
+    const refreshTokenService = {
+      create: mock.fn(() => Promise.resolve()),
+      pruneActiveSessions: mock.fn(() => Promise.resolve()),
+    } as unknown as RefreshTokenService;
+    const service = new SessionService(jwtService, refreshTokenService);
+
+    await service.create(claims.userId!, claims.role!, context, 'app-aud', {
+      accessTokenTtl: 600,
+      refreshTokenTtl: 7200,
+      maxSessionsPerUser: 2,
+    });
+
+    assert.deepStrictEqual(
+      // @ts-expect-error mock.calls exists
+      jwtService.signTokenPair.mock.calls[0].arguments,
+      [
+        claims.userId,
+        claims.role,
+        'app-aud',
+        { accessExpiresIn: 600, refreshExpiresIn: 7200 },
+      ],
+    );
+    assert.deepStrictEqual(
+      // @ts-expect-error mock.calls exists
+      refreshTokenService.pruneActiveSessions.mock.calls[0].arguments,
+      [claims.userId, 2, 'app-aud'],
+    );
   });
 
   test('rotates an application session keeping its audience and session', async () => {
@@ -106,12 +139,47 @@ describe('SessionService', () => {
     assert.deepStrictEqual(
       // @ts-expect-error mock.calls exists
       jwtService.signTokenPair.mock.calls[0].arguments,
-      [claims.userId, claims.role, 'app-aud'],
+      [claims.userId, claims.role, 'app-aud', {}],
     );
     // @ts-expect-error mock.calls exists
     const args = refreshTokenService.create.mock.calls[0].arguments;
     assert.strictEqual(args[4].sessionId, sessionId);
     assert.strictEqual(args[4].audience, 'app-aud');
+  });
+
+  test('forwards the application TTLs when rotating', async () => {
+    const wrappedClaims = { ...claims, aud: 'app-aud' };
+    const jwtService = {
+      signTokenPair: mock.fn(() => pair),
+    } as unknown as JwtService;
+    const refreshTokenService = {
+      findByJti: mock.fn(() =>
+        Promise.resolve({
+          userId: claims.userId,
+          revokedAt: null,
+          sessionId,
+        }),
+      ),
+      revokeByJti: mock.fn(() => Promise.resolve()),
+      create: mock.fn(() => Promise.resolve()),
+    } as unknown as RefreshTokenService;
+    const service = new SessionService(jwtService, refreshTokenService);
+
+    await service.rotate(wrappedClaims, claims.role!, context, {
+      accessTokenTtl: 600,
+      refreshTokenTtl: 7200,
+    });
+
+    assert.deepStrictEqual(
+      // @ts-expect-error mock.calls exists
+      jwtService.signTokenPair.mock.calls[0].arguments,
+      [
+        claims.userId,
+        claims.role,
+        'app-aud',
+        { accessExpiresIn: 600, refreshExpiresIn: 7200 },
+      ],
+    );
   });
 
   test('keeps the original session start time when rotating', async () => {

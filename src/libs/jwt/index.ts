@@ -14,6 +14,7 @@ export type {
   TokenClaims,
   TokenPair,
   TokenRole,
+  TokenSignOptions,
   VerifyTokenOptions,
 } from './jwt.interfaces';
 export { TokenTypes } from './token-types.enum';

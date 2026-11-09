@@ -66,8 +66,8 @@ export const parseUserUpdatePayload = (
       throw new InvalidArgumentError('Invalid email format');
     }
 
-    // Known risk, tracked in #193: the email changes without resetting
-    // `verified`, as #104 accepts. Never set `verified` here.
+    // UsersService.updateOneById resets `verified` when the address changes;
+    // the owner account rejects the change instead. Never set it here.
     update.email = email;
   }
   if ('password' in payload) {

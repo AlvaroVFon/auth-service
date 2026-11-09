@@ -2,12 +2,20 @@ import { NextFunction, Request, Response } from 'express';
 
 import type { ApplicationsPort } from '../../applications';
 import { GrantRoles, GrantsPort } from '../../grants';
+import { OBJECTID_REGEX } from '../constants/regex';
 import { Roles } from '../enums/roles.enum';
 import {
   ForbiddenError,
   UnauthorizedError,
 } from '../exceptions/auth.exceptions';
 import { EntityNotFoundError } from '../exceptions/base.exception';
+
+interface ApplicationReaderOptions {
+  /** Also resolve and require an active application for the owner. */
+  requireActiveForOwner?: boolean;
+  /** Hide a malformed id as 404 instead of surfacing a 400. */
+  malformedIsNotFound?: boolean;
+}
 
 export class ApplicationAuthorizationMiddleware {
   constructor(
@@ -43,13 +51,28 @@ export class ApplicationAuthorizationMiddleware {
    */
   allowApplicationReader = this.createApplicationReader('id');
 
-  private createApplicationReader(param: string) {
+  /**
+   * Settings are only exposed for an active application that the caller can
+   * administer. Unlike the catalog reader, the owner is also sent a `404` for
+   * an archived or unknown application, so the route never reveals whether an
+   * inactive application exists.
+   */
+  allowApplicationSettingsReader = this.createApplicationReader(
+    'applicationId',
+    { requireActiveForOwner: true, malformedIsNotFound: true },
+  );
+
+  private createApplicationReader(
+    param: string,
+    options: ApplicationReaderOptions = {},
+  ) {
     return async (req: Request, _res: Response, next: NextFunction) => {
       try {
         await this.authorizeApplicationAdmin(
           req,
           req.params[param],
           () => new EntityNotFoundError('Application not found'),
+          options,
         );
         next();
       } catch (error) {
@@ -59,15 +82,17 @@ export class ApplicationAuthorizationMiddleware {
   }
 
   /**
-   * Shared policy for both application surfaces: the owner always passes;
+   * Shared policy for every application surface: the owner passes (optionally
+   * after the application is resolved and required to be active), while
    * everybody else needs the `admin` grant on an active application whose
-   * audience matches the token. The only per-route difference is the error
-   * used to hide the resource, which the caller supplies.
+   * audience matches the token. The caller supplies the error used to hide the
+   * resource.
    */
   private async authorizeApplicationAdmin(
     req: Request,
     applicationId: unknown,
     deny: () => Error,
+    options: ApplicationReaderOptions = {},
   ): Promise<void> {
     const user = req.user;
 
@@ -75,7 +100,7 @@ export class ApplicationAuthorizationMiddleware {
       throw new UnauthorizedError('Authentication required');
     }
 
-    if (user.role === Roles.OWNER) {
+    if (!options.requireActiveForOwner && user.role === Roles.OWNER) {
       return;
     }
 
@@ -83,13 +108,22 @@ export class ApplicationAuthorizationMiddleware {
       throw deny();
     }
 
+    if (options.malformedIsNotFound && !OBJECTID_REGEX.test(applicationId)) {
+      throw deny();
+    }
+
     const application =
       await this.applicationsService.findAssignableById(applicationId);
 
-    if (
-      !application ||
-      (user.audience !== undefined && application.audience !== user.audience)
-    ) {
+    if (!application) {
+      throw deny();
+    }
+
+    if (user.role === Roles.OWNER) {
+      return;
+    }
+
+    if (user.audience !== undefined && application.audience !== user.audience) {
       throw deny();
     }
 

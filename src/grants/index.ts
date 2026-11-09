@@ -5,6 +5,7 @@ export {
   GRANT_MEMBER_LIST_OPTIONS,
   GRANT_MEMBER_SORTABLE_FIELDS,
 } from './grants.port';
+export type { GrantsRateLimitConfig } from './grants.router';
 export type {
   AssignRoleInput,
   GrantApplicationScope,

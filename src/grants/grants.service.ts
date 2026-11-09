@@ -52,6 +52,17 @@ export class GrantsService implements GrantsPort {
     if (!Object.values(GrantRoles).includes(role)) {
       throw new InvalidArgumentError('Invalid role');
     }
+    // Controller callers always provide the global role; an app admin cannot
+    // escalate a member to admin through the legacy PUT route. Internal
+    // callers that omit it (already authorized invitation acceptance) keep the
+    // previous behaviour.
+    if (
+      role === GrantRoles.ADMIN &&
+      input.actorRole !== undefined &&
+      input.actorRole !== Roles.OWNER
+    ) {
+      throw new ForbiddenError('Only the owner can grant the admin role');
+    }
 
     // The caller decides whether an archived application is still manageable,
     // so the owner keeps administering its grants after the archive.
@@ -154,7 +165,9 @@ export class GrantsService implements GrantsPort {
           applicationId: input.applicationId,
           role: input.role,
           application,
-          actorRole: input.actorRole,
+          ...(input.actorRole === undefined
+            ? {}
+            : { actorRole: input.actorRole }),
         });
       } catch (error) {
         // A signup can land between the lookup and the invitation: retry the
@@ -266,7 +279,7 @@ export class GrantsService implements GrantsPort {
     applicationId: string;
     role: GrantRoles;
     application: Application;
-    actorRole: Roles;
+    actorRole?: Roles;
   }): Promise<GrantedMember> {
     if (!this.invitations) {
       throw new Error('Invitations port is not configured');

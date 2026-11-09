@@ -28,6 +28,8 @@ export interface AssignRoleInput {
   userId: string;
   applicationId: string;
   role: GrantRoles;
+  /** Global role of the caller, when the request comes from the HTTP surface. */
+  actorRole?: Roles;
   actorId?: string;
 }
 
@@ -55,7 +57,7 @@ export interface GrantMemberInput {
   applicationId: string;
   role: GrantRoles;
   /** Global role of the caller: only `owner` may grant the admin role. */
-  actorRole: Roles;
+  actorRole?: Roles;
   actorId?: string;
 }
 
