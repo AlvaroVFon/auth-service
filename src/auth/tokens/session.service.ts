@@ -59,6 +59,8 @@ export class SessionService {
     await this.refreshTokenService.pruneActiveSessions(
       userId,
       policy?.maxSessionsPerUser ?? this.maxSessionsPerUser,
+      // An application session prunes only its audience; global sessions
+      // explicitly target the null audience.
       audience ?? null,
     );
 

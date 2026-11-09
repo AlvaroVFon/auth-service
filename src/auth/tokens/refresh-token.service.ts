@@ -155,7 +155,7 @@ export class RefreshTokenService {
   async pruneActiveSessions(
     userId: string,
     keep: number,
-    audience: string | null = null,
+    audience?: string | null,
   ): Promise<void> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');
@@ -168,7 +168,7 @@ export class RefreshTokenService {
     const stale = await this.refreshTokenModel
       .find({
         userId,
-        audience,
+        ...(audience === undefined ? {} : { audience }),
         revokedAt: null,
         expiresAt: { $gt: new Date() },
       })
