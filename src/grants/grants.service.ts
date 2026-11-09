@@ -365,6 +365,9 @@ export class GrantsService implements GrantsPort {
         ],
         { allowDiskUse: true },
       ),
+      // `total` is the hydratable member count on purpose: it uses the same
+      // existence filter as the page, never the raw grant count. An orphan
+      // grant is not a member and must not be advertised by the envelope.
       this.grantModel.aggregate<{ value: number }>([
         { $match: { applicationId: applicationObjectId } },
         userLookup,
