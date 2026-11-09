@@ -8,7 +8,9 @@ export {
 export type {
   AssignRoleInput,
   GrantApplicationScope,
+  GrantedMember,
   GrantMember,
+  GrantMemberInput,
   GrantMemberSortField,
   GrantsPort,
 } from './grants.port';

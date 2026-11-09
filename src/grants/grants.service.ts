@@ -2,6 +2,10 @@ import { Model, Types } from 'mongoose';
 
 import type { Application, ApplicationsPort } from '../applications';
 import { AuditEvent, AuditPort, AuditResult } from '../audit';
+import { EMAIL_REGEX } from '../common/constants/regex';
+import { normalizeEmail } from '../common/email';
+import { Roles } from '../common/enums/roles.enum';
+import { ForbiddenError } from '../common/exceptions/auth.exceptions';
 import {
   EntityNotFoundError,
   InvalidArgumentError,
@@ -14,18 +18,23 @@ import {
   type PaginatedResult,
 } from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
+import type { InvitationsPort } from '../links';
 import type { UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
 import type {
   AssignRoleInput,
   GrantApplicationScope,
   GrantedApplication,
+  GrantedMember,
   GrantMember,
+  GrantMemberInput,
   GrantMemberSortField,
   GrantsPort,
 } from './grants.port';
 
 export class GrantsService implements GrantsPort {
+  private invitations?: InvitationsPort;
+
   constructor(
     private readonly grantModel: Model<Grant>,
     private readonly applicationsService: ApplicationsPort,
@@ -66,6 +75,206 @@ export class GrantsService implements GrantsPort {
     });
 
     return grant;
+  }
+
+  async assignRoleIfAbsent(input: AssignRoleInput): Promise<boolean> {
+    const { userId, applicationId, role, actorId } = input;
+    assertObjectId(userId, 'userId');
+    assertObjectId(applicationId, 'applicationId');
+    if (!Object.values(GrantRoles).includes(role)) {
+      throw new InvalidArgumentError('Invalid role');
+    }
+
+    await this.resolveApplication(applicationId);
+
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    try {
+      await this.grantModel.create({
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+        role,
+      });
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        return false;
+      }
+      throw error;
+    }
+
+    await this.recordGrantEvent(AuditEvent.GRANT_ASSIGNED, {
+      targetUserId: userId,
+      applicationId,
+      role,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+
+    return true;
+  }
+
+  /**
+   * Grants a role by email: an existing account gets (or converges to) the
+   * grant, and an email without an account receives an invitation. The
+   * response body is identical in both cases; the resulting grant or pending
+   * invitation is visible to the application admins by design.
+   */
+  async grantMemberByEmail(input: GrantMemberInput): Promise<GrantedMember> {
+    const email = normalizeEmail(input.email ?? '');
+
+    if (!EMAIL_REGEX.test(email)) {
+      throw new InvalidArgumentError('Invalid email format');
+    }
+    assertObjectId(input.applicationId, 'applicationId');
+    if (!Object.values(GrantRoles).includes(input.role)) {
+      throw new InvalidArgumentError('Invalid role');
+    }
+
+    const application = await this.applicationsService.findAssignableById(
+      input.applicationId,
+    );
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const isOwner = input.actorRole === Roles.OWNER;
+
+    if (input.role === GrantRoles.ADMIN && !isOwner) {
+      throw new ForbiddenError('Only the owner can grant the admin role');
+    }
+
+    const user = await this.usersService.findByEmail(email);
+
+    if (!user) {
+      try {
+        return await this.inviteMember({
+          email,
+          applicationId: input.applicationId,
+          role: input.role,
+          application,
+          actorRole: input.actorRole,
+        });
+      } catch (error) {
+        // A signup can land between the lookup and the invitation: retry the
+        // grant path instead of failing with the generic invitation error.
+        if (error instanceof InvalidArgumentError) {
+          const created = await this.usersService.findByEmail(email);
+          if (created) {
+            return this.grantExistingUser(
+              input,
+              created._id.toString(),
+              isOwner,
+            );
+          }
+        }
+        throw error;
+      }
+    }
+
+    return this.grantExistingUser(input, user._id.toString(), isOwner);
+  }
+
+  private async grantExistingUser(
+    input: GrantMemberInput,
+    userId: string,
+    isOwner: boolean,
+  ): Promise<GrantedMember> {
+    const existing = await this.grantModel.findOne({
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(input.applicationId),
+    });
+
+    if (!isOwner && existing?.role === GrantRoles.ADMIN) {
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
+
+    let grant: Grant | null;
+
+    if (isOwner) {
+      grant = await this.upsertGrant(userId, input.applicationId, input.role);
+    } else {
+      // Apply the admin guard in the write itself: a concurrent promotion to
+      // admin must not be overwritten by a non-owner caller.
+      try {
+        grant = await this.grantModel.findOneAndUpdate(
+          {
+            userId: new Types.ObjectId(userId),
+            applicationId: new Types.ObjectId(input.applicationId),
+            role: { $ne: GrantRoles.ADMIN },
+          },
+          { $set: { role: input.role } },
+          {
+            upsert: true,
+            returnDocument: 'after',
+            setDefaultsOnInsert: true,
+          },
+        );
+      } catch (error) {
+        if (!isDuplicateKeyError(error)) {
+          throw error;
+        }
+
+        // Two causes: the target already holds an admin grant, or a concurrent
+        // non-owner insert won the unique index. Re-read to tell them apart.
+        const current = await this.grantModel.findOne({
+          userId: new Types.ObjectId(userId),
+          applicationId: new Types.ObjectId(input.applicationId),
+        });
+
+        if (current?.role === GrantRoles.ADMIN) {
+          throw new ForbiddenError('Only the owner can manage an admin member');
+        }
+
+        grant = await this.grantModel.findOneAndUpdate(
+          {
+            userId: new Types.ObjectId(userId),
+            applicationId: new Types.ObjectId(input.applicationId),
+            role: { $ne: GrantRoles.ADMIN },
+          },
+          { $set: { role: input.role } },
+          { returnDocument: 'after' },
+        );
+
+        if (!grant) {
+          throw new ForbiddenError('Only the owner can manage an admin member');
+        }
+      }
+    }
+
+    if (!grant) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+
+    await this.recordGrantEvent(AuditEvent.MEMBER_GRANTED, {
+      targetUserId: userId,
+      applicationId: input.applicationId,
+      role: input.role,
+      ...(input.actorId === undefined ? {} : { actorId: input.actorId }),
+    });
+
+    return { email: normalizeEmail(input.email ?? ''), role: input.role };
+  }
+
+  setInvitationsPort(invitations: InvitationsPort): void {
+    this.invitations = invitations;
+  }
+
+  private async inviteMember(input: {
+    email: string;
+    applicationId: string;
+    role: GrantRoles;
+    application: Application;
+    actorRole: Roles;
+  }): Promise<GrantedMember> {
+    if (!this.invitations) {
+      throw new Error('Invitations port is not configured');
+    }
+
+    await this.invitations.inviteMember(input);
+
+    return { email: input.email, role: input.role };
   }
 
   async findByUserAndApplication(

@@ -27,6 +27,20 @@ export class AuthMailer {
     );
   }
 
+  async sendInvitationEmail(to: string, link: string): Promise<void> {
+    await this.mailer.sendMailWithTemplate(
+      to,
+      'You have been invited',
+      MailTemplate.INVITATION,
+      {
+        userName: to,
+        link,
+        appName: this.appName,
+        year: new Date().getFullYear().toString(),
+      },
+    );
+  }
+
   async sendResetPasswordEmail(
     to: string,
     userId: string,
