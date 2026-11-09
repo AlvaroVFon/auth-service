@@ -78,8 +78,8 @@ export class UsersService implements UsersPort {
 
   async countUsers(): Promise<UserCounts> {
     const now = new Date();
-    // Three index-served counts instead of one collection-wide grouping: the
-    // verified flag and both lockout fields have their own support indexes.
+    // `total` necessarily scans the collection; the verified count and the
+    // lockout `$or` use their own support indexes.
     const [total, verified, locked] = await Promise.all([
       this.usersModel.countDocuments({}),
       this.usersModel.countDocuments({ verified: true }),
