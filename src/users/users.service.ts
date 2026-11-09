@@ -445,7 +445,7 @@ export class UsersService implements UsersPort {
     const user = await this.usersModel
       .findOne({ _id: id, role: { $ne: Roles.OWNER } })
       .select(
-        'verified mfaEnabled loginAttempts lockoutUntil mfaFailedAttempts mfaLockoutUntil lastLoginAt',
+        'verified mfaEnabled loginAttempts lockoutUntil mfaFailedAttempts mfaLockoutUntil',
       )
       .lean<{
         verified: boolean;
@@ -454,7 +454,6 @@ export class UsersService implements UsersPort {
         lockoutUntil?: Date | null;
         mfaFailedAttempts?: number;
         mfaLockoutUntil?: Date | null;
-        lastLoginAt?: Date | null;
       }>();
 
     if (!user) {
