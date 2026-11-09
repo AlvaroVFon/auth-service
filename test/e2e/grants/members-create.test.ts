@@ -150,6 +150,12 @@ describe('E2E application member creation', () => {
       .expect(403);
 
     await request(app)
+      .put(`/applications/${applicationA._id.toString()}/grants`)
+      .set('Authorization', bearer(tokenA))
+      .send({ userId: target._id.toString(), role: GrantRoles.ADMIN })
+      .expect(403);
+
+    await request(app)
       .post(`/applications/${applicationA._id.toString()}/members`)
       .send({ email: target.email, role: GrantRoles.VIEWER })
       .expect(401);

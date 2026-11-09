@@ -40,6 +40,7 @@ export class GrantsController {
         userId,
         applicationId,
         role,
+        actorRole: resolveGlobalActorRole(req.user) ?? Roles.USER,
         ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
       },
       this.scopeFor(req),

@@ -44,6 +44,17 @@ export class GrantsService implements GrantsPort {
     if (!Object.values(GrantRoles).includes(role)) {
       throw new InvalidArgumentError('Invalid role');
     }
+    // Controller callers always provide the global role; an app admin cannot
+    // escalate a member to admin through the legacy PUT route. Internal
+    // callers that omit it (already authorized invitation acceptance) keep the
+    // previous behaviour.
+    if (
+      role === GrantRoles.ADMIN &&
+      input.actorRole !== undefined &&
+      input.actorRole !== Roles.OWNER
+    ) {
+      throw new ForbiddenError('Only the owner can grant the admin role');
+    }
 
     // The caller decides whether an archived application is still manageable,
     // so the owner keeps administering its grants after the archive.
