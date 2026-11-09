@@ -55,6 +55,7 @@ import {
 } from '../links';
 import {
   GlobalSettingsRepository,
+  SettingsModule,
   SettingsService,
   type SettingsPort,
 } from '../settings';
@@ -359,6 +360,7 @@ export const createApplicationComposition = (
     linkNotifications,
     logger,
     authMailer,
+    auditService,
   );
   grantsModule.service.setInvitationsPort(invitationsService);
   const passwordResetLinksService = new PasswordResetLinksService(
@@ -382,6 +384,13 @@ export const createApplicationComposition = (
     authController: new AuthController(authService, profileService, mfaService),
     authenticationMiddleware,
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
+    logger,
+  });
+  const settingsModule = new SettingsModule({
+    settingsService,
+    auditService,
+    authenticationMiddleware,
+    authorizationMiddleware,
     logger,
   });
   const auditModule = new AuditModule({
@@ -440,6 +449,7 @@ export const createApplicationComposition = (
       authModule.initialize(app);
       linksModule.initialize(app, applicationAuthorizationMiddleware);
       auditModule.initialize(app);
+      settingsModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },
   };

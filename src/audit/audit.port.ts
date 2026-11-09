@@ -18,6 +18,7 @@ export interface RecordAuditEventInput {
   targetUserId?: string;
   ipAddress?: string;
   userAgent?: string;
+  fields?: string[];
 }
 
 /**

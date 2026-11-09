@@ -2,6 +2,7 @@ import { Application } from 'express';
 import { Types } from 'mongoose';
 import request from 'supertest';
 
+import { Roles } from '../../../src/common/enums/roles.enum';
 import { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import {
@@ -76,6 +77,107 @@ describe('E2E Test - Update User By ID', () => {
     assert.strictEqual(response.body.email, 'updated@example.com');
     const stored = await fixture.findById<User>('User', user._id.toString());
     assert.strictEqual(stored?.email, 'updated@example.com');
+  });
+
+  test('should reset verified when a verified account changes its email', async () => {
+    const user = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('emailverified'),
+      password: STRONG_PASSWORD_HASH,
+      verified: true,
+    });
+    const { application } = await createApplicationAccess(user._id.toString());
+
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: user.email,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(200);
+
+    const newEmail = generateRandomEmail('emailverifiednew');
+    const response = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: newEmail })
+      .expect(200);
+
+    assert.strictEqual(response.body.verified, false);
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.email, newEmail);
+    assert.strictEqual(stored?.verified, false);
+
+    const denied = await request(app)
+      .post('/auth/login')
+      .send({
+        email: newEmail,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(403);
+    assert.strictEqual(denied.body.message, 'Email is not verified');
+
+    // The owner can re-verify the new address through the support route.
+    await request(app)
+      .post(`/users/${user._id.toString()}/verify`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .expect(200);
+
+    await request(app)
+      .post('/auth/login')
+      .send({
+        email: newEmail,
+        password: DEFAULT_USER_PLAIN_PASSWORD,
+        application: application.slug,
+      })
+      .expect(200);
+  });
+
+  test('rejects an email change on the owner account', async () => {
+    const owner = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('owner-email'),
+      role: Roles.OWNER,
+      verified: true,
+    });
+
+    const response = await request(app)
+      .patch(`/users/${owner._id.toString()}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: generateRandomEmail('owner-new') })
+      .expect(403);
+
+    assert.strictEqual(
+      response.body.message,
+      'The owner email cannot be changed through the API',
+    );
+
+    const stored = await fixture.findById<User>('User', owner._id.toString());
+    assert.strictEqual(stored?.email, owner.email);
+    assert.strictEqual(stored?.verified, true);
+  });
+
+  test('should keep verified when the email does not change', async () => {
+    const user = await fixture.create<User>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('emailsame'),
+      password: STRONG_PASSWORD_HASH,
+      verified: true,
+    });
+
+    const response = await request(app)
+      .patch(`/users/${user._id}`)
+      .set('Authorization', `Bearer ${DEFAULT_OWNER_TOKEN}`)
+      .send({ email: user.email })
+      .expect(200);
+
+    assert.strictEqual(response.body.verified, true);
+
+    const stored = await fixture.findById<User>('User', user._id.toString());
+    assert.strictEqual(stored?.verified, true);
   });
 
   test('should reject an invalid email', async () => {

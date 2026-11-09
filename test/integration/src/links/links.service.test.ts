@@ -1,6 +1,10 @@
 import { Types } from 'mongoose';
 
-import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
+import {
+  ConflictError,
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../../../../src/common/exceptions/base.exception';
 import { InvalidLinkError } from '../../../../src/common/exceptions/links.exceptions';
 import { GrantRoles } from '../../../../src/grants';
 import { hashLinkToken } from '../../../../src/links/link-token';
@@ -283,5 +287,89 @@ describe('LinksService', () => {
     await assert.rejects(LinkModel.create(base));
 
     await assertTtlIndex(LinkModel, 'expiresAt');
+  });
+});
+
+describe('LinksService.revokeInvitation', () => {
+  const applicationId = new Types.ObjectId();
+  const otherApplicationId = new Types.ObjectId();
+
+  const seed = (overrides: Partial<OneTimeLink> = {}) =>
+    fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId,
+      expiresAt: new Date(Date.now() + 60_000),
+      ...overrides,
+    });
+
+  test('invalidates a pending invitation without deleting it', async () => {
+    const service = new LinksService(LinkModel, 60_000, 30_000);
+    const invitation = await seed({ tokenHash: 'pending' });
+
+    assert.strictEqual(
+      await service.revokeInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      true,
+    );
+
+    const stored = await fixture.findById<OneTimeLink>(
+      LinkModel.modelName,
+      invitation._id.toString(),
+    );
+    if (!stored) {
+      throw new Error('Invitation was deleted');
+    }
+    assert.ok(stored.invalidatedAt instanceof Date);
+    assert.strictEqual(stored.usedAt, null);
+  });
+
+  test('treats a repeated revocation as an idempotent no-op', async () => {
+    const service = new LinksService(LinkModel, 60_000, 30_000);
+    const invitation = await seed({
+      tokenHash: 'repeated',
+      invalidatedAt: new Date(),
+    });
+
+    assert.strictEqual(
+      await service.revokeInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      false,
+    );
+  });
+
+  test('rejects a used invitation with a conflict', async () => {
+    const service = new LinksService(LinkModel, 60_000, 30_000);
+    const invitation = await seed({
+      tokenHash: 'used',
+      usedAt: new Date(),
+    });
+
+    await assert.rejects(
+      service.revokeInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      new ConflictError('Invitation already used'),
+    );
+  });
+
+  test('hides an invitation that belongs to another application', async () => {
+    const service = new LinksService(LinkModel, 60_000, 30_000);
+    const invitation = await seed({
+      tokenHash: 'foreign',
+      applicationId: otherApplicationId,
+    });
+
+    await assert.rejects(
+      service.revokeInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      new EntityNotFoundError('Invitation not found'),
+    );
   });
 });

@@ -311,7 +311,8 @@ export class UsersService implements UsersPort {
     event:
       | AuditEvent.USER_UNLOCKED
       | AuditEvent.USER_VERIFIED
-      | AuditEvent.SESSION_REVOKED_BY_ADMIN,
+      | AuditEvent.SESSION_REVOKED_BY_ADMIN
+      | AuditEvent.USER_MFA_RESET,
     targetUserId: string,
     context: UserSupportActionContext,
     sessionId?: string,
@@ -460,6 +461,29 @@ export class UsersService implements UsersPort {
     const update: UpdateQuery<UserInterface> = { $set: { ...updateData } };
     const set = update.$set as Record<string, unknown>;
 
+    if (updateData.email !== undefined) {
+      const current = await this.usersModel.findById(id).select('email role');
+
+      if (!current) {
+        throw new EntityNotFoundError('User not found');
+      }
+
+      if (normalizeEmail(current.email) !== normalizeEmail(updateData.email)) {
+        // The owner email is the bootstrap identity: changing it is rejected
+        // instead of leaving the singleton account unverified and unrecoverable.
+        if (current.role === Roles.OWNER) {
+          throw new ForbiddenError(
+            'The owner email cannot be changed through the API',
+          );
+        }
+
+        // Nobody has proved the new address yet: the account must not keep
+        // logging in and receiving reset links on an address it no longer
+        // controls. The owner re-verifies it through POST /users/:id/verify.
+        set.verified = false;
+      }
+    }
+
     // Hash into the copy: mutating the caller's payload would hash an
     // already-hashed password if the same object is reused.
     if (updateData.password !== undefined) {
@@ -568,6 +592,39 @@ export class UsersService implements UsersPort {
     );
 
     return user !== null;
+  }
+
+  /**
+   * Owner support action: removes every MFA artefact of the target and closes
+   * all of its sessions. The owner is never a valid target and is reported as
+   * missing, like an unknown id.
+   */
+  async resetMfa(
+    id: string,
+    context: UserSupportActionContext = {},
+  ): Promise<void> {
+    this.assertValidId(id);
+
+    const target = await this.usersModel
+      .findOne({ _id: id, role: { $ne: Roles.OWNER } })
+      .select('_id');
+
+    if (!target) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    // Fail closed before touching the document: leaving MFA disabled while the
+    // sessions issued with the old factor stay alive defeats the reset.
+    if (!this.sessionRevoker) {
+      throw new Error('Session revoker is not configured');
+    }
+
+    // Close the sessions first: if this fails, MFA stays enabled and the
+    // account is still protected instead of losing its second factor while
+    // old refresh tokens remain usable.
+    await this.sessionRevoker.revokeAll(id);
+    await this.disableMfa(id);
+    await this.recordSupportEvent(AuditEvent.USER_MFA_RESET, id, context);
   }
 
   async disableMfa(id: string): Promise<void> {

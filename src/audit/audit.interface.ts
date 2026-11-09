@@ -16,8 +16,11 @@ export enum AuditEvent {
   APPLICATION_ARCHIVED = 'application.archived',
   SESSION_REVOKED_BY_ADMIN = 'session.revoked_by_admin',
   MEMBER_GRANTED = 'member.granted',
+  INVITATION_REVOKED = 'invitation.revoked',
+  SETTINGS_UPDATED = 'settings.updated',
   USER_UNLOCKED = 'user.unlocked',
   USER_VERIFIED = 'user.verified',
+  USER_MFA_RESET = 'user.mfa_reset',
 }
 
 export enum AuditResult {
@@ -39,5 +42,6 @@ export interface AuditEventRecord {
   targetUserId?: Types.ObjectId;
   ipAddress?: string;
   userAgent?: string;
+  fields?: string[];
   createdAt?: Date;
 }
