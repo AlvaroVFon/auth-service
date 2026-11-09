@@ -220,6 +220,7 @@ Every route is declared in a module router and mounted by
 | `POST`   | `/users`                                      | Owner            | Creates a verified user directly.                               |
 | `GET`    | `/users`                                      | Owner            | Lists users; paginated envelope (see below).                    |
 | `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
+| `GET`    | `/users/:id/security`                         | Owner            | Aggregate security state and active session count.              |
 | `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
 | `DELETE` | `/users/:id/sessions/:sessionId`              | Owner            | Revokes one session of the user; audited.                       |
 | `DELETE` | `/users/:id/sessions`                         | Owner            | Revokes every session of the user; audited per session.         |

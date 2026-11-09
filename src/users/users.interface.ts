@@ -2,6 +2,18 @@ import { Types } from 'mongoose';
 
 import { Roles } from '../common/enums/roles.enum';
 
+/** Aggregate security state returned to the owner. Never contains secrets. */
+export interface UserSecurityOverview {
+  verified: boolean;
+  mfaEnabled: boolean;
+  loginAttempts: number;
+  lockoutUntil: Date | null;
+  mfaFailedAttempts: number;
+  mfaLockoutUntil: Date | null;
+  lastLoginAt: Date | null;
+  activeSessions: number;
+}
+
 export interface User {
   _id: Types.ObjectId;
   username?: string;
