@@ -1,5 +1,9 @@
 import { AuditEvent } from '../../../../src/audit';
 import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../../../../src/common/exceptions/base.exception';
+import {
   SETTINGS_CODE_DEFAULTS,
   SETTINGS_FIELDS,
   SettingsAdminService,
@@ -128,6 +132,115 @@ describe('SettingsAdminService', () => {
 
     await service.updateGlobal({}, 'actor-1');
 
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+});
+
+describe('SettingsAdminService.updateApplication', () => {
+  const buildResolvedWith = (appName: {
+    value: string;
+    source: 'application' | 'global';
+  }): ResolvedSettings => {
+    const resolved = buildResolved();
+    resolved.appName = appName;
+    return resolved;
+  };
+
+  const build = (
+    options: {
+      found?: boolean;
+      before?: ResolvedSettings;
+      after?: ResolvedSettings;
+      updateError?: Error;
+    } = {},
+  ) => {
+    const record = mock.fn(async () => {});
+    const updateApplicationSettings = mock.fn(async () => {
+      if (options.updateError) {
+        throw options.updateError;
+      }
+      return (
+        options.after ??
+        buildResolvedWith({ value: 'Panel', source: 'application' })
+      );
+    });
+    const findAssignableById = mock.fn(async () =>
+      options.found === false ? null : { _id: 'app-1' },
+    );
+    const service = new SettingsAdminService(
+      {
+        resolveForApplication: async () =>
+          options.before ??
+          buildResolvedWith({ value: 'Global', source: 'global' }),
+        resolveGlobal: async () => buildResolved(),
+        updateApplicationSettings,
+        updateGlobalSettings: async () => buildResolved(),
+      } satisfies SettingsPort,
+      { record } as never,
+      { findAssignableById } as never,
+    );
+
+    return { service, record, updateApplicationSettings, findAssignableById };
+  };
+
+  test('writes the patch and audits only the changed field', async () => {
+    const { service, record, updateApplicationSettings } = build();
+
+    const view = await service.updateApplication(
+      'app-1',
+      { appName: 'Panel' },
+      'actor-1',
+    );
+
+    assert.strictEqual(view.settings.appName, 'Panel');
+    assert.deepStrictEqual(updateApplicationSettings.mock.calls[0]?.arguments, [
+      'app-1',
+      { appName: 'Panel' },
+    ]);
+    const event = record.mock.calls[0]?.arguments[0] as Record<string, unknown>;
+    assert.strictEqual(event.event, AuditEvent.SETTINGS_UPDATED);
+    assert.strictEqual(event.applicationId, 'app-1');
+    assert.strictEqual(event.actorId, 'actor-1');
+    assert.deepStrictEqual(event.fields, ['appName']);
+  });
+
+  test('does not audit a patch that changes no value or source', async () => {
+    const unchanged = buildResolvedWith({
+      value: 'Panel',
+      source: 'application',
+    });
+    const { service, record } = build({
+      before: unchanged,
+      after: unchanged,
+    });
+
+    await service.updateApplication('app-1', { appName: 'Panel' }, 'actor-1');
+
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('rejects an unknown application without writing or auditing', async () => {
+    const { service, record, updateApplicationSettings } = build({
+      found: false,
+    });
+
+    await assert.rejects(
+      service.updateApplication('missing', { appName: 'Panel' }),
+      new EntityNotFoundError('Application not found'),
+    );
+    assert.strictEqual(updateApplicationSettings.mock.callCount(), 0);
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('propagates a validation error without auditing', async () => {
+    const { service, record } = build({
+      updateError: new InvalidArgumentError('settings has unknown field'),
+    });
+
+    await assert.rejects(
+      service.updateApplication('app-1', { slug: 'x' }),
+      (error: unknown) => error instanceof Error,
+    );
     assert.strictEqual(record.mock.callCount(), 0);
   });
 });

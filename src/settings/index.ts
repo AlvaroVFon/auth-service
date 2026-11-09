@@ -2,6 +2,7 @@ export {
   MfaPolicy,
   type ApplicationSettings,
   type ApplicationSettingsInput,
+  type ApplicationSettingsPatch,
 } from './settings.interface';
 export {
   SETTINGS_CACHE_MAX_ENTRIES,

@@ -32,3 +32,8 @@ export interface ApplicationSettings {
 }
 
 export type ApplicationSettingsInput = Partial<ApplicationSettings>;
+
+/** PATCH body of one application: `null` removes the override. */
+export type ApplicationSettingsPatch = {
+  [K in keyof ApplicationSettings]?: ApplicationSettings[K] | null;
+};
