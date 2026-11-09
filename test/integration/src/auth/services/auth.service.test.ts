@@ -1054,6 +1054,29 @@ describe('Auth Service', () => {
       assert.strictEqual(callsAfter, callsBefore);
     });
 
+    test('does not send a reset code to an unverified account', async () => {
+      const email = generateRandomEmail('forgot-unverified');
+      await fixture.create<UserInterface>('User', {
+        _id: new Types.ObjectId(),
+        email,
+        verified: false,
+      });
+      const callsBefore = (
+        mockAuthMailer.sendResetPasswordEmail as unknown as {
+          mock: { calls: unknown[] };
+        }
+      ).mock.calls.length;
+
+      await authService.forgotPassword(email);
+
+      const callsAfter = (
+        mockAuthMailer.sendResetPasswordEmail as unknown as {
+          mock: { calls: unknown[] };
+        }
+      ).mock.calls.length;
+      assert.strictEqual(callsAfter, callsBefore);
+    });
+
     test('on yellow brick road', async () => {
       const email = generateRandomEmail('forgot-password');
       const user = await fixture.create<UserInterface>('User', { email });

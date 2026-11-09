@@ -637,6 +637,37 @@ describe('UsersService', () => {
         assert.strictEqual(updatedUser!.email, newUser.email);
       });
 
+      test('should reset verified when a verified account changes its email', async () => {
+        const user = await usersService.create({
+          email: generateRandomEmail('emailreset+'),
+          password: 'hashedpassword123',
+          verified: true,
+        });
+
+        const updated = await usersService.updateOneById(user._id.toString(), {
+          email: generateRandomEmail('emailresetnew+'),
+        });
+
+        assert.strictEqual(updated?.verified, false);
+        const persisted = await usersService.findById(user._id.toString());
+        assert.strictEqual(persisted?.verified, false);
+      });
+
+      test('should keep verified when the email does not change', async () => {
+        const email = generateRandomEmail('emailsame+');
+        const user = await usersService.create({
+          email,
+          password: 'hashedpassword123',
+          verified: true,
+        });
+
+        const updated = await usersService.updateOneById(user._id.toString(), {
+          email,
+        });
+
+        assert.strictEqual(updated?.verified, true);
+      });
+
       test('should revoke the sessions of the user after a password change', async () => {
         const userData: Partial<UserInterface> = UserFactory.generate({
           email: generateRandomEmail('revokesessions+'),
