@@ -14,7 +14,11 @@ export interface InviteMemberInput {
 
 /** Delivers the invitation link to an email that has no account yet. */
 export interface InvitationMailerPort {
-  sendInvitationEmail(to: string, link: string): Promise<void>;
+  sendInvitationEmail(
+    to: string,
+    link: string,
+    appName?: string,
+  ): Promise<void>;
 }
 
 /**

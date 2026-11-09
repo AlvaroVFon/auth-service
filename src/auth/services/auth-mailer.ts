@@ -27,7 +27,11 @@ export class AuthMailer {
     );
   }
 
-  async sendInvitationEmail(to: string, link: string): Promise<void> {
+  async sendInvitationEmail(
+    to: string,
+    link: string,
+    appName?: string,
+  ): Promise<void> {
     await this.mailer.sendMailWithTemplate(
       to,
       'You have been invited',
@@ -35,7 +39,9 @@ export class AuthMailer {
       {
         userName: to,
         link,
-        appName: this.appName,
+        // The application name is branding, not a trusted template value: the
+        // settings layer already rejects empty strings and trims it.
+        appName: appName?.trim() || this.appName,
         year: new Date().getFullYear().toString(),
       },
     );
