@@ -1848,6 +1848,10 @@ describe('Auth Service', () => {
 
   describe('application session policy', () => {
     const resolvedApplicationIds: string[] = [];
+
+    beforeEach(() => {
+      resolvedApplicationIds.length = 0;
+    });
     const settings = {
       resolveForApplication: async (id: string) => {
         resolvedApplicationIds.push(id);
