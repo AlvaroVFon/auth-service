@@ -1,4 +1,4 @@
-import type { ApplicationsPort } from '../applications';
+import type { Application, ApplicationsPort } from '../applications';
 import { OBJECTID_REGEX } from '../common/constants/regex';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { SettingsCache } from './settings.cache';
@@ -84,6 +84,11 @@ const parseSettingsPatch = (
 export class SettingsService implements SettingsPort {
   /** Incremented on every write; a read only fills the cache if it did not move. */
   private writeGeneration = 0;
+  /** Application + global resolved from the same read, for provenance views. */
+  private readonly pairCache = new SettingsCache<{
+    application: ResolvedSettings;
+    global: ResolvedSettings;
+  }>();
 
   constructor(
     private readonly applicationsService: ApplicationsPort,
@@ -101,24 +106,59 @@ export class SettingsService implements SettingsPort {
       return cached;
     }
 
-    // Capture the versions before the reads: a write that finishes while this
+    // Capture the version before the reads: a write that finishes while this
     // resolution is in flight must not be overwritten by the older value.
     const generation = this.writeGeneration;
+    const snapshot = await this.resolveSnapshot(applicationId);
 
+    // Unknown and malformed ids are not cached: they must not evict real
+    // application entries or pin a policy for an id that cannot exist.
+    if (snapshot.application !== null && this.writeGeneration === generation) {
+      this.cache.set(key, snapshot.applicationResolved);
+    }
+
+    return snapshot.applicationResolved;
+  }
+
+  async resolveApplicationWithGlobal(
+    applicationId: string,
+  ): Promise<{ application: ResolvedSettings; global: ResolvedSettings }> {
+    const key = applicationCacheKey(applicationId);
+    const cached = this.pairCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const generation = this.writeGeneration;
+    const snapshot = await this.resolveSnapshot(applicationId);
+    const pair = {
+      application: snapshot.applicationResolved,
+      global: snapshot.globalResolved,
+    };
+
+    if (snapshot.application !== null && this.writeGeneration === generation) {
+      this.cache.set(key, pair.application);
+      this.pairCache.set(key, pair);
+    }
+
+    return pair;
+  }
+
+  private async resolveSnapshot(applicationId: string): Promise<{
+    application: Application | null;
+    applicationResolved: ResolvedSettings;
+    globalResolved: ResolvedSettings;
+  }> {
     const [application, global] = await Promise.all([
       this.findApplication(applicationId),
       this.globalSettings.get(),
     ]);
 
-    const resolved = this.resolve(application?.settings, global);
-
-    // Unknown and malformed ids are not cached: they must not evict real
-    // application entries or pin a policy for an id that cannot exist.
-    if (application !== null && this.writeGeneration === generation) {
-      this.cache.set(key, resolved);
-    }
-
-    return resolved;
+    return {
+      application,
+      applicationResolved: this.resolve(application?.settings, global),
+      globalResolved: this.resolve(undefined, global),
+    };
   }
 
   async resolveGlobal(): Promise<ResolvedSettings> {
@@ -149,7 +189,9 @@ export class SettingsService implements SettingsPort {
 
     await this.applicationSettingsWriter.updateSettings(applicationId, changes);
     this.writeGeneration += 1;
-    this.cache.invalidate(applicationCacheKey(applicationId));
+    const key = applicationCacheKey(applicationId);
+    this.cache.invalidate(key);
+    this.pairCache.invalidate(key);
 
     return this.resolveForApplication(applicationId);
   }
@@ -168,6 +210,7 @@ export class SettingsService implements SettingsPort {
     // invalidates the whole cache, not only the global entry.
     this.writeGeneration += 1;
     this.cache.clear();
+    this.pairCache.clear();
 
     return this.resolveGlobal();
   }

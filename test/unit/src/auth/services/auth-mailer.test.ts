@@ -50,3 +50,38 @@ describe('AuthMailer', () => {
     assert.strictEqual(args[3].appName, 'Auth App');
   });
 });
+
+describe('AuthMailer.sendInvitationEmail branding', () => {
+  test('uses the application name when provided', async () => {
+    const sendMailWithTemplate = mock.fn(() => Promise.resolve());
+    const mailer = { sendMailWithTemplate } as unknown as MailerInterface;
+    const authMailer = new AuthMailer(mailer, 'https://app.test', 'Auth App');
+
+    await authMailer.sendInvitationEmail(
+      'jane@example.com',
+      'https://app.test/invitations/accept?token=x',
+      'Custom Panel',
+    );
+
+    const args = sendMailWithTemplate.mock.calls[0]?.arguments as any[];
+    assert.strictEqual(args[2], MailTemplate.INVITATION);
+    assert.strictEqual(args[3].appName, 'Custom Panel');
+  });
+
+  test('falls back to the service name when the override is absent or blank', async () => {
+    for (const override of [undefined, '   ']) {
+      const sendMailWithTemplate = mock.fn(() => Promise.resolve());
+      const mailer = { sendMailWithTemplate } as unknown as MailerInterface;
+      const authMailer = new AuthMailer(mailer, 'https://app.test', 'Auth App');
+
+      await authMailer.sendInvitationEmail(
+        'jane@example.com',
+        'https://app.test/invitations/accept?token=x',
+        override,
+      );
+
+      const args = sendMailWithTemplate.mock.calls[0]?.arguments as any[];
+      assert.strictEqual(args[3].appName, 'Auth App');
+    }
+  });
+});

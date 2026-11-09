@@ -43,6 +43,13 @@ export interface GlobalSettingsPort {
 
 export interface SettingsPort {
   resolveForApplication(applicationId: string): Promise<ResolvedSettings>;
+  /**
+   * Resolves the application and the global layer from the same snapshot so
+   * the response can show exactly the layer the application inherited from.
+   */
+  resolveApplicationWithGlobal(
+    applicationId: string,
+  ): Promise<{ application: ResolvedSettings; global: ResolvedSettings }>;
   resolveGlobal(): Promise<ResolvedSettings>;
   updateApplicationSettings(
     applicationId: string,

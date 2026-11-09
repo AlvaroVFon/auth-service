@@ -14,6 +14,15 @@ export class SettingsController {
   }
 
   @Catch()
+  async getApplicationSettings(req: Request, res: Response): Promise<void> {
+    const settings = await this.settingsAdminService.getApplication(
+      req.params.applicationId as string,
+    );
+
+    res.status(200).json(settings);
+  }
+
+  @Catch()
   async updateSettings(req: Request, res: Response): Promise<void> {
     const settings = await this.settingsAdminService.updateGlobal(
       (req.body ?? {}) as Record<string, unknown>,
