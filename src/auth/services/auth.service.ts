@@ -622,7 +622,6 @@ export class AuthService {
         );
         role = access.role;
         applicationId = access.application._id.toString();
-        policy = await this.resolveSessionPolicy(applicationId);
       } catch (error) {
         // A revoked grant or inactive application must end the session
         // permanently, not just fail until access is restored.
@@ -636,6 +635,12 @@ export class AuthService {
         }
         throw error;
       }
+    }
+
+    // Resolve outside the authorization try/catch: a settings outage must not
+    // revoke a refresh token whose grant is still valid.
+    if (applicationId !== undefined) {
+      policy = await this.resolveSessionPolicy(applicationId);
     }
 
     const session = await this.sessionService.rotate(claims, role, ctx, policy);

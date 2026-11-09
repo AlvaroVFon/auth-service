@@ -1847,15 +1847,19 @@ describe('Auth Service', () => {
   });
 
   describe('application session policy', () => {
+    const resolvedApplicationIds: string[] = [];
     const settings = {
-      resolveForApplication: async () => ({
-        accessTokenTtlSeconds: { value: 600, source: 'application' },
-        refreshTokenTtlSeconds: { value: 7200, source: 'application' },
-        maxSessionsPerUser: { value: 2, source: 'application' },
-      }),
+      resolveForApplication: async (id: string) => {
+        resolvedApplicationIds.push(id);
+        return {
+          accessTokenTtlSeconds: { value: 600, source: 'application' },
+          refreshTokenTtlSeconds: { value: 7200, source: 'application' },
+          maxSessionsPerUser: { value: 2, source: 'application' },
+        };
+      },
     } as never;
 
-    const buildPolicyService = () =>
+    const buildPolicyService = (settingsService: unknown = settings) =>
       new AuthService(
         userService,
         mockAuthMailer,
@@ -1868,7 +1872,7 @@ describe('Auth Service', () => {
         mockAuditService,
         mockMfaService,
         mockLogger,
-        settings,
+        settingsService as never,
       );
 
     test('applies the application TTLs to login and refresh rotation', async () => {
@@ -1880,6 +1884,10 @@ describe('Auth Service', () => {
       });
       const tokens = asTokens(result);
 
+      assert.strictEqual(
+        resolvedApplicationIds[0],
+        DEFAULT_APPLICATION._id.toString(),
+      );
       const access = jwtService.verifyToken(tokens.accessToken);
       const refresh = jwtService.verifyToken(tokens.refreshToken);
       assert.strictEqual(access.exp - (access.iat ?? 0), 600);
@@ -1890,6 +1898,23 @@ describe('Auth Service', () => {
       const rotatedRefresh = jwtService.verifyToken(rotated.refreshToken);
       assert.strictEqual(rotatedAccess.exp - (rotatedAccess.iat ?? 0), 600);
       assert.strictEqual(rotatedRefresh.exp - (rotatedRefresh.iat ?? 0), 7200);
+    });
+
+    test('falls back to the instance TTLs when the resolver fails', async () => {
+      const policyAuth = buildPolicyService({
+        resolveForApplication: async () => {
+          throw new Error('settings unavailable');
+        },
+      });
+      const result = await policyAuth.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+      const tokens = asTokens(result);
+      const access = jwtService.verifyToken(tokens.accessToken);
+
+      assert.strictEqual(access.exp - (access.iat ?? 0), jwtExpiresIn);
     });
   });
 });
