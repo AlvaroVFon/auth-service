@@ -121,3 +121,21 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
     );
   });
 });
+
+describe('RefreshTokenService.countActiveSessions', () => {
+  test('should count only non-revoked, non-expired tokens', async () => {
+    const countDocuments = mock.fn(async () => 4);
+    const service = new RefreshTokenService({
+      countDocuments,
+    } as unknown as Model<RefreshToken>);
+
+    assert.strictEqual(await service.countActiveSessions(), 4);
+
+    const filter = countDocuments.mock.calls[0]?.arguments[0] as {
+      revokedAt: null;
+      expiresAt: { $gt: Date };
+    };
+    assert.strictEqual(filter.revokedAt, null);
+    assert.ok(filter.expiresAt.$gt instanceof Date);
+  });
+});
