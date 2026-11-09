@@ -142,6 +142,29 @@ describe('JwtService', () => {
       assert.ok(offset >= 7199 * 1000 && offset <= 7201 * 1000);
     });
 
+    test('should reject a non-positive or non-integer TTL override', () => {
+      for (const accessExpiresIn of [0, -1, 1.5, Number.NaN]) {
+        assert.throws(
+          () =>
+            jwtService.signTokenPair(userId, Roles.USER, undefined, {
+              accessExpiresIn,
+            }),
+          (error: unknown) =>
+            error instanceof InvalidArgumentError &&
+            error.message ===
+              'InvalidArgumentError: Token TTL must be a positive integer',
+        );
+      }
+
+      assert.throws(
+        () =>
+          jwtService.signAccessToken(userId, Roles.USER, 'app-a', {
+            accessExpiresIn: 0,
+          }),
+        InvalidArgumentError,
+      );
+    });
+
     test('should fall back to both instance TTLs when no override is given', () => {
       const accessTtl = 1800;
       const refreshTtl = 7200;
