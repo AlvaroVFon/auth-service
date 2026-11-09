@@ -33,7 +33,22 @@ const run = async () => {
   );
 
   if (!ttl) {
-    console.log('No expiresAt TTL index found; nothing to migrate.');
+    // An interrupted previous run can leave the collection without the index;
+    // treat it as a state to repair, not as a no-op.
+    if (!process.argv.includes('--apply')) {
+      console.log('No expiresAt TTL index; re-run with --apply to create it.');
+      return;
+    }
+    await LinkModel.syncIndexes();
+    const recreated = (await LinkModel.collection.indexes()).find(
+      (index) =>
+        index.key.expiresAt === 1 &&
+        index.expireAfterSeconds === LINK_TTL_SECONDS,
+    );
+    if (!recreated) {
+      throw new Error('Failed to recreate the expiresAt TTL index');
+    }
+    console.log(`expiresAt TTL created with ${LINK_TTL_SECONDS}s.`);
     return;
   }
 
@@ -55,6 +70,14 @@ const run = async () => {
 
   await LinkModel.collection.dropIndex(ttl.name ?? 'expiresAt_1');
   await LinkModel.syncIndexes();
+  const migrated = (await LinkModel.collection.indexes()).find(
+    (index) =>
+      index.key.expiresAt === 1 &&
+      index.expireAfterSeconds === LINK_TTL_SECONDS,
+  );
+  if (!migrated) {
+    throw new Error('expiresAt TTL migration did not take effect');
+  }
   console.log(`expiresAt TTL migrated to ${LINK_TTL_SECONDS}s.`);
 };
 

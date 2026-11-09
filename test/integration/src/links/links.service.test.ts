@@ -332,6 +332,20 @@ describe('LinksService.countInvitations', () => {
       { pending: 1, expired: 1 },
     );
   });
+
+  test('keeps an invalidated expired invitation in the expired bucket', async () => {
+    await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      tokenHash: 'invalidated-expired',
+      expiresAt: new Date(Date.now() - 60_000),
+      invalidatedAt: new Date(),
+    });
+
+    assert.deepStrictEqual(
+      await new LinksService(LinkModel, 60_000, 30_000).countInvitations(),
+      { pending: 0, expired: 1 },
+    );
+  });
 });
 
 describe('LinksService.revokeInvitation', () => {

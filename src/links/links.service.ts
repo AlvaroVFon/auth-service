@@ -46,7 +46,12 @@ export class LinksService implements LinksPort {
         $match: {
           type: LinkType.INVITATION,
           usedAt: null,
-          invalidatedAt: null,
+          // Expired links stay in the history even if `invalidateActive`
+          // marked them while reissuing another invitation.
+          $or: [
+            { expiresAt: { $lte: now } },
+            { invalidatedAt: null, expiresAt: { $gt: now } },
+          ],
         },
       },
       {
