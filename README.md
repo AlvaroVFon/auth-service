@@ -138,6 +138,8 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window.           | `10`      | No                     |
 | `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation rate-limit window.     | `900000`  | No                     |
 | `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window.   | `60`      | No                     |
+| `RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS`   | Window for POST application members.            | `900000`  | No                     |
+| `RATE_LIMIT_MEMBERS_WRITE_MAX`         | Member writes per window.                       | `30`      | No                     |
 
 #### Links, audit, MFA and Telegram
 
@@ -146,6 +148,7 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `INVITATION_LINK_EXPIRATION_MS`     | Invitation link TTL.                                                                   | `604800000` | No                     |
 | `PASSWORD_RESET_LINK_EXPIRATION_MS` | Password-reset link TTL.                                                               | `3600000`   | No                     |
 | `AUDIT_RETENTION_DAYS`              | Audit event retention through the TTL index.                                           | `90`        | No                     |
+| `AUDIT_EXPORT_MAX_ROWS`             | Maximum rows a CSV audit export may return.                                            | `10000`     | No                     |
 | `MFA_SECRET_ENCRYPTION_KEY`         | Base64-encoded 32-byte key that encrypts TOTP secrets; empty stores them as plaintext. | `Empty`     | Yes                    |
 | `MFA_CHALLENGE_EXPIRATION`          | MFA challenge TTL in seconds.                                                          | `300`       | No                     |
 | `TELEGRAM_BOT_TOKEN`                | Bot token; empty disables Telegram notifications.                                      | `Empty`     | No                     |
@@ -229,6 +232,7 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
 | `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
 | `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
+| `POST`   | `/applications/:applicationId/members`        | Owner, app admin | Grants by email or invites; neutral `{ email, role }` response. |
 | `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                  |
 | `GET`    | `/applications/:applicationId/grants`         | Owner, app admin | Lists the application grants.                                   |
 | `GET`    | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant.                                                |
@@ -259,6 +263,7 @@ email cannot be changed through this endpoint.
 
 | `GET` | `/settings` | Owner | Effective global policy with its sources and defaults. |
 | `PATCH` | `/settings` | Owner | Updates the global policy; audited as `settings.updated`. |
+| `GET` | `/applications/:applicationId/settings` | Owner, app admin | Effective application policy with per-field provenance and the global reference. Unknown, archived or foreign applications return `404`. |
 
 ### Listing contract
 
@@ -301,9 +306,11 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 
 ### Audit
 
-| Method | Route           | Access | Notes                                                                                             |
-| ------ | --------------- | ------ | ------------------------------------------------------------------------------------------------- |
-| `GET`  | `/audit-events` | Owner  | Filters by `userId`, `email`, `applicationId`, `event`, `from`, `to`; paginated envelope (above). |
+| Method | Route                  | Access | Notes                                                                                                 |
+| ------ | ---------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
+| `GET`  | `/audit-events`        | Owner  | Filters by `userId`, `email`, `applicationId`, `event`, `from`, `to`; paginated envelope (above).     |
+| `GET`  | `/audit-events/events` | Owner  | Static catalog of audit events with a short description.                                              |
+| `GET`  | `/audit-events/export` | Owner  | CSV stream with the same filters, capped at `AUDIT_EXPORT_MAX_ROWS`; exceeding the cap returns `400`. |
 
 ## Deployment
 
@@ -472,6 +479,12 @@ The response contains a link like `https://<PUBLIC_APP_URL>/invitations/accept?t
 that the owner shares through any channel. The guest sets a password at
 `POST /auth/invitations/accept` and gets the granted role. Existing users and holders
 cannot be invited: use grants to give them access to another application.
+
+The link lifetime and the branding in the email come from the application settings:
+`invitationTtlMs` overrides the global TTL and `appName` replaces `APP_NAME` in the
+invitation email. Applications without overrides inherit the global values. The same
+`appName` brands the authenticator entry when MFA is enrolled from an application token.
+The API response always reports the effective `expiresAt`.
 
 Password resets can be generated and shared the same way:
 

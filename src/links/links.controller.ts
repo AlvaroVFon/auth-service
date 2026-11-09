@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 
+import { resolveGlobalActorRole } from '../common/actor-role';
 import { Catch } from '../common/decorators/catch.decorator';
-import { Roles } from '../common/enums/roles.enum';
 import { GrantRoles } from '../grants';
 import { InvitationsService } from './invitations.service';
 import { PasswordResetLinksService } from './password-reset-links.service';
@@ -30,14 +30,8 @@ export class LinksController {
       role: GrantRoles;
       telegramChatId?: string;
     };
-    // Application-scoped tokens carry a grant role, never a global owner.
     const user = req.user;
-    const actorRole =
-      user !== undefined &&
-      user.audience === undefined &&
-      (Object.values(Roles) as string[]).includes(user.role)
-        ? (user.role as Roles)
-        : undefined;
+    const actorRole = resolveGlobalActorRole(user);
 
     const result = await this.invitationsService.create({
       email,

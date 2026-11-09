@@ -106,9 +106,12 @@
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window                | `10`                        | No                     |
 | `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation window (ms)                | `900000`                    | No                     |
 | `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window        | `60`                        | No                     |
+| `RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS`   | Window for POST application members                 | `900000`                    | No                     |
+| `RATE_LIMIT_MEMBERS_WRITE_MAX`         | Member writes per window                            | `30`                        | No                     |
 | `INVITATION_LINK_EXPIRATION_MS`        | Invitation link TTL (ms)                            | `604800000`                 | No                     |
 | `PASSWORD_RESET_LINK_EXPIRATION_MS`    | Password-reset link TTL (ms)                        | `3600000`                   | No                     |
 | `AUDIT_RETENTION_DAYS`                 | Audit event retention (TTL index)                   | `90`                        | No                     |
+| `AUDIT_EXPORT_MAX_ROWS`                | Maximum rows in a CSV audit export                  | `10000`                     | No                     |
 | `MFA_SECRET_ENCRYPTION_KEY`            | Base64 32-byte key for TOTP secrets at rest         | Empty (plaintext)           | Yes                    |
 | `MFA_CHALLENGE_EXPIRATION`             | MFA challenge TTL (seconds)                         | `300`                       | No                     |
 | `TELEGRAM_BOT_TOKEN`                   | Bot token; empty disables notifications             | Empty                       | No                     |

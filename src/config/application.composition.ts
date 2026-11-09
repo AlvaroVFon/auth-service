@@ -29,6 +29,7 @@ import { ApplicationAuthorizationMiddleware } from '../common/middlewares/applic
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { GrantsPort } from '../grants';
+import type { GrantsRateLimitConfig } from '../grants';
 import { GrantsModule } from '../grants/grants.module';
 import { GrantModel } from '../grants/grants.schema';
 import { HealthModule, isHealthProbe } from '../health';
@@ -103,6 +104,7 @@ export interface ApplicationCompositionOptions {
   lockoutDurationMs?: number;
   publicAppUrl?: string;
   rateLimitConfig?: AuthRateLimitConfig;
+  grantsRateLimit?: GrantsRateLimitConfig;
   corsOrigins?: string[];
   trustProxy?: boolean | number;
   telegram?: TelegramPort | null;
@@ -140,6 +142,16 @@ const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
       900000,
     ),
     max: getNumberEnvVariable('RATE_LIMIT_SESSION_REVOKE_MAX', 60),
+  },
+});
+
+const getDefaultGrantsRateLimitConfig = (): GrantsRateLimitConfig => ({
+  membersWrite: {
+    windowMs: getNumberEnvVariable(
+      'RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS',
+      900000,
+    ),
+    max: getNumberEnvVariable('RATE_LIMIT_MEMBERS_WRITE_MAX', 30),
   },
 });
 
@@ -268,6 +280,7 @@ export const createApplicationComposition = (
     authenticationMiddleware,
     auditService,
     logger,
+    options.grantsRateLimit ?? getDefaultGrantsRateLimitConfig(),
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
   // Single authorization policy shared by the applications, grants and links
@@ -323,6 +336,8 @@ export const createApplicationComposition = (
     cryptoService,
     sessionService,
     getStringEnvVariable('APP_NAME', 'Auth Service'),
+    settingsService,
+    applicationsModule.service,
   );
   const authService = new AuthService(
     usersModule.service,
@@ -360,6 +375,7 @@ export const createApplicationComposition = (
     linkNotifications,
     logger,
     authMailer,
+    settingsService,
     auditService,
   );
   grantsModule.service.setInvitationsPort(invitationsService);
@@ -391,10 +407,23 @@ export const createApplicationComposition = (
     auditService,
     authenticationMiddleware,
     authorizationMiddleware,
+    applicationAuthorizationMiddleware,
     logger,
   });
+  const configuredExportMax = getNumberEnvVariable(
+    'AUDIT_EXPORT_MAX_ROWS',
+    10_000,
+  );
+  const auditExportMaxRows =
+    Number.isInteger(configuredExportMax) && configuredExportMax > 0
+      ? configuredExportMax
+      : 10_000;
   const auditModule = new AuditModule({
-    auditController: new AuditController(auditService),
+    auditController: new AuditController(
+      auditService,
+      auditExportMaxRows,
+      logger,
+    ),
     authenticationMiddleware,
     authorizationMiddleware,
     logger,
