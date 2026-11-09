@@ -22,6 +22,8 @@ export const GRANT_MEMBER_LIST_OPTIONS: ListQueryOptions<GrantMemberSortField> =
 
 export interface GrantMember extends UserSummary {
   role: GrantRoles;
+  /** Membership timestamp (the grant document), not the account date. */
+  createdAt?: Date;
 }
 
 export interface AssignRoleInput {

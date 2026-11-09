@@ -56,7 +56,6 @@ const USER_SUMMARY_PROJECTION = [
   'username',
   'verified',
   'mfaEnabled',
-  'createdAt',
   'lastLoginAt',
 ].join(' ');
 
@@ -243,7 +242,6 @@ export class UsersService implements UsersPort {
           username?: string;
           verified: boolean;
           mfaEnabled?: boolean;
-          createdAt?: Date;
           lastLoginAt?: Date | null;
         }>
       >();
@@ -254,7 +252,6 @@ export class UsersService implements UsersPort {
       ...(user.username === undefined ? {} : { username: user.username }),
       verified: user.verified,
       mfaEnabled: user.mfaEnabled ?? false,
-      ...(user.createdAt === undefined ? {} : { createdAt: user.createdAt }),
       lastLoginAt: user.lastLoginAt ?? null,
     }));
   }

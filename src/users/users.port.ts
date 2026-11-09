@@ -87,7 +87,6 @@ export interface UserSummary {
   username?: string;
   verified: boolean;
   mfaEnabled: boolean;
-  createdAt?: Date;
   lastLoginAt?: Date | null;
 }
 

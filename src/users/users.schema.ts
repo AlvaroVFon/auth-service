@@ -92,3 +92,6 @@ userSchema.index({ verified: 1, _id: 1 });
 userSchema.index({ createdAt: 1, _id: 1 });
 
 export const User = model<UserInterface>('User', userSchema);
+
+/** Physical collection name, reused by cross-domain aggregations. */
+export const USERS_COLLECTION_NAME = User.collection.name;

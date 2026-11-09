@@ -19,7 +19,7 @@ import {
 } from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
 import type { InvitationsPort } from '../links';
-import type { UsersPort } from '../users';
+import { USERS_COLLECTION_NAME, type UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
 import type {
   AssignRoleInput,
@@ -341,7 +341,7 @@ export class GrantsService implements GrantsPort {
     // always describes the set the pages are drawn from even with orphans.
     const userLookup = {
       $lookup: {
-        from: 'users',
+        from: USERS_COLLECTION_NAME,
         let: { userId: '$userId' },
         pipeline: [
           { $match: { $expr: { $eq: ['$_id', '$$userId'] } } },
@@ -403,13 +403,9 @@ export class GrantsService implements GrantsPort {
         return [];
       }
 
-      // `summary.createdAt` is the account creation date; the member listing
-      // exposes the grant date so the payload matches its ordering.
-      const { createdAt: _accountCreatedAt, ...profile } = summary;
-
       return [
         {
-          ...profile,
+          ...summary,
           userId: grant.userId,
           role: grant.role,
           ...(grant.createdAt === undefined
