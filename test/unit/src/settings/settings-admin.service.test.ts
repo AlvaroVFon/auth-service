@@ -238,7 +238,10 @@ describe('SettingsAdminService.updateApplication', () => {
     });
 
     await assert.rejects(
-      service.updateApplication('app-1', { slug: 'x' }),
+      service.updateApplication('app-1', { slug: 'x' } as unknown as Record<
+        string,
+        never
+      >),
       (error: unknown) => error instanceof Error,
     );
     assert.strictEqual(record.mock.callCount(), 0);

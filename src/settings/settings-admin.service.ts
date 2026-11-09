@@ -2,7 +2,10 @@ import type { ApplicationsPort } from '../applications';
 import { AuditEvent, AuditPort, AuditResult } from '../audit';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
 import { SETTINGS_CODE_DEFAULTS } from './settings.defaults';
-import type { ApplicationSettings } from './settings.interface';
+import type {
+  ApplicationSettings,
+  ApplicationSettingsPatch,
+} from './settings.interface';
 import type {
   ResolvedSettings,
   SettingSource,
@@ -10,11 +13,14 @@ import type {
 } from './settings.port';
 import { SETTINGS_FIELDS, type SettingsField } from './settings.validation';
 
-export interface GlobalSettingsView {
+export interface SettingsView {
   settings: Record<SettingsField, unknown>;
   sources: Record<SettingsField, SettingSource>;
   defaults: Readonly<Required<ApplicationSettings>>;
 }
+
+/** Kept for callers that only deal with the global scope. */
+export type GlobalSettingsView = SettingsView;
 
 export class SettingsAdminService {
   constructor(
@@ -60,9 +66,9 @@ export class SettingsAdminService {
    */
   async updateApplication(
     applicationId: string,
-    patch: Record<string, unknown>,
+    patch: ApplicationSettingsPatch,
     actorId?: string,
-  ): Promise<GlobalSettingsView> {
+  ): Promise<SettingsView> {
     if (!this.applicationsService) {
       throw new Error('Applications port is not configured');
     }
@@ -99,7 +105,7 @@ export class SettingsAdminService {
     return this.toView(resolved);
   }
 
-  private toView(resolved: ResolvedSettings): GlobalSettingsView {
+  private toView(resolved: ResolvedSettings): SettingsView {
     const settings = {} as Record<SettingsField, unknown>;
     const sources = {} as Record<SettingsField, SettingSource>;
 
