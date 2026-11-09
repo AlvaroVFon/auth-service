@@ -29,6 +29,7 @@ import { ApplicationAuthorizationMiddleware } from '../common/middlewares/applic
 import { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { GrantsPort } from '../grants';
+import type { GrantsRateLimitConfig } from '../grants';
 import { GrantsModule } from '../grants/grants.module';
 import { GrantModel } from '../grants/grants.schema';
 import { HealthModule, isHealthProbe } from '../health';
@@ -103,6 +104,7 @@ export interface ApplicationCompositionOptions {
   lockoutDurationMs?: number;
   publicAppUrl?: string;
   rateLimitConfig?: AuthRateLimitConfig;
+  grantsRateLimit?: GrantsRateLimitConfig;
   corsOrigins?: string[];
   trustProxy?: boolean | number;
   telegram?: TelegramPort | null;
@@ -133,6 +135,16 @@ const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
   mfaVerify: {
     windowMs: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_WINDOW_MS', 900000),
     max: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_MAX', 10),
+  },
+});
+
+const getDefaultGrantsRateLimitConfig = (): GrantsRateLimitConfig => ({
+  membersWrite: {
+    windowMs: getNumberEnvVariable(
+      'RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS',
+      900000,
+    ),
+    max: getNumberEnvVariable('RATE_LIMIT_MEMBERS_WRITE_MAX', 30),
   },
 });
 
@@ -260,6 +272,7 @@ export const createApplicationComposition = (
     authenticationMiddleware,
     auditService,
     logger,
+    options.grantsRateLimit ?? getDefaultGrantsRateLimitConfig(),
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
   // Single authorization policy shared by the applications, grants and links
