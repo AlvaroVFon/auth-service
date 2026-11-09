@@ -16,6 +16,7 @@ import {
 import { ApplicationFactory } from '../../helpers/factories/application.factory';
 import { GrantFactory } from '../../helpers/factories/grant.factory';
 import { UserFactory } from '../../helpers/factories/user.factory';
+import { signTestAccessToken } from '../../helpers/tokens';
 import { getTestAppInstance } from '../../utils/app';
 
 const bearer = (token: string) => `Bearer ${token}`;
@@ -155,5 +156,38 @@ describe('E2E application settings', () => {
 
     assert.strictEqual(response.body.code, 'NOT_FOUND');
     assert.strictEqual(response.body.settings, undefined);
+  });
+
+  test('AC-2: a viewer or editor grant cannot read the settings', async () => {
+    const application = await createApplication();
+
+    for (const role of [GrantRoles.VIEWER, GrantRoles.EDITOR]) {
+      const user = await createUser();
+      await fixture.create<Grant>(
+        'Grant',
+        GrantFactory.generate({
+          userId: user._id,
+          applicationId: application._id,
+          role,
+        }),
+      );
+
+      await request(app)
+        .get(`/applications/${application._id.toString()}/settings`)
+        .set('Authorization', bearer(signTestAccessToken(user._id.toString())))
+        .expect(404);
+    }
+  });
+
+  test('AC-4: an admin grant on another application does not authorize', async () => {
+    const applicationA = await createApplication();
+    const applicationB = await createApplication();
+    const admin = await createUser();
+    await grantAdmin(admin._id.toString(), applicationB._id.toString());
+
+    await request(app)
+      .get(`/applications/${applicationA._id.toString()}/settings`)
+      .set('Authorization', bearer(signTestAccessToken(admin._id.toString())))
+      .expect(404);
   });
 });

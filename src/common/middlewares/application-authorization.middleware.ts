@@ -10,6 +10,13 @@ import {
 } from '../exceptions/auth.exceptions';
 import { EntityNotFoundError } from '../exceptions/base.exception';
 
+interface ApplicationReaderOptions {
+  /** Also resolve and require an active application for the owner. */
+  requireActiveForOwner?: boolean;
+  /** Hide a malformed id as 404 instead of surfacing a 400. */
+  malformedIsNotFound?: boolean;
+}
+
 export class ApplicationAuthorizationMiddleware {
   constructor(
     private readonly grantsService: GrantsPort,
@@ -57,12 +64,7 @@ export class ApplicationAuthorizationMiddleware {
 
   private createApplicationReader(
     param: string,
-    options: {
-      /** Also resolve and require an active application for the owner. */
-      requireActiveForOwner?: boolean;
-      /** Hide a malformed id as 404 instead of surfacing a 400. */
-      malformedIsNotFound?: boolean;
-    } = {},
+    options: ApplicationReaderOptions = {},
   ) {
     return async (req: Request, _res: Response, next: NextFunction) => {
       try {
@@ -90,10 +92,7 @@ export class ApplicationAuthorizationMiddleware {
     req: Request,
     applicationId: unknown,
     deny: () => Error,
-    options: {
-      requireActiveForOwner?: boolean;
-      malformedIsNotFound?: boolean;
-    } = {},
+    options: ApplicationReaderOptions = {},
   ): Promise<void> {
     const user = req.user;
 
