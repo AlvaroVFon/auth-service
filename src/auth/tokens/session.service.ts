@@ -8,6 +8,16 @@ import { RefreshToken } from './refresh-token.interface';
 import { RefreshTokenService } from './refresh-token.service';
 import { RequestContext } from './request-context.type';
 
+/** Effective policy of the application that owns the session. */
+export interface SessionPolicy {
+  /** Access token TTL in seconds; falls back to the instance value. */
+  accessTokenTtl?: number;
+  /** Refresh token TTL in seconds; falls back to the instance value. */
+  refreshTokenTtl?: number;
+  /** Concurrent sessions kept for the user in this audience. */
+  maxSessionsPerUser?: number;
+}
+
 export interface SessionView {
   id: string;
   device: string | null;
@@ -30,8 +40,14 @@ export class SessionService {
     role: TokenRole,
     ctx?: RequestContext,
     audience?: string,
+    policy?: SessionPolicy,
   ): Promise<TokenPair> {
-    const session = this.jwtService.signTokenPair(userId, role, audience);
+    const session = this.jwtService.signTokenPair(
+      userId,
+      role,
+      audience,
+      this.signOptions(policy),
+    );
 
     await this.persistRefreshToken(
       userId,
@@ -42,7 +58,8 @@ export class SessionService {
     );
     await this.refreshTokenService.pruneActiveSessions(
       userId,
-      this.maxSessionsPerUser,
+      policy?.maxSessionsPerUser ?? this.maxSessionsPerUser,
+      audience ?? null,
     );
 
     return session;
@@ -57,6 +74,7 @@ export class SessionService {
     claims: TokenClaims,
     role: TokenRole,
     ctx?: RequestContext,
+    policy?: SessionPolicy,
   ): Promise<TokenPair> {
     if (claims.type !== TokenTypes.REFRESH || !claims.userId || !claims.jti) {
       throw new UnauthorizedError('Invalid refresh token');
@@ -78,7 +96,12 @@ export class SessionService {
 
     const userId = claims.userId;
     const audience = claims.aud;
-    const session = this.jwtService.signTokenPair(userId, role, audience);
+    const session = this.jwtService.signTokenPair(
+      userId,
+      role,
+      audience,
+      this.signOptions(policy),
+    );
 
     try {
       await this.refreshTokenService.revokeByJti(
@@ -138,6 +161,17 @@ export class SessionService {
 
   async revoke(userId: string, sessionId: string): Promise<void> {
     await this.refreshTokenService.revokeBySessionId(userId, sessionId);
+  }
+
+  private signOptions(policy?: SessionPolicy) {
+    return {
+      ...(policy?.accessTokenTtl === undefined
+        ? {}
+        : { accessExpiresIn: policy.accessTokenTtl }),
+      ...(policy?.refreshTokenTtl === undefined
+        ? {}
+        : { refreshExpiresIn: policy.refreshTokenTtl }),
+    };
   }
 
   private toView(token: RefreshToken): SessionView {
