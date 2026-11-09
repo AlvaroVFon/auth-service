@@ -65,6 +65,8 @@ export type AuditExportFilter = Omit<
 
 export interface AuditPort {
   record(input: RecordAuditEventInput): Promise<void>;
+  /** Best-effort batch write, used for one event per revoked session. */
+  recordMany?(inputs: RecordAuditEventInput[]): Promise<void>;
   list(filter: AuditEventFilter): Promise<PaginatedResult<AuditEventRecord>>;
   /** Counts login events since `since`, grouped by outcome. */
   countLogins(since: Date): Promise<LoginCount>;

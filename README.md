@@ -136,6 +136,8 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `RATE_LIMIT_REFRESH_MAX`               | Refresh requests allowed per window.            | `60`      | No                     |
 | `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification rate-limit window.             | `900000`  | No                     |
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window.           | `10`      | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation rate-limit window.     | `900000`  | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window.   | `60`      | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS`   | Window for POST application members.            | `900000`  | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_MAX`         | Member writes per window.                       | `30`      | No                     |
 
@@ -219,6 +221,8 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/users`                                      | Owner            | Lists users; paginated envelope (see below).                    |
 | `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
 | `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
+| `DELETE` | `/users/:id/sessions/:sessionId`              | Owner            | Revokes one session of the user; audited.                       |
+| `DELETE` | `/users/:id/sessions`                         | Owner            | Revokes every session of the user; audited per session.         |
 | `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
 | `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
 | `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |

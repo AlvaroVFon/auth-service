@@ -728,14 +728,18 @@ export class AuthService {
     sessionId: string,
     ctx?: RequestContext,
   ): Promise<void> {
-    await this.sessionService.revoke(userId, sessionId);
-    await this.auditService.record({
-      event: AuditEvent.SESSION_REVOKED,
-      result: AuditResult.SUCCESS,
-      userId,
-      sessionId,
-      ...this.auditContext(ctx),
-    });
+    const revoked = await this.sessionService.revoke(userId, sessionId);
+
+    // A repeated revocation is an idempotent no-op, not a new success.
+    if (revoked) {
+      await this.auditService.record({
+        event: AuditEvent.SESSION_REVOKED,
+        result: AuditResult.SUCCESS,
+        userId,
+        sessionId,
+        ...this.auditContext(ctx),
+      });
+    }
   }
 
   async revokeAllSessions(userId: string, ctx?: RequestContext): Promise<void> {
