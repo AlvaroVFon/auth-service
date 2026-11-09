@@ -48,3 +48,9 @@ export interface JwtServiceOptions {
 export interface VerifyTokenOptions {
   audience?: string;
 }
+
+/** Per-call TTL overrides; each value falls back to the instance setting. */
+export interface TokenSignOptions {
+  accessExpiresIn?: number;
+  refreshExpiresIn?: number;
+}
