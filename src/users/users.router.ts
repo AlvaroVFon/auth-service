@@ -17,6 +17,7 @@ export interface UsersSupportRateLimitConfig {
  */
 export const USER_SUPPORT_BODYLESS_PATHS: readonly RegExp[] = [
   /^\/users\/[^/]+\/(unlock|verify)\/?$/i,
+  /^\/users\/[^/]+\/mfa\/reset\/?$/i,
 ];
 
 export class UsersRouter {
@@ -85,6 +86,12 @@ export class UsersRouter {
       '/users/:id/verify',
       supportRateLimiter,
       this.userController.verify.bind(this.userController),
+    );
+
+    this.app.post(
+      '/users/:id/mfa/reset',
+      supportRateLimiter,
+      this.userController.resetMfa.bind(this.userController),
     );
   }
 }

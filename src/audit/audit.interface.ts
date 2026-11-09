@@ -18,6 +18,7 @@ export enum AuditEvent {
   SETTINGS_UPDATED = 'settings.updated',
   USER_UNLOCKED = 'user.unlocked',
   USER_VERIFIED = 'user.verified',
+  USER_MFA_RESET = 'user.mfa_reset',
 }
 
 export enum AuditResult {
