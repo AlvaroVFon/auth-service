@@ -219,6 +219,7 @@ Every route is declared in a module router and mounted by
 | `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
 | `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |
 | `POST`   | `/users/:id/verify`                           | Owner            | Marks the account as verified; audited.                         |
+| `POST`   | `/users/:id/mfa/reset`                        | Owner            | Removes every MFA artefact and closes all sessions; audited.    |
 | `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                  |
 | `GET`    | `/applications`                               | Owner            | Lists applications; paginated envelope (see below).             |
 | `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |

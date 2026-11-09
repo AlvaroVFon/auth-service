@@ -15,9 +15,11 @@ export enum AuditEvent {
   APPLICATION_DEACTIVATED = 'application.deactivated',
   APPLICATION_ARCHIVED = 'application.archived',
   MEMBER_GRANTED = 'member.granted',
+  INVITATION_REVOKED = 'invitation.revoked',
   SETTINGS_UPDATED = 'settings.updated',
   USER_UNLOCKED = 'user.unlocked',
   USER_VERIFIED = 'user.verified',
+  USER_MFA_RESET = 'user.mfa_reset',
 }
 
 export enum AuditResult {

@@ -27,6 +27,15 @@ export interface InvalidateLinksFilter {
 }
 
 export interface LinksPort {
+  /**
+   * Revokes one invitation of an application. Returns false when it was
+   * already invalidated (idempotent no-op), throws `EntityNotFoundError` when
+   * it does not belong to the application and `ConflictError` when used.
+   */
+  revokeInvitation(
+    applicationId: string,
+    invitationId: string,
+  ): Promise<boolean>;
   createInvitation(input: CreateInvitationLinkInput): Promise<CreatedLink>;
   createPasswordReset(
     input: CreatePasswordResetLinkInput,

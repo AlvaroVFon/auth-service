@@ -18,6 +18,13 @@ export class LinksRouter {
   }
 
   private initializeRoutes() {
+    this.app.delete(
+      '/applications/:applicationId/invitations/:invitationId',
+      this.authenticationMiddleware.authenticateAny,
+      this.applicationAuthorizationMiddleware.allowApplicationAdmin,
+      this.linksController.revokeInvitation.bind(this.linksController),
+    );
+
     this.app.post(
       '/applications/:applicationId/invitations',
       this.authenticationMiddleware.authenticateAny,

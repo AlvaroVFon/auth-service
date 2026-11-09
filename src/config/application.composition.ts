@@ -352,6 +352,7 @@ export const createApplicationComposition = (
     logger,
     authMailer,
     settingsService,
+    auditService,
   );
   grantsModule.service.setInvitationsPort(invitationsService);
   const passwordResetLinksService = new PasswordResetLinksService(
