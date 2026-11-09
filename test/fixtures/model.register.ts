@@ -14,6 +14,7 @@ import { HoldersModel } from '../../src/holders/holders.schema';
 import { OneTimeLink } from '../../src/links/link.interface';
 import { LinkModel } from '../../src/links/links.schema';
 import { GlobalSettingsModel } from '../../src/settings/settings-global.schema';
+import { LockoutModel } from '../../src/users/lockout';
 import { User as UserInterface } from '../../src/users/users.interface';
 import { User } from '../../src/users/users.schema';
 
@@ -51,6 +52,8 @@ export const registerModels = async (): Promise<void> => {
     GlobalSettingsModel.modelName,
     GlobalSettingsModel.schema,
   );
+
+  await fixture.registerModel(LockoutModel.modelName, LockoutModel.schema);
 
   const auditEventModel = createAuditEventModel();
 
