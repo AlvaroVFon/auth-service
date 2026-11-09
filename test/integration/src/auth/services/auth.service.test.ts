@@ -1914,6 +1914,73 @@ describe('Auth Service', () => {
       assert.strictEqual(lastEvent()?.event, AuditEvent.ACCOUNT_LOCKED);
     });
 
+    test('records the application id and audience on success and failure', async () => {
+      const application = await createApplication();
+      const member = await fixture.create<UserInterface>('User', {
+        email: generateRandomEmail('mfa-app+'),
+        password: DEFAULT_USER.password,
+        role: Roles.USER,
+        verified: true,
+        mfaEnabled: true,
+      });
+      await grantRole(
+        member._id.toString(),
+        application._id.toString(),
+        GrantRoles.VIEWER,
+      );
+      const challenge = jwtService.signMfaChallenge(member._id.toString(), {
+        application: application.slug,
+        audience: application.audience,
+      });
+      mockMfaService.verify = mock.fn(() => Promise.resolve());
+
+      await authService.verifyMfa(challenge, '123456');
+
+      assert.strictEqual(lastEvent()?.event, AuditEvent.LOGIN_SUCCEEDED);
+      assert.strictEqual(
+        lastEvent()?.applicationId,
+        application._id.toString(),
+      );
+      assert.strictEqual(lastEvent()?.audience, application.audience);
+
+      mockMfaService.verify = mock.fn(() =>
+        Promise.reject(new InvalidMfaCodeError()),
+      );
+      await assert.rejects(
+        authService.verifyMfa(challenge, '000000'),
+        InvalidMfaCodeError,
+      );
+      assert.strictEqual(lastEvent()?.event, AuditEvent.LOGIN_FAILED);
+      assert.strictEqual(
+        lastEvent()?.applicationId,
+        application._id.toString(),
+      );
+    });
+
+    test('records a post-verification denial as a login failure', async () => {
+      const application = await createApplication();
+      const member = await fixture.create<UserInterface>('User', {
+        email: generateRandomEmail('mfa-no-grant+'),
+        password: DEFAULT_USER.password,
+        role: Roles.USER,
+        verified: true,
+        mfaEnabled: true,
+      });
+      const challenge = jwtService.signMfaChallenge(member._id.toString(), {
+        application: application.slug,
+        audience: application.audience,
+      });
+      mockMfaService.verify = mock.fn(() => Promise.resolve());
+
+      await assert.rejects(authService.verifyMfa(challenge, '123456'));
+
+      assert.strictEqual(lastEvent()?.event, AuditEvent.LOGIN_FAILED);
+      assert.strictEqual(
+        lastEvent()?.applicationId,
+        application._id.toString(),
+      );
+    });
+
     test('logs unexpected failures without recording a login outcome', async () => {
       const user = await createOwner();
       mockMfaService.verify = mock.fn(() =>
