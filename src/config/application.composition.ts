@@ -310,7 +310,7 @@ export const createApplicationComposition = (
     getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
   );
   usersModule.service.setSessionRevoker(sessionService);
-  usersModule.service.setSessionLister({
+  usersModule.service.setSessionManager({
     listSessions: (userId) => sessionService.list(userId),
     revokeSession: (userId, sessionId) =>
       sessionService.revoke(userId, sessionId),

@@ -1097,7 +1097,7 @@ describe('UsersService session listing', () => {
     const user = await createUser();
     const listSessions = mock.fn(async () => []);
     const service = new UsersService(User, new CryptoService());
-    service.setSessionLister({
+    service.setSessionManager({
       listSessions,
       revokeSession: async () => true,
       revokeAllSessions: async () => [],
@@ -1131,7 +1131,7 @@ describe('UsersService session listing', () => {
       verified: true,
     });
     const service = new UsersService(User, new CryptoService());
-    service.setSessionLister({
+    service.setSessionManager({
       listSessions,
       revokeSession: async () => true,
       revokeAllSessions: async () => [],
@@ -1179,7 +1179,7 @@ describe('UsersService session revocation', () => {
       undefined,
       { record } as never,
     );
-    service.setSessionLister({
+    service.setSessionManager({
       listSessions: overrides.listSessions ?? (async () => []),
       revokeSession: overrides.revokeSession ?? (async () => true),
       revokeAllSessions: overrides.revokeAllSessions ?? (async () => []),

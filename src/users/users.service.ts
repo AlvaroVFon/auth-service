@@ -64,7 +64,7 @@ const USER_LIST_PROJECTION = [
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
   private sessionRevoker?: UserSessionRevokerPort;
-  private sessionLister?: UserSessionsPort;
+  private sessionManager?: UserSessionsPort;
 
   constructor(
     private readonly usersModel: Model<UserInterface>,
@@ -351,8 +351,8 @@ export class UsersService implements UsersPort {
     this.sessionRevoker = revoker;
   }
 
-  setSessionLister(lister: UserSessionsPort): void {
-    this.sessionLister = lister;
+  setSessionManager(lister: UserSessionsPort): void {
+    this.sessionManager = lister;
   }
 
   /**
@@ -423,11 +423,11 @@ export class UsersService implements UsersPort {
   }
 
   private requireSessionPort(): UserSessionsPort {
-    if (!this.sessionLister) {
+    if (!this.sessionManager) {
       throw new Error('Session manager is not configured');
     }
 
-    return this.sessionLister;
+    return this.sessionManager;
   }
 
   async updateOneById(
