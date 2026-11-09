@@ -31,6 +31,7 @@ export { GlobalSettingsModel } from './settings-global.schema';
 export { ensureGlobalSettings } from './settings.seed';
 export {
   SettingsAdminService,
+  type ApplicationSettingsView,
   type GlobalSettingsView,
   type SettingsView,
 } from './settings-admin.service';

@@ -22,6 +22,13 @@ export interface SettingsView {
 /** Kept for callers that only deal with the global scope. */
 export type GlobalSettingsView = SettingsView;
 
+/** Effective policy of one application plus the global layer it inherits from. */
+export interface ApplicationSettingsView {
+  settings: Record<SettingsField, unknown>;
+  sources: Record<SettingsField, SettingSource>;
+  global: GlobalSettingsView;
+}
+
 export class SettingsAdminService {
   constructor(
     private readonly settingsService: SettingsPort,
@@ -31,6 +38,25 @@ export class SettingsAdminService {
 
   async getGlobal(): Promise<GlobalSettingsView> {
     return this.toView(await this.settingsService.resolveGlobal());
+  }
+
+  /**
+   * Reads the effective policy of an application and the global layer used as
+   * its reference. The route guard has already resolved the active application,
+   * so an invalid id never reaches this method.
+   */
+  async getApplication(
+    applicationId: string,
+  ): Promise<ApplicationSettingsView> {
+    const resolved =
+      await this.settingsService.resolveApplicationWithGlobal(applicationId);
+    const view = this.toView(resolved.application);
+
+    return {
+      settings: view.settings,
+      sources: view.sources,
+      global: this.toView(resolved.global),
+    };
   }
 
   async updateGlobal(

@@ -630,3 +630,88 @@ describe('SettingsService writes and cache', () => {
     assert.strictEqual(update.mock.callCount(), 1);
   });
 });
+
+describe('SettingsService.resolveApplicationWithGlobal cache', () => {
+  const buildPairService = () => {
+    let applicationSettings: ApplicationSettings | undefined;
+    let globalSettings: Partial<ApplicationSettings> = { appName: 'Global' };
+    let findByIdCalls = 0;
+    let globalGetCalls = 0;
+
+    const service = new SettingsService(
+      {
+        findById: async (id: string) => {
+          findByIdCalls += 1;
+          return id === APP_ID ? buildApplication(applicationSettings) : null;
+        },
+      } as unknown as ApplicationsPort,
+      {
+        get: async () => {
+          globalGetCalls += 1;
+          return globalSettings;
+        },
+        update: async (changes: SettingsChanges) => {
+          globalSettings = { ...globalSettings, ...changes.set };
+          for (const field of changes.unset) {
+            delete globalSettings[field];
+          }
+        },
+      } as GlobalSettingsPort,
+      {
+        updateSettings: async (_id: string, changes: SettingsChanges) => {
+          applicationSettings = { ...applicationSettings, ...changes.set };
+          for (const field of changes.unset) {
+            delete applicationSettings[field];
+          }
+        },
+      } as ApplicationSettingsWriterPort,
+    );
+
+    return {
+      service,
+      stats: () => ({ findByIdCalls, globalGetCalls }),
+    };
+  };
+
+  test('caches the application and global pair together', async () => {
+    const { service, stats } = buildPairService();
+
+    const first = await service.resolveApplicationWithGlobal(APP_ID);
+    const second = await service.resolveApplicationWithGlobal(APP_ID);
+
+    assert.deepStrictEqual(second, first);
+    assert.deepStrictEqual(stats(), { findByIdCalls: 1, globalGetCalls: 1 });
+  });
+
+  test('invalidates the pair on an application write', async () => {
+    const { service } = buildPairService();
+
+    await service.resolveApplicationWithGlobal(APP_ID);
+    await service.updateApplicationSettings(APP_ID, { appName: 'Panel' });
+    const after = await service.resolveApplicationWithGlobal(APP_ID);
+
+    assert.strictEqual(after.application.appName.value, 'Panel');
+    assert.strictEqual(after.application.appName.source, 'application');
+  });
+
+  test('clears the pair on a global write so the reference matches', async () => {
+    const { service } = buildPairService();
+
+    await service.resolveApplicationWithGlobal(APP_ID);
+    await service.updateGlobalSettings({ appName: 'Global 2' });
+    const after = await service.resolveApplicationWithGlobal(APP_ID);
+
+    assert.strictEqual(after.global.appName.value, 'Global 2');
+    assert.strictEqual(after.application.appName.value, 'Global 2');
+  });
+
+  test('does not cache an unknown application id', async () => {
+    const { service, stats } = buildPairService();
+    const unknown = new Types.ObjectId().toString();
+
+    await service.resolveApplicationWithGlobal(unknown);
+    await service.resolveApplicationWithGlobal(unknown);
+
+    assert.strictEqual(stats().findByIdCalls, 2);
+  });
+});

@@ -34,3 +34,11 @@ export class EntityNotFoundError extends BaseError {
     this.statusCode = 404;
   }
 }
+
+export class ConflictError extends BaseError {
+  constructor(message: string) {
+    super(message);
+    this.code = 'CONFLICT';
+    this.statusCode = 409;
+  }
+}

@@ -42,6 +42,10 @@ describe('SettingsAdminService', () => {
     const service = new SettingsAdminService(
       {
         resolveForApplication: async () => buildResolved(),
+        resolveApplicationWithGlobal: async () => ({
+          application: buildResolved(),
+          global: buildResolved(),
+        }),
         resolveGlobal: async () => buildResolved(),
         updateApplicationSettings: async () => buildResolved(),
         updateGlobalSettings,
@@ -82,6 +86,10 @@ describe('SettingsAdminService', () => {
     const service = new SettingsAdminService(
       {
         resolveForApplication: async () => buildResolved(),
+        resolveApplicationWithGlobal: async () => ({
+          application: buildResolved(),
+          global: buildResolved(),
+        }),
         resolveGlobal: async () => buildResolved(),
         updateApplicationSettings: async () => buildResolved(),
         updateGlobalSettings: async () => buildResolved(),
@@ -108,6 +116,10 @@ describe('SettingsAdminService', () => {
     const service = new SettingsAdminService(
       {
         resolveForApplication: async () => inherited,
+        resolveApplicationWithGlobal: async () => ({
+          application: inherited,
+          global: inherited,
+        }),
         resolveGlobal: async () => inherited,
         updateApplicationSettings: async () => inherited,
         updateGlobalSettings: async () => overridden,
@@ -173,6 +185,10 @@ describe('SettingsAdminService.updateApplication', () => {
           options.before ??
           buildResolvedWith({ value: 'Global', source: 'global' }),
         resolveGlobal: async () => buildResolved(),
+        resolveApplicationWithGlobal: async () => ({
+          application: buildResolved(),
+          global: buildResolved(),
+        }),
         updateApplicationSettings,
         updateGlobalSettings: async () => buildResolved(),
       } satisfies SettingsPort,

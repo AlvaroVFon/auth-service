@@ -1,5 +1,10 @@
 import type { ApplicationsPort } from '../applications';
-import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
+import { AuditEvent, AuditPort, AuditResult } from '../audit';
+import {
+  EMAIL_REGEX,
+  OBJECTID_REGEX,
+  PASSWORD_REGEX,
+} from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
 import { Roles } from '../common/enums/roles.enum';
 import { ForbiddenError } from '../common/exceptions/auth.exceptions';
@@ -14,6 +19,7 @@ import { GrantRoles } from '../grants';
 import type { HoldersPort } from '../holders';
 import { CryptoService } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
+import type { SettingsPort } from '../settings';
 import type { UsersPort } from '../users';
 import type {
   InvitationMailerPort,
@@ -63,7 +69,44 @@ export class InvitationsService {
     private readonly notifications: LinkNotificationsService,
     private readonly logger: LoggerInterface,
     private readonly invitationMailer?: InvitationMailerPort,
+    private readonly settingsService?: SettingsPort,
+    private readonly auditService?: AuditPort,
   ) {}
+
+  /**
+   * Revokes one pending invitation of an application without deleting it.
+   * A repeated revocation is an idempotent no-op and is not audited again.
+   */
+  async revoke(
+    applicationId: string,
+    invitationId: string,
+    actorId?: string,
+  ): Promise<void> {
+    // Revocation is management, not creation: the owner keeps administering an
+    // archived application, while the middleware already rejected app admins.
+    const application = OBJECTID_REGEX.test(applicationId)
+      ? await this.applicationsService.findById(applicationId)
+      : null;
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+    const revoked = await this.linksService.revokeInvitation(
+      application._id.toString(),
+      invitationId,
+    );
+
+    if (!revoked) {
+      return;
+    }
+
+    await this.auditService?.record({
+      event: AuditEvent.INVITATION_REVOKED,
+      result: AuditResult.SUCCESS,
+      applicationId: application._id.toString(),
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+  }
 
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
     if (input.role === GrantRoles.ADMIN && input.actorRole !== Roles.OWNER) {
@@ -73,12 +116,16 @@ export class InvitationsService {
     const email = normalizeEmail(input.email ?? '');
     const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
     const application = await this.findApplication(input.applicationId);
+    const policy = await this.resolvePolicy(application._id.toString());
 
     const created = await this.buildInvitation({
       email,
       application,
       role: input.role,
       ...(telegramChatId === undefined ? {} : { telegramChatId }),
+      ...(policy.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: policy.expiresInMs }),
       allowHolder: false,
     });
 
@@ -110,17 +157,25 @@ export class InvitationsService {
 
     const application =
       input.application ?? (await this.findApplication(input.applicationId));
+    const policy = await this.resolvePolicy(application._id.toString());
 
     const created = await this.buildInvitation({
       email,
       application,
       role: input.role,
+      ...(policy.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: policy.expiresInMs }),
       allowHolder: true,
     });
 
     if (this.invitationMailer) {
       try {
-        await this.invitationMailer.sendInvitationEmail(email, created.link);
+        await this.invitationMailer.sendInvitationEmail(
+          email,
+          created.link,
+          policy.appName,
+        );
       } catch (error) {
         // Delivery is best effort: the link exists and the caller already has a
         // successful response shape, so a mailer outage must not fail the grant.
@@ -143,6 +198,22 @@ export class InvitationsService {
     return application;
   }
 
+  private async resolvePolicy(
+    applicationId: string,
+  ): Promise<{ expiresInMs?: number; appName?: string }> {
+    if (!this.settingsService) {
+      return {};
+    }
+
+    const resolved =
+      await this.settingsService.resolveForApplication(applicationId);
+
+    return {
+      expiresInMs: resolved.invitationTtlMs.value,
+      appName: resolved.appName.value,
+    };
+  }
+
   private async buildInvitation(input: {
     email: string;
     application: {
@@ -151,6 +222,7 @@ export class InvitationsService {
     };
     role: GrantRoles;
     telegramChatId?: string;
+    expiresInMs?: number;
     allowHolder: boolean;
   }) {
     const existingUser = await this.usersService.findByEmail(input.email);
@@ -171,6 +243,9 @@ export class InvitationsService {
       ...(input.telegramChatId === undefined
         ? {}
         : { telegramChatId: input.telegramChatId }),
+      ...(input.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: input.expiresInMs }),
     });
 
     const link = buildInvitationLink(this.publicAppUrl, created.token);
