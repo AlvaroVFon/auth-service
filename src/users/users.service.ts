@@ -444,13 +444,17 @@ export class UsersService implements UsersPort {
 
     const user = await this.usersModel
       .findOne({ _id: id, role: { $ne: Roles.OWNER } })
-      .select('verified mfaEnabled loginAttempts lockoutUntil mfaLockoutUntil')
+      .select(
+        'verified mfaEnabled loginAttempts lockoutUntil mfaFailedAttempts mfaLockoutUntil lastLoginAt',
+      )
       .lean<{
         verified: boolean;
         mfaEnabled?: boolean;
         loginAttempts?: number;
         lockoutUntil?: Date | null;
+        mfaFailedAttempts?: number;
         mfaLockoutUntil?: Date | null;
+        lastLoginAt?: Date | null;
       }>();
 
     if (!user) {
@@ -458,20 +462,26 @@ export class UsersService implements UsersPort {
     }
 
     const sessions = await this.requireSessionPort().listSessions(id);
-    const lastLoginAt =
+    const lastActivity =
       sessions.length === 0
-        ? null
-        : new Date(
-            Math.max(
-              ...sessions.map((session) => session.lastActivityAt.getTime()),
-            ),
+        ? undefined
+        : Math.max(
+            ...sessions.map((session) => session.lastActivityAt.getTime()),
           );
+    // The login timestamp persists after logout; an active session can be more
+    // recent because rotation advances its activity.
+    const candidates = [user.lastLoginAt?.getTime(), lastActivity].filter(
+      (value): value is number => value !== undefined,
+    );
+    const lastLoginAt =
+      candidates.length === 0 ? null : new Date(Math.max(...candidates));
 
     return {
       verified: user.verified,
       mfaEnabled: user.mfaEnabled ?? false,
       loginAttempts: user.loginAttempts ?? 0,
       lockoutUntil: user.lockoutUntil ?? null,
+      mfaFailedAttempts: user.mfaFailedAttempts ?? 0,
       mfaLockoutUntil: user.mfaLockoutUntil ?? null,
       lastLoginAt,
       activeSessions: sessions.length,

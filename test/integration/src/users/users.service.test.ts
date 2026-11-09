@@ -1455,6 +1455,7 @@ describe('UsersService.getSecurityOverview', () => {
       mfaEnabled: true,
       loginAttempts: 3,
       lockoutUntil: new Date('2026-01-01T00:00:00.000Z'),
+      mfaFailedAttempts: 4,
       mfaLockoutUntil: new Date('2026-01-02T00:00:00.000Z'),
     });
     const service = new UsersService(User, new CryptoService());
@@ -1490,6 +1491,7 @@ describe('UsersService.getSecurityOverview', () => {
       mfaEnabled: true,
       loginAttempts: 3,
       lockoutUntil: new Date('2026-01-01T00:00:00.000Z'),
+      mfaFailedAttempts: 4,
       mfaLockoutUntil: new Date('2026-01-02T00:00:00.000Z'),
       lastLoginAt: new Date('2026-01-05T00:00:00.000Z'),
       activeSessions: 2,

@@ -8,6 +8,7 @@ export interface UserSecurityOverview {
   mfaEnabled: boolean;
   loginAttempts: number;
   lockoutUntil: Date | null;
+  mfaFailedAttempts: number;
   mfaLockoutUntil: Date | null;
   lastLoginAt: Date | null;
   activeSessions: number;
