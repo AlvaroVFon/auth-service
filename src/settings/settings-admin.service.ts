@@ -32,8 +32,8 @@ export interface ApplicationSettingsView {
 export class SettingsAdminService {
   constructor(
     private readonly settingsService: SettingsPort,
-    private readonly auditService?: AuditPort,
-    private readonly applicationsService?: ApplicationsPort,
+    private readonly auditService: AuditPort | undefined,
+    private readonly applicationsService: ApplicationsPort,
   ) {}
 
   async getGlobal(): Promise<GlobalSettingsView> {
@@ -66,11 +66,7 @@ export class SettingsAdminService {
     const before = await this.settingsService.resolveGlobal();
     const resolved = await this.settingsService.updateGlobalSettings(patch);
     // A repeated value is a no-op; only real transitions are audited.
-    const fields = SETTINGS_FIELDS.filter(
-      (field) =>
-        before[field].value !== resolved[field].value ||
-        before[field].source !== resolved[field].source,
-    );
+    const fields = this.changedFields(before, resolved);
 
     if (fields.length > 0 && this.auditService) {
       await this.auditService.record({
@@ -95,10 +91,6 @@ export class SettingsAdminService {
     patch: ApplicationSettingsPatch,
     actorId?: string,
   ): Promise<SettingsView> {
-    if (!this.applicationsService) {
-      throw new Error('Applications port is not configured');
-    }
-
     const application =
       await this.applicationsService.findAssignableById(applicationId);
 
@@ -112,11 +104,7 @@ export class SettingsAdminService {
       applicationId,
       patch,
     );
-    const fields = SETTINGS_FIELDS.filter(
-      (field) =>
-        before[field].value !== resolved[field].value ||
-        before[field].source !== resolved[field].source,
-    );
+    const fields = this.changedFields(before, resolved);
 
     if (fields.length > 0 && this.auditService) {
       await this.auditService.record({
@@ -129,6 +117,18 @@ export class SettingsAdminService {
     }
 
     return this.toView(resolved);
+  }
+
+  /** Fields whose effective value or provenance changed. */
+  private changedFields(
+    before: ResolvedSettings,
+    resolved: ResolvedSettings,
+  ): SettingsField[] {
+    return SETTINGS_FIELDS.filter(
+      (field) =>
+        before[field].value !== resolved[field].value ||
+        before[field].source !== resolved[field].source,
+    );
   }
 
   private toView(resolved: ResolvedSettings): SettingsView {

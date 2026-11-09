@@ -51,6 +51,7 @@ describe('SettingsAdminService', () => {
         updateGlobalSettings,
       } satisfies SettingsPort,
       { record } as never,
+      {} as never,
     );
 
     return { service, record, updateGlobalSettings };
@@ -95,6 +96,7 @@ describe('SettingsAdminService', () => {
         updateGlobalSettings: async () => buildResolved(),
       } satisfies SettingsPort,
       { record } as never,
+      {} as never,
     );
 
     await service.updateGlobal(
@@ -125,6 +127,7 @@ describe('SettingsAdminService', () => {
         updateGlobalSettings: async () => overridden,
       } satisfies SettingsPort,
       { record } as never,
+      {} as never,
     );
 
     await service.updateGlobal(
@@ -258,7 +261,9 @@ describe('SettingsAdminService.updateApplication', () => {
         string,
         never
       >),
-      (error: unknown) => error instanceof Error,
+      (error: unknown) =>
+        error instanceof InvalidArgumentError &&
+        /unknown field/.test(error.message),
     );
     assert.strictEqual(record.mock.callCount(), 0);
   });
