@@ -321,69 +321,87 @@ export class GrantsService implements GrantsPort {
     assertObjectId(applicationId, 'applicationId');
     await this.resolveApplication(applicationId, scope);
 
-    // Join, filter and paginate in one pipeline so `total` and the page use the
-    // same set: a grant whose user was deleted is not a member and must neither
-    // inflate the count nor occupy a page slot.
-    const [facet] = await this.grantModel.aggregate<{
-      items: GrantMember[];
-      total: Array<{ value: number }>;
-    }>(
-      [
-        {
-          $match: { applicationId: new Types.ObjectId(applicationId) },
-        },
-        {
-          $lookup: {
-            from: 'users',
-            let: { userId: '$userId' },
-            pipeline: [
-              { $match: { $expr: { $eq: ['$_id', '$$userId'] } } },
-              {
-                $project: {
-                  email: 1,
-                  username: 1,
-                  verified: 1,
-                  mfaEnabled: 1,
-                  lastLoginAt: 1,
-                },
-              },
-            ],
-            as: 'user',
+    const applicationObjectId = new Types.ObjectId(applicationId);
+    // Sort and page the grants on the base collection so the compound indexes
+    // can serve the ordering, then keep only the ids of users that still exist.
+    // The count runs the same existence filter, so `total` always describes the
+    // set the pages are drawn from even when an orphan grant is present.
+    const userLookup = {
+      $lookup: {
+        from: 'users',
+        let: { userId: '$userId' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$_id', '$$userId'] } } },
+          // Only existence matters here; the safe profile fields are loaded
+          // through UsersPort once the page is bounded.
+          { $project: { _id: 1 } },
+        ],
+        as: 'user',
+      },
+    };
+
+    const [page, totalRows] = await Promise.all([
+      this.grantModel.aggregate<{
+        userId: string;
+        role: GrantRoles;
+        createdAt?: Date;
+      }>(
+        [
+          { $match: { applicationId: applicationObjectId } },
+          { $sort: buildSortObject(query.sort) },
+          userLookup,
+          { $unwind: '$user' },
+          { $skip: (query.page - 1) * query.limit },
+          { $limit: query.limit },
+          {
+            $project: {
+              _id: 0,
+              userId: { $toString: '$userId' },
+              role: 1,
+              // The membership date, matching the `createdAt` ordering.
+              createdAt: 1,
+            },
           },
-        },
+        ],
+        { allowDiskUse: true },
+      ),
+      this.grantModel.aggregate<{ value: number }>([
+        { $match: { applicationId: applicationObjectId } },
+        userLookup,
         { $unwind: '$user' },
-        {
-          $facet: {
-            items: [
-              { $sort: buildSortObject(query.sort) },
-              { $skip: (query.page - 1) * query.limit },
-              { $limit: query.limit },
-              {
-                $project: {
-                  _id: 0,
-                  userId: { $toString: '$userId' },
-                  role: 1,
-                  // The membership date, matching the `createdAt` ordering.
-                  createdAt: 1,
-                  email: '$user.email',
-                  username: '$user.username',
-                  verified: '$user.verified',
-                  mfaEnabled: { $ifNull: ['$user.mfaEnabled', false] },
-                  lastLoginAt: '$user.lastLoginAt',
-                },
-              },
-            ],
-            total: [{ $count: 'value' }],
-          },
-        },
-      ],
-      { allowDiskUse: true },
+        { $count: 'value' },
+      ]),
+    ]);
+
+    const summaries = await this.usersService.findSummariesByIds(
+      page.map((grant) => grant.userId),
     );
+    const byUserId = new Map(
+      summaries.map((summary) => [summary.userId, summary]),
+    );
+    const items = page.flatMap((grant): GrantMember[] => {
+      const summary = byUserId.get(grant.userId);
+      if (!summary) {
+        return [];
+      }
 
-    const items = facet?.items ?? [];
-    const total = facet?.total[0]?.value ?? 0;
+      // `summary.createdAt` is the account creation date; the member listing
+      // exposes the grant date so the payload matches its ordering.
+      const { createdAt: _accountCreatedAt, ...profile } = summary;
 
-    return buildPaginatedResult(items, total, query);
+      return [
+        {
+          ...profile,
+          userId: grant.userId,
+          role: grant.role,
+          ...(grant.createdAt === undefined
+            ? {}
+            : { createdAt: grant.createdAt }),
+        },
+      ];
+    });
+
+    return buildPaginatedResult(items, totalRows[0]?.value ?? 0, query);
   }
 
   async listByApplication(

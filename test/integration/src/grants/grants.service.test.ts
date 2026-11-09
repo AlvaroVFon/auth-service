@@ -1087,11 +1087,31 @@ describe('GrantsService.listMembers', () => {
     assert.strictEqual('mfaSecret' in admin!, false);
   });
 
-  test('orders by role with the stable tie break', async () => {
+  test('orders by role and breaks ties by grant id', async () => {
     const application = await createApplication();
-    await createMember(application._id, GrantRoles.VIEWER);
     await createMember(application._id, GrantRoles.ADMIN);
     await createMember(application._id, GrantRoles.EDITOR);
+
+    const createViewer = async (grantId: Types.ObjectId) => {
+      const user = await fixture.create<UserInterface>(
+        'User',
+        UserFactory.generate(),
+      );
+      await fixture.create<Grant>(GrantModel.modelName, {
+        _id: grantId,
+        userId: user._id,
+        applicationId: application._id,
+        role: GrantRoles.VIEWER,
+      });
+
+      return user;
+    };
+    const firstViewer = await createViewer(
+      new Types.ObjectId('000000000000000000000001'),
+    );
+    const secondViewer = await createViewer(
+      new Types.ObjectId('000000000000000000000002'),
+    );
 
     const result = await grantsService.listMembers(
       application._id.toString(),
@@ -1100,7 +1120,16 @@ describe('GrantsService.listMembers', () => {
 
     assert.deepStrictEqual(
       result.items.map((member) => member.role),
-      [GrantRoles.ADMIN, GrantRoles.EDITOR, GrantRoles.VIEWER],
+      [
+        GrantRoles.ADMIN,
+        GrantRoles.EDITOR,
+        GrantRoles.VIEWER,
+        GrantRoles.VIEWER,
+      ],
+    );
+    assert.deepStrictEqual(
+      result.items.slice(-2).map((member) => member.userId),
+      [firstViewer._id.toString(), secondViewer._id.toString()],
     );
   });
 
