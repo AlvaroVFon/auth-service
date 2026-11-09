@@ -17,9 +17,10 @@ import {
   InvalidArgumentError,
 } from '../../common/exceptions/base.exception';
 import { AlreadyGeneratedCodeError } from '../../common/exceptions/codes.exceptions';
+import { InvalidMfaCodeError } from '../../common/exceptions/mfa.exceptions';
 import { TokenBlacklistPort } from '../../common/ports/token-blacklist.port';
 import { Holder, HoldersPort } from '../../holders';
-import { JwtService, TokenTypes } from '../../libs/jwt';
+import { JwtService, TokenTypes, type TokenClaims } from '../../libs/jwt';
 import type { TokenRole } from '../../libs/jwt';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
 import { User, UsersPort } from '../../users';
@@ -325,48 +326,156 @@ export class AuthService {
     }
 
     this.assertVerified(user);
-    await this.mfaService.verify(user, code);
+
+    try {
+      await this.mfaService.verify(user, code);
+    } catch (error) {
+      // Only credential outcomes are audit events; an infrastructure failure
+      // must not be labelled as a login attempt.
+      if (
+        error instanceof AccountLockedError ||
+        error instanceof InvalidMfaCodeError
+      ) {
+        await this.recordMfaFailure(
+          userId,
+          user.email,
+          claims,
+          ctx,
+          error instanceof AccountLockedError
+            ? AuditEvent.ACCOUNT_LOCKED
+            : AuditEvent.LOGIN_FAILED,
+        );
+      } else {
+        this.logger.warn(
+          `Unexpected MFA verification failure for ${userId}`,
+          error,
+        );
+      }
+      throw error;
+    }
 
     const application = claims.app;
 
-    if (application !== undefined) {
-      const access = await this.applicationTokens.resolveAccess(
-        userId,
-        application,
-      );
+    try {
+      if (application !== undefined) {
+        const access = await this.applicationTokens.resolveAccess(
+          userId,
+          application,
+        );
 
-      if (
-        claims.targetAudience !== undefined &&
-        claims.targetAudience !== access.application.audience
-      ) {
-        throw new UnauthorizedError('Invalid MFA challenge');
+        if (
+          claims.targetAudience !== undefined &&
+          claims.targetAudience !== access.application.audience
+        ) {
+          throw new UnauthorizedError('Invalid MFA challenge');
+        }
+
+        const session = await this.sessionService.create(
+          userId,
+          access.role,
+          ctx,
+          access.application.audience,
+        );
+        await this.recordLogin(userId);
+        await this.auditService.record({
+          event: AuditEvent.LOGIN_SUCCEEDED,
+          result: AuditResult.SUCCESS,
+          userId,
+          email: user.email,
+          applicationId: access.application._id.toString(),
+          audience: access.application.audience,
+          role: access.role,
+          ...this.auditContext(ctx),
+        });
+
+        return {
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+        };
       }
 
-      const session = await this.sessionService.create(
-        userId,
-        access.role,
-        ctx,
-        access.application.audience,
-      );
+      if (user.role !== Roles.OWNER) {
+        throw new ForbiddenError('An application is required');
+      }
+
+      const session = await this.sessionService.create(userId, user.role, ctx);
       await this.recordLogin(userId);
+      await this.auditService.record({
+        event: AuditEvent.LOGIN_SUCCEEDED,
+        result: AuditResult.SUCCESS,
+        userId,
+        email: user.email,
+        role: user.role,
+        ...this.auditContext(ctx),
+      });
 
       return {
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
       };
+    } catch (error) {
+      // Only expected authorization denials are login outcomes; a database or
+      // session-store failure is logged, not counted as a credential attack.
+      if (
+        error instanceof ForbiddenError ||
+        error instanceof UnauthorizedError
+      ) {
+        await this.recordMfaFailure(
+          userId,
+          user.email,
+          claims,
+          ctx,
+          AuditEvent.LOGIN_FAILED,
+        );
+      } else {
+        this.logger.warn(
+          `Unexpected post-verification failure for ${userId}`,
+          error,
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Records an MFA login failure with the application resolved from the
+   * signed challenge, so per-application audit views see the same id as the
+   * success event.
+   */
+  private async recordMfaFailure(
+    userId: string,
+    email: string,
+    claims: TokenClaims,
+    ctx: RequestContext | undefined,
+    event: AuditEvent.LOGIN_FAILED | AuditEvent.ACCOUNT_LOCKED,
+  ): Promise<void> {
+    let applicationId: string | undefined;
+
+    if (claims.app !== undefined) {
+      try {
+        const resolved = await this.applicationTokens.resolveApplication(
+          claims.app,
+        );
+        applicationId = resolved?.application._id.toString();
+      } catch (resolveError) {
+        this.logger.warn(
+          'Failed to resolve the application of an MFA failure',
+          resolveError,
+        );
+      }
     }
 
-    if (user.role !== Roles.OWNER) {
-      throw new ForbiddenError('An application is required');
-    }
-
-    const session = await this.sessionService.create(userId, user.role, ctx);
-    await this.recordLogin(userId);
-
-    return {
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
-    };
+    await this.auditService.record({
+      event,
+      result: AuditResult.FAILURE,
+      userId,
+      email,
+      ...(applicationId === undefined ? {} : { applicationId }),
+      ...(claims.targetAudience === undefined
+        ? {}
+        : { audience: claims.targetAudience }),
+      ...this.auditContext(ctx),
+    });
   }
 
   private buildMfaChallenge(

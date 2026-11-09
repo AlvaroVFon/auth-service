@@ -10,11 +10,12 @@ import {
 } from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
 import { LoggerInterface } from '../libs/logger';
-import { AuditEvent, AuditEventRecord } from './audit.interface';
+import { AuditEvent, AuditEventRecord, AuditResult } from './audit.interface';
 import {
   AuditEventFilter,
   AuditExportFilter,
   AuditPort,
+  LoginCount,
   RecordAuditEventInput,
 } from './audit.port';
 
@@ -152,5 +153,48 @@ export class AuditService implements AuditPort {
     }
 
     return query;
+  }
+
+  /**
+   * Counts login outcomes from `since` onwards. The aggregation uses the
+   * `event + createdAt` index to bound the scan; the group still reads the
+   * matching documents because the index does not carry `result`.
+   */
+  async countLogins(since: Date): Promise<LoginCount> {
+    if (!(since instanceof Date) || Number.isNaN(since.getTime())) {
+      throw new InvalidArgumentError('since must be a valid date');
+    }
+
+    const rows = await this.auditModel.aggregate<{
+      _id: AuditResult;
+      count: number;
+    }>([
+      {
+        $match: {
+          event: {
+            $in: [
+              AuditEvent.LOGIN_SUCCEEDED,
+              AuditEvent.LOGIN_FAILED,
+              // A lockout-denied attempt is still a failed login outcome.
+              AuditEvent.ACCOUNT_LOCKED,
+            ],
+          },
+          createdAt: { $gte: since },
+        },
+      },
+      { $group: { _id: '$result', count: { $sum: 1 } } },
+    ]);
+
+    const counts: LoginCount = { succeeded: 0, failed: 0 };
+
+    for (const row of rows) {
+      if (row._id === AuditResult.SUCCESS) {
+        counts.succeeded = row.count;
+      } else if (row._id === AuditResult.FAILURE) {
+        counts.failed = row.count;
+      }
+    }
+
+    return counts;
   }
 }
