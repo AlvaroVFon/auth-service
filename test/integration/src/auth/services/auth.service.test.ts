@@ -1845,4 +1845,51 @@ describe('Auth Service', () => {
       assert.ok(allTokens[1]!.revokedAt);
     });
   });
+
+  describe('application session policy', () => {
+    const settings = {
+      resolveForApplication: async () => ({
+        accessTokenTtlSeconds: { value: 600, source: 'application' },
+        refreshTokenTtlSeconds: { value: 7200, source: 'application' },
+        maxSessionsPerUser: { value: 2, source: 'application' },
+      }),
+    } as never;
+
+    const buildPolicyService = () =>
+      new AuthService(
+        userService,
+        mockAuthMailer,
+        codeService,
+        sessionService,
+        blacklistService,
+        holdersService,
+        applicationTokens,
+        jwtService,
+        mockAuditService,
+        mockMfaService,
+        mockLogger,
+        settings,
+      );
+
+    test('applies the application TTLs to login and refresh rotation', async () => {
+      const policyAuth = buildPolicyService();
+      const result = await policyAuth.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+      const tokens = asTokens(result);
+
+      const access = jwtService.verifyToken(tokens.accessToken);
+      const refresh = jwtService.verifyToken(tokens.refreshToken);
+      assert.strictEqual(access.exp - (access.iat ?? 0), 600);
+      assert.strictEqual(refresh.exp - (refresh.iat ?? 0), 7200);
+
+      const rotated = await policyAuth.refreshToken(tokens.refreshToken);
+      const rotatedAccess = jwtService.verifyToken(rotated.accessToken);
+      const rotatedRefresh = jwtService.verifyToken(rotated.refreshToken);
+      assert.strictEqual(rotatedAccess.exp - (rotatedAccess.iat ?? 0), 600);
+      assert.strictEqual(rotatedRefresh.exp - (rotatedRefresh.iat ?? 0), 7200);
+    });
+  });
 });

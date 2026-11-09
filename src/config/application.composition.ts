@@ -325,6 +325,7 @@ export const createApplicationComposition = (
     auditService,
     mfaService,
     logger,
+    settingsService,
   );
   const profileService = new ProfileService(
     usersModule.service,
