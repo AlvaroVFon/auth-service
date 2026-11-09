@@ -139,7 +139,12 @@ export class GrantsController {
   async revoke(req: Request, res: Response): Promise<void> {
     const applicationId = req.params.applicationId as string;
     const userId = req.params.userId as string;
-    await this.grantsService.revokeRole(userId, applicationId, req.user?.id);
+    await this.grantsService.revokeRole(
+      userId,
+      applicationId,
+      req.user?.id,
+      resolveGlobalActorRole(req.user),
+    );
 
     res.status(204).json();
   }

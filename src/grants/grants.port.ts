@@ -111,6 +111,7 @@ export interface GrantsPort {
     userId: string,
     applicationId: string,
     actorId?: string,
+    actorRole?: Roles,
   ): Promise<void>;
   deleteByUser(userId: string, actorId?: string): Promise<void>;
 }

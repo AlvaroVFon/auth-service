@@ -74,6 +74,16 @@ export class GrantsService implements GrantsPort {
       throw new EntityNotFoundError('User not found');
     }
 
+    if (input.actorRole !== undefined) {
+      const existing = await this.grantModel.findOne({
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+      });
+      if (existing !== null) {
+        this.assertMemberEscalation(existing.role, role, input.actorRole);
+      }
+    }
+
     const grant = await this.upsertGrant(userId, applicationId, role);
     if (!grant) {
       throw new EntityNotFoundError('Grant not found');
@@ -296,16 +306,26 @@ export class GrantsService implements GrantsPort {
     }
     this.assertMemberEscalation(existing.role, role, actorRole);
 
-    const grant = await this.grantModel.findOneAndUpdate(
-      {
-        userId: new Types.ObjectId(userId),
-        applicationId: new Types.ObjectId(applicationId),
-      },
+    const writeFilter: Record<string, unknown> = {
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+      // A concurrent promotion to admin must not be overwritten by a non-owner.
+      ...(actorRole === Roles.OWNER ? {} : { role: { $ne: GrantRoles.ADMIN } }),
+    };
+    let grant = await this.grantModel.findOneAndUpdate(
+      writeFilter,
       { $set: { role } },
       { returnDocument: 'after' },
     );
     if (!grant) {
-      throw new EntityNotFoundError('Grant not found');
+      const current = await this.grantModel.exists({
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+      });
+      if (!current) {
+        throw new EntityNotFoundError('Grant not found');
+      }
+      throw new ForbiddenError('Only the owner can manage an admin member');
     }
 
     await this.recordGrantEvent(AuditEvent.MEMBER_GRANTED, {
@@ -338,7 +358,18 @@ export class GrantsService implements GrantsPort {
     }
     this.assertMemberEscalation(existing.role, existing.role, actorRole);
 
-    await this.grantModel.deleteOne({ _id: existing._id });
+    const removed = await this.grantModel.deleteOne({
+      _id: existing._id,
+      ...(actorRole === Roles.OWNER ? {} : { role: { $ne: GrantRoles.ADMIN } }),
+    });
+    if (removed.deletedCount === 0) {
+      const current = await this.grantModel.exists({ _id: existing._id });
+      if (!current) {
+        throw new EntityNotFoundError('Grant not found');
+      }
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
+
     await this.recordGrantEvent(AuditEvent.MEMBER_REVOKED, {
       targetUserId: userId,
       applicationId,
@@ -525,13 +556,23 @@ export class GrantsService implements GrantsPort {
     userId: string,
     applicationId: string,
     actorId?: string,
+    actorRole?: Roles,
   ): Promise<void> {
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
 
-    const result = await this.grantModel.deleteOne({
+    const existing = await this.grantModel.findOne({
       userId: new Types.ObjectId(userId),
       applicationId: new Types.ObjectId(applicationId),
+    });
+    if (!existing) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+    this.assertMemberEscalation(existing.role, existing.role, actorRole);
+
+    const result = await this.grantModel.deleteOne({
+      _id: existing._id,
+      ...(actorRole === Roles.OWNER ? {} : { role: { $ne: GrantRoles.ADMIN } }),
     });
 
     if (result.deletedCount === 0) {
