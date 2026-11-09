@@ -13,6 +13,7 @@ import { LoggerInterface } from '../libs/logger';
 import { AuditEvent, AuditEventRecord, AuditResult } from './audit.interface';
 import {
   AuditEventFilter,
+  AuditExportFilter,
   AuditPort,
   LoginCount,
   RecordAuditEventInput,
@@ -71,6 +72,41 @@ export class AuditService implements AuditPort {
   async list(
     filter: AuditEventFilter,
   ): Promise<PaginatedResult<AuditEventRecord>> {
+    const query = this.buildQuery(filter);
+
+    const [items, total] = await Promise.all([
+      this.auditModel
+        .find(query)
+        .sort(buildSortObject(filter.sort))
+        .skip((filter.page - 1) * filter.limit)
+        .limit(filter.limit)
+        // The audit collection is the highest-volume one; a sort over a field
+        // without a matching `_id` tie-break index must not fail at 32 MB.
+        .allowDiskUse(true),
+      this.auditModel.countDocuments(query),
+    ]);
+
+    return buildPaginatedResult(items, total, filter);
+  }
+
+  async countForExport(filter: AuditExportFilter): Promise<number> {
+    return this.auditModel.countDocuments(this.buildQuery(filter));
+  }
+
+  streamForExport(
+    filter: AuditExportFilter,
+    limit?: number,
+  ): AsyncIterable<AuditEventRecord> {
+    const query = this.auditModel
+      .find(this.buildQuery(filter))
+      .sort({ createdAt: 1, _id: 1 });
+
+    return (limit === undefined ? query : query.limit(limit)).cursor();
+  }
+
+  private buildQuery(
+    filter: AuditExportFilter | AuditEventFilter,
+  ): Record<string, unknown> {
     const query: Record<string, unknown> = {};
 
     if (filter.userId !== undefined) {
@@ -116,19 +152,7 @@ export class AuditService implements AuditPort {
       ];
     }
 
-    const [items, total] = await Promise.all([
-      this.auditModel
-        .find(query)
-        .sort(buildSortObject(filter.sort))
-        .skip((filter.page - 1) * filter.limit)
-        .limit(filter.limit)
-        // The audit collection is the highest-volume one; a sort over a field
-        // without a matching `_id` tie-break index must not fail at 32 MB.
-        .allowDiskUse(true),
-      this.auditModel.countDocuments(query),
-    ]);
-
-    return buildPaginatedResult(items, total, filter);
+    return query;
   }
 
   /**
