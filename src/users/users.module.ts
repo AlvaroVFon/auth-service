@@ -25,6 +25,7 @@ export class UsersModule {
     private readonly mfaCipher: SecretCipher | undefined,
     private readonly auditService: AuditPort,
     private readonly supportRateLimit: UsersSupportRateLimitConfig,
+    private readonly sessionRevokeRateLimit: UsersSupportRateLimitConfig,
   ) {
     assertDependencies(
       {
@@ -34,6 +35,7 @@ export class UsersModule {
         logger,
         auditService,
         supportRateLimit,
+        sessionRevokeRateLimit,
       },
       this.constructor.name,
     );
@@ -55,6 +57,7 @@ export class UsersModule {
       this.authorizationMiddleware,
       this.controller,
       this.supportRateLimit,
+      this.sessionRevokeRateLimit,
       app,
     );
     this.logger.info('Init Module - Users - OK');

@@ -12,6 +12,8 @@ export interface RefreshToken {
   expiresAt: Date;
   lastActivityAt?: Date;
   revokedAt: Date | null;
+  /** Internal marker of the bulk revocation that closed this token. */
+  revocationBatchId?: string;
   replacedByJti: string | null;
   ipAddress: string | null;
   userAgent: string | null;

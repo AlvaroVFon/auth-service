@@ -9,7 +9,7 @@ import type { LoggerInterface } from '../libs/logger';
 import type { UsersPort } from '../users';
 import { GrantsController } from './grants.controller';
 import type { Grant } from './grants.interface';
-import { GrantsRouter } from './grants.router';
+import { GrantsRouter, type GrantsRateLimitConfig } from './grants.router';
 import { GrantsService } from './grants.service';
 
 export class GrantsModule {
@@ -23,6 +23,7 @@ export class GrantsModule {
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     auditService: AuditPort,
     private readonly logger: LoggerInterface,
+    private readonly rateLimitConfig: GrantsRateLimitConfig,
   ) {
     this.service = new GrantsService(
       grantModel,
@@ -41,6 +42,7 @@ export class GrantsModule {
       this.authenticationMiddleware,
       applicationAuthorizationMiddleware,
       this.controller,
+      this.rateLimitConfig,
       app,
     );
     this.logger.info('Init Module - Grants - OK');

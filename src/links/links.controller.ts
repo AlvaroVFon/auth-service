@@ -1,9 +1,17 @@
 import { Request, Response } from 'express';
 
+import { resolveGlobalActorRole } from '../common/actor-role';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
+import { InvalidArgumentError } from '../common/exceptions/base.exception';
+import { parseListQuery } from '../common/pagination';
 import { GrantRoles } from '../grants';
 import { InvitationsService } from './invitations.service';
+import {
+  INVITATION_LIST_OPTIONS,
+  type InvitationSortField,
+  type InvitationState,
+} from './links.port';
 import { PasswordResetLinksService } from './password-reset-links.service';
 
 export class LinksController {
@@ -11,6 +19,33 @@ export class LinksController {
     private readonly invitationsService: InvitationsService,
     private readonly passwordResetLinksService: PasswordResetLinksService,
   ) {}
+
+  @Catch()
+  async listInvitations(req: Request, res: Response): Promise<void> {
+    const query = parseListQuery<InvitationSortField>(
+      req.query as Record<string, unknown>,
+      INVITATION_LIST_OPTIONS,
+    );
+    if (query.q !== undefined) {
+      throw new InvalidArgumentError('q is not supported on this listing');
+    }
+    if (req.query.state !== undefined && typeof req.query.state !== 'string') {
+      throw new InvalidArgumentError('Invalid invitation state');
+    }
+
+    const invitations = await this.invitationsService.list(
+      req.params.applicationId as string,
+      {
+        ...query,
+        ...(req.query.state === undefined
+          ? {}
+          : { state: req.query.state as InvitationState }),
+      },
+      req.user?.role === Roles.OWNER,
+    );
+
+    res.status(200).json(invitations);
+  }
 
   @Catch()
   async revokeInvitation(req: Request, res: Response): Promise<void> {
@@ -30,14 +65,8 @@ export class LinksController {
       role: GrantRoles;
       telegramChatId?: string;
     };
-    // Application-scoped tokens carry a grant role, never a global owner.
     const user = req.user;
-    const actorRole =
-      user !== undefined &&
-      user.audience === undefined &&
-      (Object.values(Roles) as string[]).includes(user.role)
-        ? (user.role as Roles)
-        : undefined;
+    const actorRole = resolveGlobalActorRole(user);
 
     const result = await this.invitationsService.create({
       email,

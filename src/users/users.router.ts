@@ -26,6 +26,7 @@ export class UsersRouter {
     private readonly authorizationMiddleware: AuthorizationMiddleware,
     private readonly userController: UsersController,
     private readonly supportRateLimit: UsersSupportRateLimitConfig,
+    private readonly sessionRevokeRateLimit: UsersSupportRateLimitConfig,
     private readonly app: Application,
   ) {
     this.initializeRoutes();
@@ -86,6 +87,23 @@ export class UsersRouter {
       '/users/:id/verify',
       supportRateLimiter,
       this.userController.verify.bind(this.userController),
+    );
+
+    const sessionRateLimiter = createRateLimiter(
+      this.sessionRevokeRateLimit.windowMs,
+      this.sessionRevokeRateLimit.max,
+    );
+
+    this.app.delete(
+      '/users/:id/sessions/:sessionId',
+      sessionRateLimiter,
+      this.userController.revokeUserSession.bind(this.userController),
+    );
+
+    this.app.delete(
+      '/users/:id/sessions',
+      sessionRateLimiter,
+      this.userController.revokeAllUserSessions.bind(this.userController),
     );
 
     this.app.post(

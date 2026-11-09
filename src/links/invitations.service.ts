@@ -13,12 +13,14 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { InvalidLinkError } from '../common/exceptions/links.exceptions';
+import type { PaginatedResult } from '../common/pagination';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import type { GrantsPort } from '../grants';
 import { GrantRoles } from '../grants';
 import type { HoldersPort } from '../holders';
 import { CryptoService } from '../libs/crypto';
 import { LoggerInterface } from '../libs/logger';
+import type { SettingsPort } from '../settings';
 import type { UsersPort } from '../users';
 import type {
   InvitationMailerPort,
@@ -30,7 +32,11 @@ import {
 } from './link-notifications.service';
 import { buildInvitationLink } from './link-urls';
 import { LinkType } from './link.interface';
-import type { LinksPort } from './links.port';
+import type {
+  InvitationListItem,
+  InvitationListQuery,
+  LinksPort,
+} from './links.port';
 
 export interface CreateInvitationInput {
   email: string;
@@ -68,8 +74,28 @@ export class InvitationsService {
     private readonly notifications: LinkNotificationsService,
     private readonly logger: LoggerInterface,
     private readonly invitationMailer?: InvitationMailerPort,
+    private readonly settingsService?: SettingsPort,
     private readonly auditService?: AuditPort,
   ) {}
+
+  /** Lists the invitations of an application the caller already administers. */
+  async list(
+    applicationId: string,
+    query: InvitationListQuery,
+    includeArchived = false,
+  ): Promise<PaginatedResult<InvitationListItem>> {
+    const application = includeArchived
+      ? OBJECTID_REGEX.test(applicationId)
+        ? await this.applicationsService.findById(applicationId)
+        : null
+      : await this.findApplication(applicationId);
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    return this.linksService.listInvitations(application._id.toString(), query);
+  }
 
   /**
    * Revokes one pending invitation of an application without deleting it.
@@ -114,12 +140,16 @@ export class InvitationsService {
     const email = normalizeEmail(input.email ?? '');
     const telegramChatId = normalizeTelegramChatId(input.telegramChatId);
     const application = await this.findApplication(input.applicationId);
+    const policy = await this.resolvePolicy(application._id.toString());
 
     const created = await this.buildInvitation({
       email,
       application,
       role: input.role,
       ...(telegramChatId === undefined ? {} : { telegramChatId }),
+      ...(policy.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: policy.expiresInMs }),
       allowHolder: false,
     });
 
@@ -151,17 +181,25 @@ export class InvitationsService {
 
     const application =
       input.application ?? (await this.findApplication(input.applicationId));
+    const policy = await this.resolvePolicy(application._id.toString());
 
     const created = await this.buildInvitation({
       email,
       application,
       role: input.role,
+      ...(policy.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: policy.expiresInMs }),
       allowHolder: true,
     });
 
     if (this.invitationMailer) {
       try {
-        await this.invitationMailer.sendInvitationEmail(email, created.link);
+        await this.invitationMailer.sendInvitationEmail(
+          email,
+          created.link,
+          policy.appName,
+        );
       } catch (error) {
         // Delivery is best effort: the link exists and the caller already has a
         // successful response shape, so a mailer outage must not fail the grant.
@@ -184,6 +222,22 @@ export class InvitationsService {
     return application;
   }
 
+  private async resolvePolicy(
+    applicationId: string,
+  ): Promise<{ expiresInMs?: number; appName?: string }> {
+    if (!this.settingsService) {
+      return {};
+    }
+
+    const resolved =
+      await this.settingsService.resolveForApplication(applicationId);
+
+    return {
+      expiresInMs: resolved.invitationTtlMs.value,
+      appName: resolved.appName.value,
+    };
+  }
+
   private async buildInvitation(input: {
     email: string;
     application: {
@@ -192,6 +246,7 @@ export class InvitationsService {
     };
     role: GrantRoles;
     telegramChatId?: string;
+    expiresInMs?: number;
     allowHolder: boolean;
   }) {
     const existingUser = await this.usersService.findByEmail(input.email);
@@ -212,6 +267,9 @@ export class InvitationsService {
       ...(input.telegramChatId === undefined
         ? {}
         : { telegramChatId: input.telegramChatId }),
+      ...(input.expiresInMs === undefined
+        ? {}
+        : { expiresInMs: input.expiresInMs }),
     });
 
     const link = buildInvitationLink(this.publicAppUrl, created.token);

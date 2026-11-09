@@ -81,6 +81,7 @@ export class AuthController {
     const enrollment = await this.mfaService.enroll(
       req.user?.id as string,
       password,
+      req.user?.audience,
     );
 
     res.status(200).json(enrollment);

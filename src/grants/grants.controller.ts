@@ -1,13 +1,35 @@
 import { Request, Response } from 'express';
 
+import { resolveGlobalActorRole } from '../common/actor-role';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
 import { EntityNotFoundError } from '../common/exceptions/base.exception';
+import type { GrantRoles } from './grants.interface';
 import type { GrantApplicationScope } from './grants.port';
 import { GrantsService } from './grants.service';
 
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
+
+  @Catch()
+  async createMember(req: Request, res: Response): Promise<void> {
+    const { email, role } = req.body as {
+      email: string;
+      role: GrantRoles;
+    };
+    const user = req.user;
+    const actorRole = resolveGlobalActorRole(user);
+
+    const member = await this.grantsService.grantMemberByEmail({
+      email,
+      applicationId: req.params.applicationId as string,
+      role,
+      ...(actorRole === undefined ? {} : { actorRole }),
+      ...(user?.id === undefined ? {} : { actorId: user.id }),
+    });
+
+    res.status(201).json(member);
+  }
 
   @Catch()
   async upsert(req: Request, res: Response): Promise<void> {
@@ -18,6 +40,7 @@ export class GrantsController {
         userId,
         applicationId,
         role,
+        actorRole: resolveGlobalActorRole(req.user) ?? Roles.USER,
         ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
       },
       this.scopeFor(req),

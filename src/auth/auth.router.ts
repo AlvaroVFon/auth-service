@@ -25,6 +25,10 @@ export interface AuthRateLimitConfig {
     windowMs: number;
     max: number;
   };
+  sessionRevoke: {
+    windowMs: number;
+    max: number;
+  };
 }
 
 export class AuthRouter {

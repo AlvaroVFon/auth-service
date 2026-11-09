@@ -2,6 +2,7 @@ import type { Application } from 'express';
 
 import type { AuditPort } from '../audit';
 import { assertDependencies } from '../common/depencencies-validator';
+import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import type { LoggerInterface } from '../libs/logger';
@@ -15,6 +16,7 @@ export interface SettingsModuleDependencies {
   auditService?: AuditPort;
   authenticationMiddleware: AuthenticationMiddleware;
   authorizationMiddleware: AuthorizationMiddleware;
+  applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware;
   logger: LoggerInterface;
 }
 
@@ -22,6 +24,7 @@ export class SettingsModule {
   private readonly controller: SettingsController;
   private readonly authenticationMiddleware: AuthenticationMiddleware;
   private readonly authorizationMiddleware: AuthorizationMiddleware;
+  private readonly applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware;
   private readonly logger: LoggerInterface;
 
   constructor(dependencies: SettingsModuleDependencies) {
@@ -30,6 +33,8 @@ export class SettingsModule {
         settingsService: dependencies.settingsService,
         authenticationMiddleware: dependencies.authenticationMiddleware,
         authorizationMiddleware: dependencies.authorizationMiddleware,
+        applicationAuthorizationMiddleware:
+          dependencies.applicationAuthorizationMiddleware,
         logger: dependencies.logger,
       },
       this.constructor.name,
@@ -43,6 +48,8 @@ export class SettingsModule {
     );
     this.authenticationMiddleware = dependencies.authenticationMiddleware;
     this.authorizationMiddleware = dependencies.authorizationMiddleware;
+    this.applicationAuthorizationMiddleware =
+      dependencies.applicationAuthorizationMiddleware;
     this.logger = dependencies.logger;
   }
 
@@ -50,6 +57,7 @@ export class SettingsModule {
     new SettingsRouter(
       this.authenticationMiddleware,
       this.authorizationMiddleware,
+      this.applicationAuthorizationMiddleware,
       this.controller,
       app,
     );

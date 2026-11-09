@@ -1,6 +1,7 @@
 import type { Application } from 'express';
 
 import { Roles } from '../common/enums/roles.enum';
+import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
 import { createRateLimiter } from '../common/middlewares/rate-limiter.middleware';
@@ -14,6 +15,7 @@ export class SettingsRouter {
   constructor(
     private readonly authenticationMiddleware: AuthenticationMiddleware,
     private readonly authorizationMiddleware: AuthorizationMiddleware,
+    private readonly applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware,
     private readonly controller: SettingsController,
     private readonly app: Application,
   ) {
@@ -41,6 +43,13 @@ export class SettingsRouter {
       ...ownerOnly,
       writeRateLimiter,
       this.controller.updateSettings.bind(this.controller),
+    );
+
+    this.app.get(
+      '/applications/:applicationId/settings',
+      this.authenticationMiddleware.authenticateAny,
+      this.applicationAuthorizationMiddleware.allowApplicationSettingsReader,
+      this.controller.getApplicationSettings.bind(this.controller),
     );
   }
 }

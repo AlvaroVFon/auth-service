@@ -128,8 +128,32 @@ export class SessionService {
     return session;
   }
 
+  async revokeAllWithIds(
+    userId: string,
+    audience?: string,
+  ): Promise<{ sessionIds: string[]; complete: boolean }> {
+    const revoked = await this.refreshTokenService.revokeAllByUserId(
+      userId,
+      audience,
+    );
+
+    return {
+      sessionIds: revoked.sessions.map((token) => token.sessionId),
+      complete: revoked.complete,
+    };
+  }
+
   async revokeAll(userId: string, audience?: string): Promise<void> {
-    await this.refreshTokenService.revokeAllByUserId(userId, audience);
+    // Re-list until no active token remains: a rotation that lands during the
+    // bulk update must not leave the account with a live session.
+    const result = await this.refreshTokenService.revokeAllByUserId(
+      userId,
+      audience,
+    );
+
+    if (!result.complete) {
+      throw new Error('Session revocation incomplete');
+    }
   }
 
   async revokeByRefreshToken(
@@ -161,8 +185,8 @@ export class SessionService {
     return tokens.map((token) => this.toView(token));
   }
 
-  async revoke(userId: string, sessionId: string): Promise<void> {
-    await this.refreshTokenService.revokeBySessionId(userId, sessionId);
+  async revoke(userId: string, sessionId: string): Promise<boolean> {
+    return this.refreshTokenService.revokeBySessionId(userId, sessionId);
   }
 
   private signOptions(policy?: SessionPolicy) {
