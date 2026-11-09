@@ -11,13 +11,18 @@ export const AUDIT_CSV_COLUMNS = [
   'audience',
 ] as const;
 
+const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+
 const escapeCsvValue = (value: string | Date | undefined | null): string => {
-  const text =
+  const raw =
     value === undefined || value === null
       ? ''
       : value instanceof Date
         ? value.toISOString()
         : String(value);
+  // Neutralize spreadsheet formula injection before CSV quoting. Audit values
+  // such as the login `audience` are attacker-controlled.
+  const text = FORMULA_PREFIX.test(raw) ? `'${raw}` : raw;
 
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };

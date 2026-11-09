@@ -35,6 +35,12 @@ describe('audit CSV', () => {
     assert.strictEqual(row.includes('token'), false);
     assert.strictEqual(row.includes('password'), false);
   });
+
+  test('neutralizes spreadsheet formula injection', () => {
+    const row = auditCsvRow({ ...buildRecord(), audience: '=1+1' });
+
+    assert.match(row, /'=1\+1$/);
+  });
 });
 
 describe('AuditController.exportCsv', () => {
@@ -67,6 +73,34 @@ describe('AuditController.exportCsv', () => {
     assert.ok(error instanceof InvalidArgumentError);
     assert.match(error.message, /narrow the date range/);
     assert.strictEqual(res.write.mock.callCount(), 0);
+  });
+
+  test('never writes more data rows than the cap even if the cursor yields more', async () => {
+    const controller = new AuditController(
+      {
+        countForExport: async () => 1,
+        streamForExport: async function* () {
+          yield buildRecord();
+          yield buildRecord();
+        },
+      } as never,
+      1,
+    );
+    const next = mock.fn();
+    const res = {
+      status: mock.fn(() => res),
+      setHeader: mock.fn(),
+      write: mock.fn(),
+      end: mock.fn(),
+      headersSent: true,
+    };
+
+    await (
+      controller.exportCsv as unknown as (...args: unknown[]) => Promise<void>
+    )({ query: {} }, res, next);
+
+    assert.strictEqual(res.write.mock.callCount(), 2);
+    assert.strictEqual(res.end.mock.callCount(), 1);
   });
 
   test('streams the header and the rows when the cap is not exceeded', async () => {

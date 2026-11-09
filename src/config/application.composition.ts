@@ -385,6 +385,7 @@ export const createApplicationComposition = (
     auditController: new AuditController(
       auditService,
       getNumberEnvVariable('AUDIT_EXPORT_MAX_ROWS', 10_000),
+      logger,
     ),
     authenticationMiddleware,
     authorizationMiddleware,

@@ -92,11 +92,15 @@ export class AuditService implements AuditPort {
     return this.auditModel.countDocuments(this.buildQuery(filter));
   }
 
-  streamForExport(filter: AuditExportFilter): AsyncIterable<AuditEventRecord> {
-    return this.auditModel
+  streamForExport(
+    filter: AuditExportFilter,
+    limit?: number,
+  ): AsyncIterable<AuditEventRecord> {
+    const query = this.auditModel
       .find(this.buildQuery(filter))
-      .sort({ createdAt: 1, _id: 1 })
-      .cursor();
+      .sort({ createdAt: 1, _id: 1 });
+
+    return (limit === undefined ? query : query.limit(limit)).cursor();
   }
 
   private buildQuery(

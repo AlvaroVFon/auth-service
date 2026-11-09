@@ -63,5 +63,8 @@ export interface AuditPort {
   /** Counts the rows a CSV export would contain. */
   countForExport(filter: AuditExportFilter): Promise<number>;
   /** Streams the export rows in creation order without pagination. */
-  streamForExport(filter: AuditExportFilter): AsyncIterable<AuditEventRecord>;
+  streamForExport(
+    filter: AuditExportFilter,
+    limit?: number,
+  ): AsyncIterable<AuditEventRecord>;
 }

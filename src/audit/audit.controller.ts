@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { Catch } from '../common/decorators/catch.decorator';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { parseListQuery } from '../common/pagination';
+import type { LoggerInterface } from '../libs/logger';
 import { auditCsvHeader, auditCsvRow } from './audit-csv';
 import { AUDIT_EVENT_DESCRIPTIONS, AuditEvent } from './audit.interface';
 import {
@@ -45,6 +46,7 @@ export class AuditController {
   constructor(
     private readonly auditService: AuditPort,
     private readonly maxExportRows: number = 10_000,
+    private readonly logger?: LoggerInterface,
   ) {}
 
   @Catch()
@@ -91,8 +93,26 @@ export class AuditController {
     );
     res.write(`${auditCsvHeader()}\n`);
 
-    for await (const event of this.auditService.streamForExport(filter)) {
-      res.write(`${auditCsvRow(event)}\n`);
+    let written = 0;
+    try {
+      for await (const event of this.auditService.streamForExport(
+        filter,
+        this.maxExportRows,
+      )) {
+        // A write between the count and the cursor must not exceed the cap.
+        if (written >= this.maxExportRows) {
+          break;
+        }
+        res.write(`${auditCsvRow(event)}\n`);
+        written += 1;
+      }
+    } catch (error) {
+      this.logger?.warn('Audit export stream failed', error);
+      if (!res.headersSent) {
+        throw error;
+      }
+      res.end();
+      return;
     }
 
     res.end();
