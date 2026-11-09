@@ -35,6 +35,7 @@ export class LinksService implements LinksPort {
     applicationId: string,
     invitationId: string,
     allowAdminInvitation = false,
+    expiresInMs?: number,
   ): Promise<CreatedLink> {
     assertObjectId(applicationId, 'applicationId');
     assertObjectId(invitationId, 'invitationId');
@@ -70,6 +71,7 @@ export class LinksService implements LinksPort {
       ...(existing.telegramChatId === undefined
         ? {}
         : { telegramChatId: existing.telegramChatId }),
+      ...(expiresInMs === undefined ? {} : { expiresInMs }),
     });
   }
 

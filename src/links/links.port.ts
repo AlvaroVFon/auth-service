@@ -36,6 +36,7 @@ export interface LinksPort {
     applicationId: string,
     invitationId: string,
     allowAdminInvitation?: boolean,
+    expiresInMs?: number,
   ): Promise<CreatedLink>;
   /**
    * Revokes one invitation of an application. Returns false when it was

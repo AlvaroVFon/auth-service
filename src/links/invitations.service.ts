@@ -134,10 +134,12 @@ export class InvitationsService {
       throw new EntityNotFoundError('Application not found');
     }
 
+    const policy = await this.resolvePolicy(application._id.toString());
     const created = await this.linksService.resendInvitation(
       application._id.toString(),
       invitationId,
       actorRole === Roles.OWNER,
+      policy.expiresInMs,
     );
     const link = buildInvitationLink(this.publicAppUrl, created.token);
 
