@@ -69,14 +69,24 @@ export class AuthService {
       return undefined;
     }
 
-    const resolved =
-      await this.settingsService.resolveForApplication(applicationId);
+    try {
+      const resolved =
+        await this.settingsService.resolveForApplication(applicationId);
 
-    return {
-      accessTokenTtl: resolved.accessTokenTtlSeconds.value,
-      refreshTokenTtl: resolved.refreshTokenTtlSeconds.value,
-      maxSessionsPerUser: resolved.maxSessionsPerUser.value,
-    };
+      return {
+        accessTokenTtl: resolved.accessTokenTtlSeconds.value,
+        refreshTokenTtl: resolved.refreshTokenTtlSeconds.value,
+        maxSessionsPerUser: resolved.maxSessionsPerUser.value,
+      };
+    } catch (error) {
+      // A settings outage must not turn a valid login into a failure or revoke
+      // a still-valid refresh token: fall back to the instance policy.
+      this.logger.warn(
+        `Failed to resolve the session policy of application ${applicationId}`,
+        error,
+      );
+      return undefined;
+    }
   }
 
   private async resolveResetPasswordCode(userId: string): Promise<Code> {
