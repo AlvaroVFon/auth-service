@@ -33,6 +33,7 @@ import { User as UserInterface } from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
+  UserSummary,
   UserListItem,
   UserSessionRevokerPort,
   UserSortField,
@@ -50,6 +51,14 @@ export interface UserSupportActionContext extends RequestAuditContext {
  * Inclusion projection: a path added to the schema later is not shipped until
  * it is listed here, so the listing fails closed instead of leaking a secret.
  */
+const USER_SUMMARY_PROJECTION = [
+  'email',
+  'username',
+  'verified',
+  'mfaEnabled',
+  'lastLoginAt',
+].join(' ');
+
 const USER_LIST_PROJECTION = [
   'username',
   'email',
@@ -209,6 +218,42 @@ export class UsersService implements UsersPort {
     }
 
     return user;
+  }
+
+  /**
+   * Batched profile projection for a known id set. The inclusion select never
+   * returns credentials, lockout counters or MFA material.
+   */
+  async findSummariesByIds(ids: string[]): Promise<UserSummary[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    for (const id of ids) {
+      this.assertValidId(id);
+    }
+
+    const users = await this.usersModel
+      .find({ _id: { $in: ids } })
+      .select(USER_SUMMARY_PROJECTION)
+      .lean<
+        Array<{
+          _id: { toString(): string };
+          email: string;
+          username?: string;
+          verified: boolean;
+          mfaEnabled?: boolean;
+          lastLoginAt?: Date | null;
+        }>
+      >();
+
+    return users.map((user) => ({
+      userId: user._id.toString(),
+      email: user.email,
+      ...(user.username === undefined ? {} : { username: user.username }),
+      verified: user.verified,
+      mfaEnabled: user.mfaEnabled ?? false,
+      lastLoginAt: user.lastLoginAt ?? null,
+    }));
   }
 
   /**
