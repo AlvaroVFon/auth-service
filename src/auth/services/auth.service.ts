@@ -457,7 +457,9 @@ export class AuthService {
     }
 
     const user = await this.usersService.findByEmail(normalizedEmail);
-    if (!user) {
+    if (!user || !user.verified) {
+      // An unproven address must not receive reset codes: the same generic
+      // response keeps the endpoint from revealing the account state.
       return;
     }
 

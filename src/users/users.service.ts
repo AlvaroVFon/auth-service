@@ -401,16 +401,24 @@ export class UsersService implements UsersPort {
     const set = update.$set as Record<string, unknown>;
 
     if (updateData.email !== undefined) {
-      const current = await this.usersModel.findById(id).select('email');
+      const current = await this.usersModel.findById(id).select('email role');
 
       if (!current) {
         throw new EntityNotFoundError('User not found');
       }
 
-      // The owner can change the address, but nobody has proved it yet: a
-      // verified account must not keep logging in and receiving reset links on
-      // an address it no longer controls.
       if (normalizeEmail(current.email) !== normalizeEmail(updateData.email)) {
+        // The owner email is the bootstrap identity: changing it is rejected
+        // instead of leaving the singleton account unverified and unrecoverable.
+        if (current.role === Roles.OWNER) {
+          throw new ForbiddenError(
+            'The owner email cannot be changed through the API',
+          );
+        }
+
+        // Nobody has proved the new address yet: the account must not keep
+        // logging in and receiving reset links on an address it no longer
+        // controls. The owner re-verifies it through POST /users/:id/verify.
         set.verified = false;
       }
     }
