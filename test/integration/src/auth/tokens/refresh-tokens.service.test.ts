@@ -563,6 +563,23 @@ describe('RefreshTokenService', () => {
       );
     });
 
+    test('should reject revoking an expired session', async () => {
+      const userId = new Types.ObjectId();
+      await fixture.create<RefreshToken>(
+        RefreshTokenModel.modelName,
+        RefreshTokenFactory.generate({
+          userId,
+          sessionId: sessionA,
+          expiresAt: new Date(Date.now() - 60_000),
+        }),
+      );
+
+      await assert.rejects(
+        refreshTokenService.revokeBySessionId(userId.toString(), sessionA),
+        new EntityNotFoundError('Session not found'),
+      );
+    });
+
     test('should throw when the session does not exist', async () => {
       await assert.rejects(
         refreshTokenService.revokeBySessionId(
