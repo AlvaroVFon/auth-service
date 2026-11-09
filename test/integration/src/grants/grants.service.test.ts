@@ -1105,4 +1105,26 @@ describe('GrantsService.listMembers', () => {
     assert.strictEqual(result.total, 1);
     assert.strictEqual(result.items.length, 1);
   });
+
+  test('pages the hydratable set so orphans cannot hide a member', async () => {
+    const application = await createApplication();
+    const member = await createMember(application._id, GrantRoles.VIEWER);
+    for (let index = 0; index < 2; index += 1) {
+      await fixture.create<Grant>(GrantModel.modelName, {
+        _id: new Types.ObjectId(),
+        userId: new Types.ObjectId(),
+        applicationId: application._id,
+        role: GrantRoles.EDITOR,
+      });
+    }
+
+    const result = await grantsService.listMembers(
+      application._id.toString(),
+      query({ limit: 2 }),
+    );
+
+    assert.strictEqual(result.total, 1);
+    assert.strictEqual(result.items.length, 1);
+    assert.strictEqual(result.items[0]!.userId, member._id.toString());
+  });
 });

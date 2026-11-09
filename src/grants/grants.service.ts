@@ -321,56 +321,56 @@ export class GrantsService implements GrantsPort {
     assertObjectId(applicationId, 'applicationId');
     await this.resolveApplication(applicationId, scope);
 
-    const filter = { applicationId: new Types.ObjectId(applicationId) };
-
-    // Count only hydratable members (grants whose user still exists) without
-    // materialising or sorting the whole join: the page query below is served
-    // by the { applicationId, createdAt|role, _id } indexes.
-    const [count] = await this.grantModel.aggregate<{ value: number }>([
-      { $match: filter },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user',
+    // Join, filter and paginate in one pipeline so `total` and the page use the
+    // same set: a grant whose user was deleted is not a member and must neither
+    // inflate the count nor occupy a page slot.
+    const [facet] = await this.grantModel.aggregate<{
+      items: GrantMember[];
+      total: Array<{ value: number }>;
+    }>(
+      [
+        {
+          $match: { applicationId: new Types.ObjectId(applicationId) },
         },
-      },
-      { $match: { 'user.0': { $exists: true } } },
-      { $count: 'value' },
-    ]);
-    const total = count?.value ?? 0;
-
-    const grants = await this.grantModel
-      .find(filter)
-      .sort(buildSortObject(query.sort))
-      .skip((query.page - 1) * query.limit)
-      .limit(query.limit);
-
-    const summaries = await this.usersService.findSummariesByIds(
-      grants.map((grant) => grant.userId.toString()),
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        { $unwind: '$user' },
+        {
+          $facet: {
+            items: [
+              { $sort: buildSortObject(query.sort) },
+              { $skip: (query.page - 1) * query.limit },
+              { $limit: query.limit },
+              {
+                $project: {
+                  _id: 0,
+                  userId: { $toString: '$userId' },
+                  role: 1,
+                  // The membership date, matching the `createdAt` ordering.
+                  createdAt: 1,
+                  email: '$user.email',
+                  username: '$user.username',
+                  verified: '$user.verified',
+                  mfaEnabled: { $ifNull: ['$user.mfaEnabled', false] },
+                  lastLoginAt: '$user.lastLoginAt',
+                },
+              },
+            ],
+            total: [{ $count: 'value' }],
+          },
+        },
+      ],
+      { allowDiskUse: true },
     );
-    const summariesById = new Map(
-      summaries.map((summary) => [summary.userId, summary]),
-    );
 
-    // A grant whose user was deleted is not a member any more.
-    const items = grants.flatMap((grant) => {
-      const summary = summariesById.get(grant.userId.toString());
-
-      return summary
-        ? [
-            {
-              ...summary,
-              role: grant.role,
-              // The membership date, matching the `createdAt` ordering.
-              ...(grant.createdAt === undefined
-                ? {}
-                : { createdAt: grant.createdAt }),
-            },
-          ]
-        : [];
-    });
+    const items = facet?.items ?? [];
+    const total = facet?.total[0]?.value ?? 0;
 
     return buildPaginatedResult(items, total, query);
   }
