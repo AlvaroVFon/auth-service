@@ -85,7 +85,7 @@ export class JwtService {
     userId: string,
     role: TokenRole,
     audience: string,
-    options: TokenSignOptions = {},
+    options: Pick<TokenSignOptions, 'accessExpiresIn'> = {},
   ): string {
     if (!audience) {
       throw new InvalidArgumentError(
