@@ -133,7 +133,8 @@ export class AuditService implements AuditPort {
 
   /**
    * Counts login outcomes from `since` onwards. The aggregation uses the
-   * `event + createdAt` index and never materialises the matching documents.
+   * `event + createdAt` index to bound the scan; the group still reads the
+   * matching documents because the index does not carry `result`.
    */
   async countLogins(since: Date): Promise<LoginCount> {
     if (!(since instanceof Date) || Number.isNaN(since.getTime())) {
