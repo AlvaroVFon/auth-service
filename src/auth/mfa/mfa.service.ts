@@ -1,3 +1,4 @@
+import type { ApplicationsPort } from '../../applications';
 import {
   AccountLockedError,
   InvalidCredentialsError,
@@ -10,6 +11,7 @@ import {
   MfaNotEnabledError,
 } from '../../common/exceptions/mfa.exceptions';
 import { CryptoService } from '../../libs/crypto';
+import type { SettingsPort } from '../../settings';
 import type { User, UsersPort } from '../../users';
 import type { SessionService } from '../tokens/session.service';
 import { MfaActivation, MfaEnrollment } from './mfa.interface';
@@ -23,9 +25,15 @@ export class MfaService {
     private readonly cryptoService: CryptoService,
     private readonly sessionService: SessionService,
     private readonly issuer: string,
+    private readonly settingsService?: SettingsPort,
+    private readonly applicationsService?: ApplicationsPort,
   ) {}
 
-  async enroll(userId: string, password: string): Promise<MfaEnrollment> {
+  async enroll(
+    userId: string,
+    password: string,
+    audience?: string,
+  ): Promise<MfaEnrollment> {
     const user = await this.getUser(userId);
 
     if (user.mfaEnabled) {
@@ -47,11 +55,34 @@ export class MfaService {
     return {
       secret,
       otpauthUrl: buildOtpauthUrl({
-        issuer: this.issuer,
+        issuer: await this.resolveIssuer(audience),
         account: user.email,
         secret,
       }),
     };
+  }
+
+  /**
+   * The authenticator entry is branded with the application that issued the
+   * token. Tokens without an audience (owner/global flows) keep the service
+   * name from the environment.
+   */
+  private async resolveIssuer(audience?: string): Promise<string> {
+    if (!audience || !this.settingsService || !this.applicationsService) {
+      return this.issuer;
+    }
+
+    const application = await this.applicationsService.findByAudience(audience);
+
+    if (!application) {
+      return this.issuer;
+    }
+
+    const resolved = await this.settingsService.resolveForApplication(
+      application._id.toString(),
+    );
+
+    return resolved.appName.value;
   }
 
   async activate(userId: string, code: string): Promise<MfaActivation> {

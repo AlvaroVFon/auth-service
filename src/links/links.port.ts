@@ -46,6 +46,8 @@ export interface CreateInvitationLinkInput {
   applicationId: string;
   role: GrantRoles;
   telegramChatId?: string;
+  /** Effective invitation TTL; falls back to the service default. */
+  expiresInMs?: number;
 }
 
 export interface CreatePasswordResetLinkInput {
