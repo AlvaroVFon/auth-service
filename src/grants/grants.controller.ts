@@ -40,6 +40,36 @@ export class GrantsController {
   }
 
   @Catch()
+  async updateMember(req: Request, res: Response): Promise<void> {
+    const { role } = req.body as { role: GrantRoles };
+    const user = req.user;
+    const actorRole = resolveGlobalActorRole(user);
+    const grant = await this.grantsService.changeMemberRole({
+      userId: req.params.userId as string,
+      applicationId: req.params.applicationId as string,
+      role,
+      ...(actorRole === undefined ? {} : { actorRole }),
+      ...(user?.id === undefined ? {} : { actorId: user.id }),
+    });
+
+    res.status(200).json(grant);
+  }
+
+  @Catch()
+  async removeMember(req: Request, res: Response): Promise<void> {
+    const user = req.user;
+    const actorRole = resolveGlobalActorRole(user);
+    await this.grantsService.removeMember({
+      userId: req.params.userId as string,
+      applicationId: req.params.applicationId as string,
+      ...(actorRole === undefined ? {} : { actorRole }),
+      ...(user?.id === undefined ? {} : { actorId: user.id }),
+    });
+
+    res.status(204).send();
+  }
+
+  @Catch()
   async upsert(req: Request, res: Response): Promise<void> {
     const applicationId = req.params.applicationId as string;
     const { userId, role } = req.body ?? {};

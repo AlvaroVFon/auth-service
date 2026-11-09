@@ -29,6 +29,7 @@ import type {
   GrantMember,
   GrantMemberInput,
   GrantMemberSortField,
+  MemberMutationInput,
   GrantsPort,
 } from './grants.port';
 
@@ -268,6 +269,95 @@ export class GrantsService implements GrantsPort {
     });
 
     return { email: normalizeEmail(input.email ?? ''), role: input.role };
+  }
+
+  async changeMemberRole(
+    input: MemberMutationInput & { role: GrantRoles },
+  ): Promise<Grant> {
+    const { userId, applicationId, role, actorId, actorRole } = input;
+    assertObjectId(userId, 'userId');
+    assertObjectId(applicationId, 'applicationId');
+    if (!Object.values(GrantRoles).includes(role)) {
+      throw new InvalidArgumentError('Invalid role');
+    }
+
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const existing = await this.grantModel.findOne({
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+    });
+    if (!existing) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+    this.assertMemberEscalation(existing.role, role, actorRole);
+
+    const grant = await this.grantModel.findOneAndUpdate(
+      {
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+      },
+      { $set: { role } },
+      { returnDocument: 'after' },
+    );
+    if (!grant) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+
+    await this.recordGrantEvent(AuditEvent.MEMBER_GRANTED, {
+      targetUserId: userId,
+      applicationId,
+      role,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+
+    return grant;
+  }
+
+  async removeMember(input: MemberMutationInput): Promise<void> {
+    const { userId, applicationId, actorId, actorRole } = input;
+    assertObjectId(userId, 'userId');
+    assertObjectId(applicationId, 'applicationId');
+
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const existing = await this.grantModel.findOne({
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+    });
+    if (!existing) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+    this.assertMemberEscalation(existing.role, existing.role, actorRole);
+
+    await this.grantModel.deleteOne({ _id: existing._id });
+    await this.recordGrantEvent(AuditEvent.MEMBER_REVOKED, {
+      targetUserId: userId,
+      applicationId,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+  }
+
+  /** Only the owner may create, modify or remove an admin member. */
+  private assertMemberEscalation(
+    currentRole: GrantRoles,
+    nextRole: GrantRoles,
+    actorRole?: Roles,
+  ): void {
+    if (
+      (currentRole === GrantRoles.ADMIN || nextRole === GrantRoles.ADMIN) &&
+      actorRole !== Roles.OWNER
+    ) {
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
   }
 
   setInvitationsPort(invitations: InvitationsPort): void {

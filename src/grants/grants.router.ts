@@ -40,6 +40,20 @@ export class GrantsRouter {
       this.grantsController.createMember.bind(this.grantsController),
     );
 
+    this.app.patch(
+      '/applications/:applicationId/members/:userId',
+      ...appAdminOnly,
+      membersWriteRateLimiter,
+      this.grantsController.updateMember.bind(this.grantsController),
+    );
+
+    this.app.delete(
+      '/applications/:applicationId/members/:userId',
+      ...appAdminOnly,
+      membersWriteRateLimiter,
+      this.grantsController.removeMember.bind(this.grantsController),
+    );
+
     this.app.put(
       '/applications/:applicationId/grants',
       ...appAdminOnly,
