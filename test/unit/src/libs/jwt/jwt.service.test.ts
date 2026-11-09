@@ -99,6 +99,67 @@ describe('JwtService', () => {
 
       assert.strictEqual(decoded.exp - decoded.iat, refreshExpiresIn);
     });
+
+    test('should apply a per-call access TTL without changing the instance TTL', () => {
+      const instanceTtl = 3600;
+      const service = new JwtService(keyring, instanceTtl, 86400, {
+        issuer: 'auth-service-test',
+      });
+
+      const overridden = service.signTokenPair(userId, Roles.USER, undefined, {
+        accessExpiresIn: 600,
+      });
+      const claims = service.verifyToken(
+        overridden.accessToken,
+      ) as TokenClaims & {
+        iat: number;
+      };
+      assert.strictEqual(claims.exp - claims.iat, 600);
+
+      const fallback = service.signTokenPair(userId, Roles.USER);
+      const fallbackClaims = service.verifyToken(
+        fallback.accessToken,
+      ) as TokenClaims & { iat: number };
+      assert.strictEqual(fallbackClaims.exp - fallbackClaims.iat, instanceTtl);
+    });
+
+    test('should apply a per-call refresh TTL to the token and refreshExpiresAt', () => {
+      const service = new JwtService(keyring, 3600, 86400, {
+        issuer: 'auth-service-test',
+      });
+      const before = Date.now();
+      const session = service.signTokenPair(userId, Roles.USER, undefined, {
+        refreshExpiresIn: 7200,
+      });
+      const claims = service.verifyToken(
+        session.refreshToken,
+      ) as TokenClaims & {
+        iat: number;
+      };
+
+      assert.strictEqual(claims.exp - claims.iat, 7200);
+      const offset = session.refreshExpiresAt.getTime() - before;
+      assert.ok(offset >= 7199 * 1000 && offset <= 7201 * 1000);
+    });
+
+    test('should fall back to both instance TTLs when no override is given', () => {
+      const accessTtl = 1800;
+      const refreshTtl = 7200;
+      const service = new JwtService(keyring, accessTtl, refreshTtl, {
+        issuer: 'auth-service-test',
+      });
+
+      const session = service.signTokenPair(userId, Roles.USER);
+      const access = service.verifyToken(session.accessToken) as TokenClaims & {
+        iat: number;
+      };
+      const refresh = service.verifyToken(
+        session.refreshToken,
+      ) as TokenClaims & { iat: number };
+
+      assert.strictEqual(access.exp - access.iat, accessTtl);
+      assert.strictEqual(refresh.exp - refresh.iat, refreshTtl);
+    });
   });
 
   describe('RS256 signing', () => {
@@ -135,6 +196,20 @@ describe('JwtService', () => {
       assert.strictEqual(claims.aud, 'app-a');
       assert.strictEqual(claims.role, GrantRoles.ADMIN);
       assert.strictEqual(claims.type, TokenTypes.ACCESS);
+    });
+
+    test('should apply a per-call access TTL to application tokens', () => {
+      const token = jwtService.signAccessToken(
+        userId,
+        GrantRoles.VIEWER,
+        'app-a',
+        { accessExpiresIn: 600 },
+      );
+
+      const claims = jwtService.verifyToken(token, {
+        audience: 'app-a',
+      }) as TokenClaims & { iat: number };
+      assert.strictEqual(claims.exp - claims.iat, 600);
     });
 
     test('should reject a token issued for another audience', () => {

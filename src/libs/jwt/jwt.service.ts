@@ -14,6 +14,7 @@ import {
   TokenClaims,
   TokenPair,
   TokenRole,
+  TokenSignOptions,
   VerifyTokenOptions,
 } from './jwt.interfaces';
 import { TokenTypes } from './token-types.enum';
@@ -52,29 +53,40 @@ export class JwtService {
     this.mfaChallengeExpiresIn = options.mfaChallengeExpiresIn ?? 300;
   }
 
-  signTokenPair(userId: string, role: TokenRole, audience?: string): TokenPair {
+  signTokenPair(
+    userId: string,
+    role: TokenRole,
+    audience?: string,
+    options: TokenSignOptions = {},
+  ): TokenPair {
     const scope = audience ? { aud: audience } : {};
     const refreshTokenId = randomUUID();
+    const accessExpiresIn = options.accessExpiresIn ?? this.expiresIn;
+    const refreshExpiresIn =
+      options.refreshExpiresIn ?? this.refreshTokenExpiresIn;
     const accessToken = this.signUserToken(
       { userId, role, type: TokenTypes.ACCESS, ...scope },
-      this.expiresIn,
+      accessExpiresIn,
     );
     const refreshToken = this.signUserToken(
       { userId, role, type: TokenTypes.REFRESH, jti: refreshTokenId, ...scope },
-      this.refreshTokenExpiresIn,
+      refreshExpiresIn,
     );
 
     return {
       accessToken,
       refreshToken,
       refreshTokenId,
-      refreshExpiresAt: new Date(
-        Date.now() + this.refreshTokenExpiresIn * 1000,
-      ),
+      refreshExpiresAt: new Date(Date.now() + refreshExpiresIn * 1000),
     };
   }
 
-  signAccessToken(userId: string, role: TokenRole, audience: string): string {
+  signAccessToken(
+    userId: string,
+    role: TokenRole,
+    audience: string,
+    options: TokenSignOptions = {},
+  ): string {
     if (!audience) {
       throw new InvalidArgumentError(
         'InvalidArgumentError: Audience is required for application tokens',
@@ -83,7 +95,7 @@ export class JwtService {
 
     return this.signUserToken(
       { userId, role, type: TokenTypes.ACCESS, aud: audience },
-      this.expiresIn,
+      options.accessExpiresIn ?? this.expiresIn,
     );
   }
 
