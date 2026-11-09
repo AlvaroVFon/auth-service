@@ -639,3 +639,48 @@ describe('RefreshTokenService revokeAllByAudience', () => {
     });
   });
 });
+
+describe('RefreshTokenService.pruneActiveSessions by audience', () => {
+  test('prunes only the requested audience and leaves other applications intact', async () => {
+    const userId = new Types.ObjectId();
+    const now = Date.now();
+    const tokens = [
+      { audience: 'app-a', sessionId: '6f1c2a2e-1111-4111-a111-111111111111' },
+      { audience: 'app-a', sessionId: '6f1c2a2e-2222-4222-a222-222222222222' },
+      { audience: 'app-b', sessionId: '6f1c2a2e-3333-4333-a333-333333333333' },
+    ];
+    await fixture.createMany<RefreshToken>(
+      RefreshTokenModel.modelName,
+      tokens.map((token, index) =>
+        RefreshTokenFactory.generate({
+          userId,
+          audience: token.audience,
+          sessionId: token.sessionId,
+          lastActivityAt: new Date(now - (tokens.length - index) * 1000),
+          expiresAt: new Date(now + 60_000),
+        }),
+      ),
+    );
+
+    await new RefreshTokenService(RefreshTokenModel).pruneActiveSessions(
+      userId.toString(),
+      1,
+      'app-a',
+    );
+
+    const active = await fixture.find<RefreshToken>(
+      RefreshTokenModel.modelName,
+      { userId, revokedAt: null },
+    );
+
+    assert.deepStrictEqual(
+      active
+        .map((token) => token.sessionId ?? '')
+        .sort((a, b) => a.localeCompare(b)),
+      [
+        '6f1c2a2e-2222-4222-a222-222222222222',
+        '6f1c2a2e-3333-4333-a333-333333333333',
+      ],
+    );
+  });
+});
