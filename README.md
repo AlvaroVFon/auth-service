@@ -136,6 +136,8 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `RATE_LIMIT_REFRESH_MAX`               | Refresh requests allowed per window.            | `60`      | No                     |
 | `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification rate-limit window.             | `900000`  | No                     |
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window.           | `10`      | No                     |
+| `RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS`   | Window for POST application members.            | `900000`  | No                     |
+| `RATE_LIMIT_MEMBERS_WRITE_MAX`         | Member writes per window.                       | `30`      | No                     |
 
 #### Links, audit, MFA and Telegram
 
@@ -224,6 +226,7 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
 | `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
 | `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
+| `POST`   | `/applications/:applicationId/members`        | Owner, app admin | Grants by email or invites; neutral `{ email, role }` response. |
 | `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                  |
 | `GET`    | `/applications/:applicationId/grants`         | Owner, app admin | Lists the application grants.                                   |
 | `GET`    | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant.                                                |

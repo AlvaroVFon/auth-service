@@ -146,7 +146,9 @@ export class GrantsService implements GrantsPort {
           applicationId: input.applicationId,
           role: input.role,
           application,
-          actorRole: input.actorRole,
+          ...(input.actorRole === undefined
+            ? {}
+            : { actorRole: input.actorRole }),
         });
       } catch (error) {
         // A signup can land between the lookup and the invitation: retry the
@@ -258,7 +260,7 @@ export class GrantsService implements GrantsPort {
     applicationId: string;
     role: GrantRoles;
     application: Application;
-    actorRole: Roles;
+    actorRole?: Roles;
   }): Promise<GrantedMember> {
     if (!this.invitations) {
       throw new Error('Invitations port is not configured');
