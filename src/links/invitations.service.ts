@@ -51,6 +51,7 @@ export interface CreatedInvitation {
 }
 
 export interface ResentInvitation {
+  id: string;
   link: string;
   expiresAt: Date;
 }
@@ -153,7 +154,11 @@ export class InvitationsService {
       ...(actorId === undefined ? {} : { actorId }),
     });
 
-    return { link, expiresAt: created.link.expiresAt };
+    return {
+      id: created.link._id.toString(),
+      link,
+      expiresAt: created.link.expiresAt,
+    };
   }
 
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
