@@ -89,6 +89,8 @@ userSchema.index({ email: 1, _id: 1 });
 userSchema.index({ username: 1, _id: 1 });
 userSchema.index({ role: 1, _id: 1 });
 userSchema.index({ verified: 1, _id: 1 });
+// Supports the active-lockout counter without a collection scan.
+userSchema.index({ lockoutUntil: 1 });
 userSchema.index({ createdAt: 1, _id: 1 });
 
 export const User = model<UserInterface>('User', userSchema);

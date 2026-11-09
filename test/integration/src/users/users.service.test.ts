@@ -1211,3 +1211,37 @@ describe('UsersService.recordLogin', () => {
     );
   });
 });
+
+describe('UsersService.countUsers', () => {
+  test('should count verified, unverified and actively locked accounts', async () => {
+    await fixture.createMany<UserInterface>('User', [
+      UserFactory.generate({
+        email: generateRandomEmail('count-verified+'),
+        verified: true,
+      }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-unverified+'),
+        verified: false,
+      }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-locked+'),
+        verified: true,
+        lockoutUntil: new Date(Date.now() + 60_000),
+      }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-expired+'),
+        verified: false,
+        lockoutUntil: new Date(Date.now() - 60_000),
+      }),
+    ]);
+
+    const service = new UsersService(User, new CryptoService());
+
+    assert.deepStrictEqual(await service.countUsers(), {
+      total: 4,
+      verified: 2,
+      unverified: 2,
+      locked: 1,
+    });
+  });
+});

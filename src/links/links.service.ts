@@ -13,6 +13,7 @@ import {
   CreateInvitationLinkInput,
   CreatePasswordResetLinkInput,
   CreatedLink,
+  InvitationCounts,
   InvalidateLinksFilter,
   LinksPort,
 } from './links.port';
@@ -25,6 +26,43 @@ export class LinksService implements LinksPort {
     private readonly invitationExpirationMs: number = 7 * 24 * 60 * 60 * 1000,
     private readonly passwordResetExpirationMs: number = 60 * 60 * 1000,
   ) {}
+
+  /**
+   * Counts unused and non-invalidated invitation links, splitting them by
+   * whether they are still usable. Used or revoked links belong to neither
+   * bucket, so pending and expired never overlap.
+   */
+  async countInvitations(): Promise<InvitationCounts> {
+    const now = new Date();
+    const rows = await this.linkModel.aggregate<{
+      _id: 'pending' | 'expired';
+      count: number;
+    }>([
+      {
+        $match: {
+          type: LinkType.INVITATION,
+          usedAt: null,
+          invalidatedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [{ $gt: ['$expiresAt', now] }, 'pending', 'expired'],
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const counts: InvitationCounts = { pending: 0, expired: 0 };
+
+    for (const row of rows) {
+      counts[row._id] = row.count;
+    }
+
+    return counts;
+  }
 
   async createInvitation(
     input: CreateInvitationLinkInput,

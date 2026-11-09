@@ -87,6 +87,14 @@ export class RefreshTokenService {
     return this.refreshTokenModel.findOne({ jti });
   }
 
+  /** Counts every non-revoked, non-expired refresh token. */
+  async countActiveSessions(): Promise<number> {
+    return this.refreshTokenModel.countDocuments({
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+  }
+
   async listActiveByUserId(userId: string): Promise<RefreshToken[]> {
     if (!OBJECTID_REGEX.test(userId)) {
       throw new InvalidArgumentError('userId is not a valid ObjectId');

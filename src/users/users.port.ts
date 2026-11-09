@@ -71,7 +71,17 @@ export interface UserSessionsPort {
   listSessions(userId: string): Promise<UserSessionView[]>;
 }
 
+/** Management counters used by the admin overview. */
+export interface UserCounts {
+  total: number;
+  verified: number;
+  unverified: number;
+  /** Accounts with a lockout that is still in force. */
+  locked: number;
+}
+
 export interface UsersPort {
+  countUsers(): Promise<UserCounts>;
   findAll(
     query: ListQuery<UserSortField>,
   ): Promise<PaginatedResult<UserListItem>>;

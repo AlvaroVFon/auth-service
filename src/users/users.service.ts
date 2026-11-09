@@ -37,6 +37,7 @@ import type {
   UserSessionRevokerPort,
   UserSortField,
   UserSessionsPort,
+  UserCounts,
   UserSessionView,
   UsersPort,
 } from './users.port';
@@ -74,6 +75,38 @@ export class UsersService implements UsersPort {
     private readonly mfaCipher?: SecretCipher,
     private readonly auditService?: AuditPort,
   ) {}
+
+  async countUsers(): Promise<UserCounts> {
+    const now = new Date();
+    const [row] = await this.usersModel.aggregate<{
+      total: number;
+      verified: number;
+      locked: number;
+    }>([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          verified: { $sum: { $cond: ['$verified', 1, 0] } },
+          locked: {
+            $sum: {
+              $cond: [{ $gt: ['$lockoutUntil', now] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    const total = row?.total ?? 0;
+    const verified = row?.verified ?? 0;
+
+    return {
+      total,
+      verified,
+      unverified: total - verified,
+      locked: row?.locked ?? 0,
+    };
+  }
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
     if (!data.email) {

@@ -24,7 +24,14 @@ export interface InvalidateLinksFilter {
   userId?: string;
 }
 
+/** Invitation links split by whether their expiry has passed. */
+export interface InvitationCounts {
+  pending: number;
+  expired: number;
+}
+
 export interface LinksPort {
+  countInvitations(): Promise<InvitationCounts>;
   createInvitation(input: CreateInvitationLinkInput): Promise<CreatedLink>;
   createPasswordReset(
     input: CreatePasswordResetLinkInput,

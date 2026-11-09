@@ -32,6 +32,8 @@ const linkSchema = new Schema<OneTimeLink>(
 
 linkSchema.index({ type: 1, email: 1, applicationId: 1, invalidatedAt: 1 });
 linkSchema.index({ type: 1, userId: 1, invalidatedAt: 1 });
+// Invitation counters filter by type/used/invalidated and split on expiry.
+linkSchema.index({ type: 1, usedAt: 1, invalidatedAt: 1, expiresAt: 1 });
 linkSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const LinkModel = model<OneTimeLink>('Link', linkSchema);
