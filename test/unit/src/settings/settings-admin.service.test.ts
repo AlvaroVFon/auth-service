@@ -167,6 +167,7 @@ describe('SettingsAdminService.updateApplication', () => {
       before?: ResolvedSettings;
       after?: ResolvedSettings;
       updateError?: Error;
+      findError?: Error;
     } = {},
   ) => {
     const record = mock.fn(async () => {});
@@ -179,9 +180,12 @@ describe('SettingsAdminService.updateApplication', () => {
         buildResolvedWith({ value: 'Panel', source: 'application' })
       );
     });
-    const findAssignableById = mock.fn(async () =>
-      options.found === false ? null : { _id: 'app-1' },
-    );
+    const findAssignableById = mock.fn(async () => {
+      if (options.findError) {
+        throw options.findError;
+      }
+      return options.found === false ? null : { _id: 'app-1' };
+    });
     const service = new SettingsAdminService(
       {
         resolveForApplication: async () =>
@@ -246,6 +250,73 @@ describe('SettingsAdminService.updateApplication', () => {
     await assert.rejects(
       service.updateApplication('missing', { appName: 'Panel' }),
       new EntityNotFoundError('Application not found'),
+    );
+    assert.strictEqual(updateApplicationSettings.mock.callCount(), 0);
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('forwards a null removal and audits the source transition', async () => {
+    const before = buildResolvedWith({ value: 'Panel', source: 'application' });
+    const after = buildResolvedWith({ value: 'Global', source: 'global' });
+    const { service, record, updateApplicationSettings } = build({
+      before,
+      after,
+    });
+
+    await service.updateApplication('app-1', { appName: null }, 'actor-1');
+
+    assert.deepStrictEqual(updateApplicationSettings.mock.calls[0]?.arguments, [
+      'app-1',
+      { appName: null },
+    ]);
+    const event = record.mock.calls[0]?.arguments[0] as Record<string, unknown>;
+    assert.deepStrictEqual(event.fields, ['appName']);
+  });
+
+  test('forwards a mixed patch unchanged and audits both changes', async () => {
+    const before = buildResolved();
+    const after = buildResolved();
+    after.appName = { value: 'Panel', source: 'application' };
+    after.accessTokenTtlSeconds = { value: 120, source: 'application' };
+    const { service, record, updateApplicationSettings } = build({
+      before,
+      after,
+    });
+
+    await service.updateApplication(
+      'app-1',
+      { appName: 'Panel', accessTokenTtlSeconds: 120 },
+      'actor-1',
+    );
+
+    assert.deepStrictEqual(updateApplicationSettings.mock.calls[0]?.arguments, [
+      'app-1',
+      { appName: 'Panel', accessTokenTtlSeconds: 120 },
+    ]);
+    const event = record.mock.calls[0]?.arguments[0] as Record<string, unknown>;
+    assert.deepStrictEqual(event.fields, ['accessTokenTtlSeconds', 'appName']);
+  });
+
+  test('does not audit a null-only no-op', async () => {
+    const unchanged = buildResolvedWith({
+      value: 'Global',
+      source: 'global',
+    });
+    const { service, record } = build({ before: unchanged, after: unchanged });
+
+    await service.updateApplication('app-1', { appName: null }, 'actor-1');
+
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('rejects a malformed application id without writing', async () => {
+    const { service, record, updateApplicationSettings } = build({
+      findError: new InvalidArgumentError('Invalid ID format'),
+    });
+
+    await assert.rejects(
+      service.updateApplication('bad-id', { appName: 'Panel' }, 'actor-1'),
+      new InvalidArgumentError('Invalid ID format'),
     );
     assert.strictEqual(updateApplicationSettings.mock.callCount(), 0);
     assert.strictEqual(record.mock.callCount(), 0);
