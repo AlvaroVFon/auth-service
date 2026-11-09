@@ -253,8 +253,10 @@ email still does not trigger a verification flow: the account keeps its current
 
 ### Listing contract
 
-`GET /users`, `GET /applications` and `GET /audit-events` share one listing
-contract:
+`GET /users`, `GET /applications`, `GET /audit-events` and
+`GET /applications/:applicationId/members` share one listing contract. The
+member listing counts only members whose user still exists: an orphan grant is
+excluded from both `items` and `total`.
 
 | Parameter | Meaning                                                                                                                                              |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
