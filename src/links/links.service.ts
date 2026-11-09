@@ -42,38 +42,35 @@ export class LinksService implements LinksPort {
       applicationId: new Types.ObjectId(applicationId),
       type: LinkType.INVITATION,
     };
-    const link = await this.linkModel.findOne(filter);
 
-    if (!link) {
-      throw new EntityNotFoundError('Invitation not found');
-    }
-    if (link.usedAt !== null) {
-      throw new ConflictError('Invitation already used');
-    }
-    if (link.invalidatedAt !== null) {
-      return false;
-    }
+    // Bounded retry: an acceptance can set usedAt and then release() it back to
+    // null after a failed password/grant step. Treating that transient state as
+    // an already-invalidated no-op would tell the admin the invitation is
+    // revoked while the token is still acceptable.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const link = await this.linkModel.findOne(filter);
 
-    const result = await this.linkModel.updateOne(
-      { ...filter, usedAt: null, invalidatedAt: null },
-      { $set: { invalidatedAt: new Date() } },
-    );
+      if (!link) {
+        throw new EntityNotFoundError('Invitation not found');
+      }
+      if (link.usedAt !== null) {
+        throw new ConflictError('Invitation already used');
+      }
+      if (link.invalidatedAt !== null) {
+        return false;
+      }
 
-    if (result.modifiedCount > 0) {
-      return true;
-    }
+      const result = await this.linkModel.updateOne(
+        { ...filter, usedAt: null, invalidatedAt: null },
+        { $set: { invalidatedAt: new Date() } },
+      );
 
-    // A concurrent acceptance or revocation won the write: re-read to tell the
-    // used conflict apart from an idempotent repeated revocation.
-    const current = await this.linkModel.findOne(filter);
-    if (!current) {
-      throw new EntityNotFoundError('Invitation not found');
-    }
-    if (current.usedAt !== null) {
-      throw new ConflictError('Invitation already used');
+      if (result.modifiedCount > 0) {
+        return true;
+      }
     }
 
-    return false;
+    throw new ConflictError('Invitation could not be revoked; retry');
   }
 
   async createInvitation(

@@ -1,6 +1,10 @@
 import type { ApplicationsPort } from '../applications';
 import { AuditEvent, AuditPort, AuditResult } from '../audit';
-import { EMAIL_REGEX, PASSWORD_REGEX } from '../common/constants/regex';
+import {
+  EMAIL_REGEX,
+  OBJECTID_REGEX,
+  PASSWORD_REGEX,
+} from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
 import { Roles } from '../common/enums/roles.enum';
 import { ForbiddenError } from '../common/exceptions/auth.exceptions';
@@ -76,7 +80,15 @@ export class InvitationsService {
     invitationId: string,
     actorId?: string,
   ): Promise<void> {
-    const application = await this.findApplication(applicationId);
+    // Revocation is management, not creation: the owner keeps administering an
+    // archived application, while the middleware already rejected app admins.
+    const application = OBJECTID_REGEX.test(applicationId)
+      ? await this.applicationsService.findById(applicationId)
+      : null;
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
     const revoked = await this.linksService.revokeInvitation(
       application._id.toString(),
       invitationId,

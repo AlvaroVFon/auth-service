@@ -142,6 +142,25 @@ describe('E2E invitation revocation', () => {
     assert.strictEqual(stored?.invalidatedAt, null);
   });
 
+  test('lets the owner revoke an invitation of an archived application', async () => {
+    const application = await createApplication();
+    await fixture.updateOne<ApplicationInterface>(
+      'Application',
+      { _id: application._id },
+      { $set: { active: false } } as never,
+    );
+    const invitation = await seedInvitation(application._id, {
+      tokenHash: 'archived',
+    });
+
+    await request(app)
+      .delete(
+        `/applications/${application._id.toString()}/invitations/${invitation._id.toString()}`,
+      )
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(204);
+  });
+
   test('AC-3: hides an invitation of another application', async () => {
     const applicationA = await createApplication();
     const applicationB = await createApplication();
