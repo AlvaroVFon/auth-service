@@ -24,7 +24,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "commit": "cz",
-    "prepare": "husky"
+    "prepare": "husky",
+    "migrate:link-ttl": "tsx scripts/migrate-link-ttl.ts"
   },
   "dependencies": {
     "bcrypt": "6.0.0",

@@ -6,6 +6,7 @@ import type { Application as ApplicationInterface } from '../../../src/applicati
 import type { User } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import {
+  DEFAULT_OWNER_TOKEN,
   DEFAULT_USER_PLAIN_PASSWORD,
   generateRandomEmail,
 } from '../../fixtures/defaults';
@@ -155,6 +156,19 @@ describe('E2E device sessions', () => {
       .delete(`/auth/sessions/${desktopSession!.id}`)
       .set('Authorization', bearer(desktop.accessToken))
       .expect(204);
+
+    const audit = await request(app)
+      .get('/audit-events')
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .query({ event: 'session.revoked' })
+      .expect(200);
+    const events = (
+      Array.isArray(audit.body) ? audit.body : audit.body.items
+    ) as Array<{ sessionId?: string }>;
+    assert.strictEqual(
+      events.filter((event) => event.sessionId === desktopSession!.id).length,
+      1,
+    );
 
     await request(app)
       .post('/auth/refresh')

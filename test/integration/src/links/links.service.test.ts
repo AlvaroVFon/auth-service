@@ -287,7 +287,113 @@ describe('LinksService', () => {
     await LinkModel.create(base);
     await assert.rejects(LinkModel.create(base));
 
-    await assertTtlIndex(LinkModel, 'expiresAt');
+    await assertTtlIndex(LinkModel, 'expiresAt', 30 * 24 * 60 * 60);
+  });
+});
+
+describe('LinksService.listInvitations', () => {
+  const applicationId = new Types.ObjectId().toString();
+
+  const seed = async (
+    overrides: Partial<OneTimeLink> & { tokenHash: string },
+  ) => {
+    const link = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId: new Types.ObjectId(applicationId),
+      expiresAt: new Date(Date.now() + 60_000),
+      ...overrides,
+    });
+
+    return link;
+  };
+
+  test('computes states with the documented precedence and filters them', async () => {
+    const service = new LinksService(LinkModel, 60_000, 30_000);
+    const now = Date.now();
+    const pending = await seed({ tokenHash: 'pending' });
+    const used = await seed({
+      tokenHash: 'used',
+      usedAt: new Date(now - 1000),
+      expiresAt: new Date(now - 60_000),
+    });
+    const invalidated = await seed({
+      tokenHash: 'invalidated',
+      invalidatedAt: new Date(now - 1000),
+      expiresAt: new Date(now - 60_000),
+    });
+    const expired = await seed({
+      tokenHash: 'expired',
+      expiresAt: new Date(now - 60_000),
+    });
+
+    const all = await service.listInvitations(applicationId, {
+      page: 1,
+      limit: 20,
+      sort: { field: 'createdAt', direction: -1 },
+    });
+    assert.strictEqual(all.total, 4);
+    assert.deepStrictEqual(all.items.map((item) => item.state).sort(), [
+      'expired',
+      'invalidated',
+      'pending',
+      'used',
+    ]);
+
+    const filtered = await service.listInvitations(applicationId, {
+      page: 1,
+      limit: 20,
+      sort: { field: 'createdAt', direction: -1 },
+      state: 'pending',
+    });
+    assert.strictEqual(filtered.total, 1);
+    assert.strictEqual(filtered.items[0]?.id, pending._id.toString());
+
+    for (const [state, expected] of [
+      ['used', used],
+      ['invalidated', invalidated],
+      ['expired', expired],
+    ] as const) {
+      const page = await service.listInvitations(applicationId, {
+        page: 1,
+        limit: 20,
+        sort: { field: 'createdAt', direction: -1 },
+        state,
+      });
+      assert.strictEqual(page.total, 1);
+      assert.strictEqual(page.items[0]?.id, expected._id.toString());
+    }
+
+    await assert.rejects(
+      service.listInvitations(applicationId, {
+        page: 1,
+        limit: 20,
+        sort: { field: 'createdAt', direction: -1 },
+        state: 'unknown' as never,
+      }),
+      new InvalidArgumentError('Invalid invitation state'),
+    );
+  });
+
+  test('does not leak the token hash or the telegram chat id', async () => {
+    const service = new LinksService(LinkModel, 60_000, 30_000);
+    await seed({
+      tokenHash: 'secret-hash',
+      telegramChatId: '12345',
+      email: 'invitee@example.com',
+      role: GrantRoles.VIEWER,
+    });
+
+    const result = await service.listInvitations(applicationId, {
+      page: 1,
+      limit: 20,
+      sort: { field: 'createdAt', direction: -1 },
+    });
+    const serialized = JSON.stringify(result.items);
+
+    assert.strictEqual(serialized.includes('secret-hash'), false);
+    assert.strictEqual(serialized.includes('12345'), false);
+    assert.strictEqual(serialized.includes('tokenHash'), false);
+    assert.strictEqual(serialized.includes('telegramChatId'), false);
   });
 });
 

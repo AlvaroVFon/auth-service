@@ -136,6 +136,8 @@ the global settings (the settings endpoints arrive with #149/#150) or removing t
 | `RATE_LIMIT_REFRESH_MAX`               | Refresh requests allowed per window.            | `60`      | No                     |
 | `RATE_LIMIT_MFA_VERIFY_WINDOW_MS`      | MFA verification rate-limit window.             | `900000`  | No                     |
 | `RATE_LIMIT_MFA_VERIFY_MAX`            | MFA verification requests per window.           | `10`      | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_WINDOW_MS`  | Owner session-revocation rate-limit window.     | `900000`  | No                     |
+| `RATE_LIMIT_SESSION_REVOKE_MAX`        | Owner session-revocation requests per window.   | `60`      | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS`   | Window for POST application members.            | `900000`  | No                     |
 | `RATE_LIMIT_MEMBERS_WRITE_MAX`         | Member writes per window.                       | `30`      | No                     |
 
@@ -203,12 +205,13 @@ Every route is declared in a module router and mounted by
 
 ### Links
 
-| Method | Route                                      | Access    | Notes                                        |
-| ------ | ------------------------------------------ | --------- | -------------------------------------------- |
-| `POST` | `/applications/:applicationId/invitations` | App admin | Single-use invitation for an email and role. |
-| `POST` | `/auth/invitations/accept`                 | Public    | Sets the password and grants the role.       |
-| `POST` | `/auth/password-reset-links`               | Owner     | Generates a shareable reset link.            |
-| `POST` | `/auth/password-reset-links/accept`        | Public    | Consumes the link and rotates the password.  |
+| Method | Route                                      | Access           | Notes                                                                                  |
+| ------ | ------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------- |
+| `POST` | `/applications/:applicationId/invitations` | App admin        | Single-use invitation for an email and role.                                           |
+| `GET`  | `/applications/:applicationId/invitations` | Owner, app admin | Paginated invitation history with the computed `state` and an optional `state` filter. |
+| `POST` | `/auth/invitations/accept`                 | Public           | Sets the password and grants the role.                                                 |
+| `POST` | `/auth/password-reset-links`               | Owner            | Generates a shareable reset link.                                                      |
+| `POST` | `/auth/password-reset-links/accept`        | Public           | Consumes the link and rotates the password.                                            |
 
 ### Users, applications and grants
 
@@ -218,6 +221,8 @@ Every route is declared in a module router and mounted by
 | `GET`    | `/users`                                      | Owner            | Lists users; paginated envelope (see below).                    |
 | `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
 | `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
+| `DELETE` | `/users/:id/sessions/:sessionId`              | Owner            | Revokes one session of the user; audited.                       |
+| `DELETE` | `/users/:id/sessions`                         | Owner            | Revokes every session of the user; audited per session.         |
 | `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
 | `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
 | `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |
@@ -309,6 +314,8 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 | `GET`  | `/audit-events/export` | Owner  | CSV stream with the same filters, capped at `AUDIT_EXPORT_MAX_ROWS`; exceeding the cap returns `400`. |
 
 ## Deployment
+
+After deploying the invitation-history retention change, run `pnpm migrate:link-ttl --apply` once so the existing `expiresAt_1` TTL index is recreated with the 30-day retention.
 
 ### Production image
 
@@ -472,7 +479,10 @@ POST /applications/:applicationId/invitations   { "email": "...", "role": "edito
 ```
 
 The response contains a link like `https://<PUBLIC_APP_URL>/invitations/accept?token=...`
-that the owner shares through any channel. The guest sets a password at
+that the owner shares through any channel. `GET /applications/:applicationId/invitations`
+returns the `{ items, total, page, limit }` envelope with each invitation's computed
+`state` (`used` > `invalidated` > `expired` > `pending`); `?state=pending` filters the
+same set. The guest sets a password at
 `POST /auth/invitations/accept` and gets the granted role. Existing users and holders
 cannot be invited: use grants to give them access to another application.
 

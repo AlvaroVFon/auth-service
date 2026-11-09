@@ -137,6 +137,13 @@ const getDefaultRateLimitConfig = (): AuthRateLimitConfig => ({
     windowMs: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_WINDOW_MS', 900000),
     max: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_MAX', 10),
   },
+  sessionRevoke: {
+    windowMs: getNumberEnvVariable(
+      'RATE_LIMIT_SESSION_REVOKE_WINDOW_MS',
+      900000,
+    ),
+    max: getNumberEnvVariable('RATE_LIMIT_SESSION_REVOKE_MAX', 60),
+  },
 });
 
 const getDefaultGrantsRateLimitConfig = (): GrantsRateLimitConfig => ({
@@ -265,6 +272,7 @@ export const createApplicationComposition = (
     mfaCipher ?? undefined,
     auditService,
     (options.rateLimitConfig ?? getDefaultRateLimitConfig()).login,
+    (options.rateLimitConfig ?? getDefaultRateLimitConfig()).sessionRevoke,
   );
   const grantsModule = new GrantsModule(
     GrantModel,
@@ -318,8 +326,11 @@ export const createApplicationComposition = (
     getNumberEnvVariable('MAX_SESSIONS_PER_USER', 50),
   );
   usersModule.service.setSessionRevoker(sessionService);
-  usersModule.service.setSessionLister({
+  usersModule.service.setSessionManager({
     listSessions: (userId) => sessionService.list(userId),
+    revokeSession: (userId, sessionId) =>
+      sessionService.revoke(userId, sessionId),
+    revokeAllSessions: (userId) => sessionService.revokeAllWithIds(userId),
   });
   const mfaService = new MfaService(
     usersModule.service,

@@ -20,6 +20,15 @@ export { generateLinkToken, hashLinkToken } from './link-token';
 export { LinksController } from './links.controller';
 export { LinkModel } from './links.schema';
 export { LinksService } from './links.service';
+export {
+  INVITATION_LIST_OPTIONS,
+  INVITATION_SORTABLE_FIELDS,
+  INVITATION_STATES,
+  type InvitationListItem,
+  type InvitationListQuery,
+  type InvitationSortField,
+  type InvitationState,
+} from './links.port';
 export type {
   CreateInvitationLinkInput,
   CreatePasswordResetLinkInput,

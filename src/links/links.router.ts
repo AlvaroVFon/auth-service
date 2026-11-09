@@ -37,6 +37,13 @@ export class LinksRouter {
         `${req.params.applicationId}:${req.params.invitationId}`.toLowerCase(),
     );
 
+    this.app.get(
+      '/applications/:applicationId/invitations',
+      this.authenticationMiddleware.authenticateAny,
+      this.applicationAuthorizationMiddleware.allowApplicationAdmin,
+      this.linksController.listInvitations.bind(this.linksController),
+    );
+
     this.app.post(
       '/applications/:applicationId/invitations/:invitationId/resend',
       this.authenticationMiddleware.authenticateAny,
