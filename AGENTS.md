@@ -107,6 +107,7 @@
 | `INVITATION_LINK_EXPIRATION_MS`        | Invitation link TTL (ms)                            | `604800000`                 | No                     |
 | `PASSWORD_RESET_LINK_EXPIRATION_MS`    | Password-reset link TTL (ms)                        | `3600000`                   | No                     |
 | `AUDIT_RETENTION_DAYS`                 | Audit event retention (TTL index)                   | `90`                        | No                     |
+| `AUDIT_EXPORT_MAX_ROWS`                | Maximum rows in a CSV audit export                  | `10000`                     | No                     |
 | `MFA_SECRET_ENCRYPTION_KEY`            | Base64 32-byte key for TOTP secrets at rest         | Empty (plaintext)           | Yes                    |
 | `MFA_CHALLENGE_EXPIRATION`             | MFA challenge TTL (seconds)                         | `300`                       | No                     |
 | `TELEGRAM_BOT_TOKEN`                   | Bot token; empty disables notifications             | Empty                       | No                     |

@@ -385,8 +385,20 @@ export const createApplicationComposition = (
     authorizationMiddleware,
     logger,
   });
+  const configuredExportMax = getNumberEnvVariable(
+    'AUDIT_EXPORT_MAX_ROWS',
+    10_000,
+  );
+  const auditExportMaxRows =
+    Number.isInteger(configuredExportMax) && configuredExportMax > 0
+      ? configuredExportMax
+      : 10_000;
   const auditModule = new AuditModule({
-    auditController: new AuditController(auditService),
+    auditController: new AuditController(
+      auditService,
+      auditExportMaxRows,
+      logger,
+    ),
     authenticationMiddleware,
     authorizationMiddleware,
     logger,
