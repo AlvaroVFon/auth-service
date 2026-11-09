@@ -302,6 +302,8 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 
 ## Deployment
 
+After deploying the invitation-history retention change, run `pnpm migrate:link-ttl --apply` once so the existing `expiresAt_1` TTL index is recreated with the 30-day retention.
+
 ### Production image
 
 The `Dockerfile` builds a production artifact and runs it with Node, not `tsx watch`:
