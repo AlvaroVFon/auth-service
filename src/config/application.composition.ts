@@ -55,6 +55,7 @@ import {
 } from '../links';
 import {
   GlobalSettingsRepository,
+  SettingsModule,
   SettingsService,
   type SettingsPort,
 } from '../settings';
@@ -373,6 +374,13 @@ export const createApplicationComposition = (
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
     logger,
   });
+  const settingsModule = new SettingsModule({
+    settingsService,
+    auditService,
+    authenticationMiddleware,
+    authorizationMiddleware,
+    logger,
+  });
   const auditModule = new AuditModule({
     auditController: new AuditController(auditService),
     authenticationMiddleware,
@@ -429,6 +437,7 @@ export const createApplicationComposition = (
       authModule.initialize(app);
       linksModule.initialize(app, applicationAuthorizationMiddleware);
       auditModule.initialize(app);
+      settingsModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },
   };

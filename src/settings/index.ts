@@ -28,6 +28,14 @@ export {
 export { GlobalSettingsRepository } from './settings-global.repository';
 export { GlobalSettingsModel } from './settings-global.schema';
 export { ensureGlobalSettings } from './settings.seed';
+export { SettingsAdminService } from './settings-admin.service';
+export { SettingsController } from './settings.controller';
+export { SettingsModule } from './settings.module';
+export {
+  SETTINGS_RATE_LIMIT_MAX,
+  SETTINGS_RATE_LIMIT_WINDOW_MS,
+  SettingsRouter,
+} from './settings.router';
 export { SettingsService } from './settings.service';
 export {
   MFA_POLICIES,
