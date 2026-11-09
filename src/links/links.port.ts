@@ -26,6 +26,15 @@ export interface InvalidateLinksFilter {
 
 export interface LinksPort {
   /**
+   * Reissues a pending invitation: the previous link is invalidated by the
+   * creation flow and a new one is returned. A used invitation raises
+   * `ConflictError`; an unknown one raises `EntityNotFoundError`.
+   */
+  resendInvitation(
+    applicationId: string,
+    invitationId: string,
+  ): Promise<CreatedLink>;
+  /**
    * Revokes one invitation of an application. Returns false when it was
    * already invalidated (idempotent no-op), throws `EntityNotFoundError` when
    * it does not belong to the application and `ConflictError` when used.

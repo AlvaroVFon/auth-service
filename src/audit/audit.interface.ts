@@ -16,6 +16,7 @@ export enum AuditEvent {
   APPLICATION_ARCHIVED = 'application.archived',
   MEMBER_GRANTED = 'member.granted',
   INVITATION_REVOKED = 'invitation.revoked',
+  INVITATION_RESENT = 'invitation.resent',
   SETTINGS_UPDATED = 'settings.updated',
   USER_UNLOCKED = 'user.unlocked',
   USER_VERIFIED = 'user.verified',

@@ -47,6 +47,7 @@ import { HandlebarsEngine } from '../libs/templates-engine/adapters/handlebars.a
 import {
   InvitationsService,
   LinkModel,
+  LINKS_BODYLESS_PATHS,
   LinksController,
   LinksModule,
   LinksService,
@@ -427,7 +428,11 @@ export const createApplicationComposition = (
       );
       GlobalMiddlewares.initialize(
         app,
-        ['/auth/logout', ...USER_SUPPORT_BODYLESS_PATHS],
+        [
+          '/auth/logout',
+          ...USER_SUPPORT_BODYLESS_PATHS,
+          ...LINKS_BODYLESS_PATHS,
+        ],
         corsOrigins,
       );
       healthModule.initialize(app);
