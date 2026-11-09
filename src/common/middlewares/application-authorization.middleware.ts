@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 
 import type { ApplicationsPort } from '../../applications';
 import { GrantRoles, GrantsPort } from '../../grants';
+import { OBJECTID_REGEX } from '../constants/regex';
 import { Roles } from '../enums/roles.enum';
 import {
   ForbiddenError,
@@ -42,6 +43,65 @@ export class ApplicationAuthorizationMiddleware {
    * names it differently is a visible decision instead of an implicit contract.
    */
   allowApplicationReader = this.createApplicationReader('id');
+
+  /**
+   * Settings are only exposed for an active application that the caller can
+   * administer. Unlike the catalog reader, the owner is also sent a `404` for
+   * an archived or unknown application, so the route never reveals whether an
+   * inactive application exists.
+   */
+  allowApplicationSettingsReader =
+    this.createApplicationSettingsReader('applicationId');
+
+  private createApplicationSettingsReader(param: string) {
+    return async (req: Request, _res: Response, next: NextFunction) => {
+      try {
+        const user = req.user;
+
+        if (!user) {
+          throw new UnauthorizedError('Authentication required');
+        }
+
+        const applicationId = req.params[param];
+        const application =
+          typeof applicationId === 'string' &&
+          OBJECTID_REGEX.test(applicationId)
+            ? await this.applicationsService.findAssignableById(applicationId)
+            : null;
+
+        if (!application) {
+          throw new EntityNotFoundError('Application not found');
+        }
+
+        if (user.role === Roles.OWNER) {
+          next();
+          return;
+        }
+
+        if (
+          typeof applicationId !== 'string' ||
+          (user.audience !== undefined &&
+            application.audience !== user.audience)
+        ) {
+          throw new EntityNotFoundError('Application not found');
+        }
+
+        const grant = await this.grantsService.findByUserAndApplication(
+          user.id,
+          applicationId,
+          { application },
+        );
+
+        if (!grant || grant.role !== GrantRoles.ADMIN) {
+          throw new EntityNotFoundError('Application not found');
+        }
+
+        next();
+      } catch (error) {
+        next(error);
+      }
+    };
+  }
 
   private createApplicationReader(param: string) {
     return async (req: Request, _res: Response, next: NextFunction) => {

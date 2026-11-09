@@ -379,6 +379,7 @@ export const createApplicationComposition = (
     auditService,
     authenticationMiddleware,
     authorizationMiddleware,
+    applicationAuthorizationMiddleware,
     logger,
   });
   const auditModule = new AuditModule({
