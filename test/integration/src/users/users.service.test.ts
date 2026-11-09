@@ -1250,3 +1250,98 @@ describe('UsersService.countUsers', () => {
     });
   });
 });
+
+describe('UsersService.resetMfa', () => {
+  const createUser = (overrides: Partial<UserInterface> = {}) =>
+    fixture.create<UserInterface>('User', {
+      _id: new Types.ObjectId(),
+      email: generateRandomEmail('mfa-reset+'),
+      password: DEFAULT_USER.password,
+      mfaEnabled: true,
+      mfaSecret: 'encrypted-secret',
+      mfaPendingSecret: 'pending-secret',
+      mfaRecoveryCodes: ['recovery-hash'],
+      mfaLastUsedStep: 42,
+      mfaFailedAttempts: 3,
+      mfaLockoutUntil: new Date(Date.now() + 60_000),
+      ...overrides,
+    });
+
+  test('removes every MFA artefact, revokes all sessions and audits the reset', async () => {
+    const user = await createUser();
+    const revokeAll = mock.fn(async () => {});
+    const record = mock.fn(async () => {});
+    const service = new UsersService(
+      User,
+      new CryptoService(),
+      5,
+      900000,
+      undefined,
+      { record } as never,
+    );
+    service.setSessionRevoker({ revokeAll });
+    const actorId = new Types.ObjectId().toString();
+
+    await service.resetMfa(user._id.toString(), { actorId });
+
+    const stored = await fixture.findById<UserInterface>(
+      'User',
+      user._id.toString(),
+    );
+    assert.strictEqual(stored?.mfaEnabled, false);
+    assert.strictEqual(stored?.mfaSecret, undefined);
+    assert.strictEqual(stored?.mfaPendingSecret, undefined);
+    assert.deepStrictEqual(stored?.mfaRecoveryCodes, []);
+    assert.strictEqual(stored?.mfaLastUsedStep, undefined);
+    assert.strictEqual(stored?.mfaFailedAttempts, 0);
+    assert.strictEqual(stored?.mfaLockoutUntil, null);
+
+    assert.deepStrictEqual(revokeAll.mock.calls[0]?.arguments, [
+      user._id.toString(),
+    ]);
+    const event = record.mock.calls[0]?.arguments[0] as Record<string, unknown>;
+    assert.strictEqual(event.event, AuditEvent.USER_MFA_RESET);
+    assert.strictEqual(event.targetUserId, user._id.toString());
+    assert.strictEqual(event.actorId, actorId);
+  });
+
+  test('rejects the owner and an unknown id without touching the document', async () => {
+    const owner = await createUser({
+      email: generateRandomEmail('mfa-owner+'),
+      role: Roles.OWNER,
+    });
+    const revokeAll = mock.fn(async () => {});
+    const service = new UsersService(User, new CryptoService());
+    service.setSessionRevoker({ revokeAll });
+
+    for (const id of [owner._id.toString(), new Types.ObjectId().toString()]) {
+      await assert.rejects(
+        service.resetMfa(id),
+        new EntityNotFoundError('User not found'),
+      );
+    }
+
+    const stored = await fixture.findById<UserInterface>(
+      'User',
+      owner._id.toString(),
+    );
+    assert.strictEqual(stored?.mfaEnabled, true);
+    assert.strictEqual(revokeAll.mock.callCount(), 0);
+  });
+
+  test('fails closed when no session revoker is wired', async () => {
+    const user = await createUser();
+    const service = new UsersService(User, new CryptoService());
+
+    await assert.rejects(
+      service.resetMfa(user._id.toString()),
+      new Error('Session revoker is not configured'),
+    );
+
+    const stored = await fixture.findById<UserInterface>(
+      'User',
+      user._id.toString(),
+    );
+    assert.strictEqual(stored?.mfaEnabled, true);
+  });
+});
