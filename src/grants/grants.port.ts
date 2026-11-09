@@ -1,4 +1,5 @@
 import type { Application } from '../applications';
+import type { Roles } from '../common/enums/roles.enum';
 import { Grant, GrantRoles } from './grants.interface';
 
 export interface AssignRoleInput {
@@ -27,11 +28,32 @@ export interface GrantedApplication {
   role: GrantRoles;
 }
 
+export interface GrantMemberInput {
+  email: string;
+  applicationId: string;
+  role: GrantRoles;
+  /** Global role of the caller: only `owner` may grant the admin role. */
+  actorRole: Roles;
+  actorId?: string;
+}
+
+export interface GrantedMember {
+  email: string;
+  role: GrantRoles;
+}
+
 export interface GrantsPort {
   assignRole(
     input: AssignRoleInput,
     scope?: GrantApplicationScope,
   ): Promise<Grant>;
+  grantMemberByEmail(input: GrantMemberInput): Promise<GrantedMember>;
+  /**
+   * Creates the grant only when the pair has none; returns false when it
+   * already existed. Never overwrites an existing role (for example an admin
+   * promoted after an invitation was issued).
+   */
+  assignRoleIfAbsent(input: AssignRoleInput): Promise<boolean>;
   findByUserAndApplication(
     userId: string,
     applicationId: string,
