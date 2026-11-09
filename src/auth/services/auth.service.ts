@@ -325,7 +325,27 @@ export class AuthService {
     }
 
     this.assertVerified(user);
-    await this.mfaService.verify(user, code);
+
+    try {
+      await this.mfaService.verify(user, code);
+    } catch (error) {
+      // The password step already succeeded, so the second-factor outcome is
+      // the login outcome the overview must count.
+      await this.auditService.record({
+        event:
+          error instanceof AccountLockedError
+            ? AuditEvent.ACCOUNT_LOCKED
+            : AuditEvent.LOGIN_FAILED,
+        result: AuditResult.FAILURE,
+        userId,
+        email: user.email,
+        ...(claims.targetAudience === undefined
+          ? {}
+          : { audience: claims.targetAudience }),
+        ...this.auditContext(ctx),
+      });
+      throw error;
+    }
 
     const application = claims.app;
 
@@ -349,6 +369,16 @@ export class AuthService {
         access.application.audience,
       );
       await this.recordLogin(userId);
+      await this.auditService.record({
+        event: AuditEvent.LOGIN_SUCCEEDED,
+        result: AuditResult.SUCCESS,
+        userId,
+        email: user.email,
+        applicationId: access.application._id.toString(),
+        audience: access.application.audience,
+        role: access.role,
+        ...this.auditContext(ctx),
+      });
 
       return {
         accessToken: session.accessToken,
@@ -362,6 +392,14 @@ export class AuthService {
 
     const session = await this.sessionService.create(userId, user.role, ctx);
     await this.recordLogin(userId);
+    await this.auditService.record({
+      event: AuditEvent.LOGIN_SUCCEEDED,
+      result: AuditResult.SUCCESS,
+      userId,
+      email: user.email,
+      role: user.role,
+      ...this.auditContext(ctx),
+    });
 
     return {
       accessToken: session.accessToken,
