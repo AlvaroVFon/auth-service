@@ -256,6 +256,7 @@ email cannot be changed through this endpoint.
 
 | `GET` | `/settings` | Owner | Effective global policy with its sources and defaults. |
 | `PATCH` | `/settings` | Owner | Updates the global policy; audited as `settings.updated`. |
+| `GET` | `/applications/:applicationId/settings` | Owner, app admin | Effective application policy with per-field provenance and the global reference. Unknown, archived or foreign applications return `404`. |
 
 ### Listing contract
 

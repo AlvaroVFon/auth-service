@@ -28,7 +28,11 @@ export {
 export { GlobalSettingsRepository } from './settings-global.repository';
 export { GlobalSettingsModel } from './settings-global.schema';
 export { ensureGlobalSettings } from './settings.seed';
-export { SettingsAdminService } from './settings-admin.service';
+export {
+  SettingsAdminService,
+  type ApplicationSettingsView,
+  type GlobalSettingsView,
+} from './settings-admin.service';
 export { SettingsController } from './settings.controller';
 export { SettingsModule } from './settings.module';
 export {

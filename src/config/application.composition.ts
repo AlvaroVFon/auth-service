@@ -383,6 +383,7 @@ export const createApplicationComposition = (
     auditService,
     authenticationMiddleware,
     authorizationMiddleware,
+    applicationAuthorizationMiddleware,
     logger,
   });
   const configuredExportMax = getNumberEnvVariable(
