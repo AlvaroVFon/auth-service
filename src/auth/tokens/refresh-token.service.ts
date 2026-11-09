@@ -44,10 +44,10 @@ export interface RevokeAllByUserResult {
 const MAX_REVOCATION_PASSES = 5;
 const REVOCATION_BATCH_SIZE = 500;
 
-interface ActiveAudienceToken {
+interface RevocableToken {
   _id: Types.ObjectId;
-  userId: Types.ObjectId;
-  sessionId: string;
+  userId?: Types.ObjectId;
+  sessionId?: string;
   jti: string;
 }
 
@@ -143,12 +143,19 @@ export class RefreshTokenService {
       $or: [{ sessionId }, { jti: sessionId, sessionId: null }],
     };
 
-    const result = await this.refreshTokenModel.updateMany(
+    // Bounded re-list: a concurrent rotation revokes the old token and inserts
+    // its replacement with the same session id, so a single update can miss
+    // the replacement and report a no-op while the session stays alive.
+    const revoked = await this.revokeInBatches<RevocableToken>(
       { ...sessionFilter, revokedAt: null },
-      { revokedAt: now },
+      'sessionId jti',
+      (token) => token,
     );
 
-    if (result.matchedCount > 0) {
+    if (revoked.items.length > 0) {
+      if (!revoked.complete) {
+        throw new Error('Session revocation incomplete');
+      }
       return true;
     }
 
@@ -240,61 +247,22 @@ export class RefreshTokenService {
         : { userId: { $nin: excludedUserIds } }),
     };
 
-    const sessions: RevokedAudienceSession[] = [];
-    let revoked = 0;
-    let complete = true;
+    const result = await this.revokeInBatches<RevokedAudienceSession>(
+      filter,
+      'userId sessionId jti',
+      (token) => ({
+        userId: token.userId?.toString() ?? '',
+        // Legacy tokens may predate `sessionId`; the jti identifies them.
+        sessionId: token.sessionId ?? token.jti,
+        jti: token.jti,
+      }),
+    );
 
-    // Re-evaluate the filter on every pass so a token issued while the call is
-    // running is revoked too. Each batch is bounded, so neither the listing nor
-    // the `_id` update command can grow with the audience size.
-    for (let pass = 0; pass < MAX_REVOCATION_PASSES; pass += 1) {
-      const active = await this.refreshTokenModel
-        .find(filter)
-        .select('_id userId sessionId jti')
-        .limit(REVOCATION_BATCH_SIZE)
-        .lean<ActiveAudienceToken[]>();
-
-      if (active.length === 0) {
-        complete = true;
-        break;
-      }
-
-      for (const token of active) {
-        sessions.push({
-          userId: token.userId.toString(),
-          // Legacy tokens may predate `sessionId`; the jti identifies them.
-          sessionId: token.sessionId ?? token.jti,
-          jti: token.jti,
-        });
-      }
-
-      const result = await this.refreshTokenModel.updateMany(
-        {
-          _id: { $in: active.map((token) => token._id) },
-          revokedAt: null,
-        },
-        { revokedAt: new Date() },
-      );
-      revoked += result.modifiedCount ?? 0;
-
-      // Keep looping until a pass finds nothing: a token created between this
-      // listing and the update is caught by the next pass.
-      complete = pass < MAX_REVOCATION_PASSES - 1;
-    }
-
-    if (!complete) {
-      // A full last pass may have drained the remaining batch; confirm with a
-      // cheap existence query instead of reporting a retry that would be a no-op.
-      const remaining = await this.refreshTokenModel
-        .find(filter)
-        .select('_id')
-        .limit(1)
-        .lean<ActiveAudienceToken[]>();
-
-      complete = remaining.length === 0;
-    }
-
-    return { sessions, revoked, complete };
+    return {
+      sessions: result.items,
+      revoked: result.items.length,
+      complete: result.complete,
+    };
   }
 
   /**
@@ -316,19 +284,42 @@ export class RefreshTokenService {
       expiresAt: { $gt: new Date() },
       ...(audience === undefined ? {} : { audience }),
     };
-    const revoked: Array<{ sessionId: string; jti: string }> = [];
+    const result = await this.revokeInBatches<{
+      sessionId: string;
+      jti: string;
+    }>(filter, 'sessionId jti', (token) => ({
+      sessionId: token.sessionId ?? token.jti,
+      jti: token.jti,
+    }));
 
-    // Re-list until no active token remains (bounded), so a token issued while
-    // the revocation runs is revoked and reported too. The timestamp marks the
-    // tokens this call actually revoked, not ones a concurrent action closed.
+    // Return what was revoked even when a token survived the bounded passes:
+    // the caller can audit every real revocation and still surface that the
+    // bulk operation was incomplete.
+    return { sessions: result.items, complete: result.complete };
+  }
+
+  /**
+   * Shared bounded revocation loop: re-list the filter on every pass, update
+   * exactly the listed ids and report the tokens the write matched. A token
+   * created between a listing and its update is caught by the next pass.
+   */
+  private async revokeInBatches<T>(
+    filter: Record<string, unknown>,
+    select: string,
+    map: (token: RevocableToken) => T,
+  ): Promise<{ items: T[]; complete: boolean }> {
+    const items: T[] = [];
+    let complete = false;
+
     for (let pass = 0; pass < MAX_REVOCATION_PASSES; pass += 1) {
       const active = await this.refreshTokenModel
         .find(filter)
-        .select('_id')
+        .select(select)
         .limit(REVOCATION_BATCH_SIZE)
-        .lean<Array<{ _id: Types.ObjectId }>>();
+        .lean<RevocableToken[]>();
 
       if (active.length === 0) {
+        complete = true;
         break;
       }
 
@@ -340,28 +331,29 @@ export class RefreshTokenService {
         { revokedAt },
       );
 
+      // The timestamp marks the tokens this call actually revoked.
       const revokedNow = await this.refreshTokenModel
         .find({ _id: { $in: ids }, revokedAt })
-        .select('sessionId jti')
-        .lean<Array<{ sessionId?: string; jti: string }>>();
+        .select(select)
+        .lean<RevocableToken[]>();
 
       for (const token of revokedNow) {
-        revoked.push({
-          sessionId: token.sessionId ?? token.jti,
-          jti: token.jti,
-        });
+        items.push(map(token));
       }
     }
 
-    const remaining = await this.refreshTokenModel
-      .find(filter)
-      .select('_id')
-      .limit(1)
-      .lean<Array<{ _id: Types.ObjectId }>>();
+    if (!complete) {
+      // A full last pass may have drained the remaining batch; confirm instead
+      // of reporting a retry that would be a no-op.
+      const remaining = await this.refreshTokenModel
+        .find(filter)
+        .select('_id')
+        .limit(1)
+        .lean<RevocableToken[]>();
 
-    // Return what was revoked even when a token survived the bounded passes:
-    // the caller can audit every real revocation and still surface that the
-    // bulk operation was incomplete.
-    return { sessions: revoked, complete: remaining.length === 0 };
+      complete = remaining.length === 0;
+    }
+
+    return { items, complete };
   }
 }
