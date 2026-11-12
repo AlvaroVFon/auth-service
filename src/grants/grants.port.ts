@@ -68,12 +68,23 @@ export interface GrantedMember {
   role: GrantRoles;
 }
 
+export interface MemberMutationInput {
+  userId: string;
+  applicationId: string;
+  actorRole?: Roles;
+  actorId?: string;
+}
+
 export interface GrantsPort {
   assignRole(
     input: AssignRoleInput,
     scope?: GrantApplicationScope,
   ): Promise<Grant>;
   grantMemberByEmail(input: GrantMemberInput): Promise<GrantedMember>;
+  changeMemberRole(
+    input: MemberMutationInput & { role: GrantRoles },
+  ): Promise<Grant>;
+  removeMember(input: MemberMutationInput): Promise<void>;
   /**
    * Creates the grant only when the pair has none; returns false when it
    * already existed. Never overwrites an existing role (for example an admin
@@ -100,6 +111,7 @@ export interface GrantsPort {
     userId: string,
     applicationId: string,
     actorId?: string,
+    actorRole?: Roles,
   ): Promise<void>;
   deleteByUser(userId: string, actorId?: string): Promise<void>;
 }

@@ -307,6 +307,42 @@ describe('E2E Grants administration', () => {
     assert.strictEqual(grants[0]?.role, GrantRoles.ADMIN);
   });
 
+  test('should forbid an app admin from demoting or revoking an admin through the legacy grant routes', async () => {
+    const application = await createApplication();
+    const admin = await createUser();
+    const target = await createUser();
+    const applicationId = application._id.toString();
+    const adminId = admin._id.toString();
+    const targetId = target._id.toString();
+    await grantRole(adminId, applicationId, GrantRoles.ADMIN);
+    await grantRole(targetId, applicationId, GrantRoles.ADMIN);
+
+    const adminToken = signTestAccessToken(adminId);
+    const path = `/applications/${applicationId}/grants`;
+
+    await request(app)
+      .put(path)
+      .set('Authorization', bearer(adminToken))
+      .send({ userId: targetId, role: GrantRoles.VIEWER })
+      .expect(403);
+
+    await request(app)
+      .delete(`${path}/${targetId}`)
+      .set('Authorization', bearer(adminToken))
+      .expect(403);
+
+    const grants = await fixture.find<Grant>('Grant', {
+      applicationId: application._id,
+    });
+    assert.strictEqual(grants.length, 2);
+    assert.ok(grants.every((grant) => grant.role === GrantRoles.ADMIN));
+
+    await request(app)
+      .delete(`${path}/${targetId}`)
+      .set('Authorization', bearer(DEFAULT_OWNER_TOKEN))
+      .expect(204);
+  });
+
   test('should validate grants', async () => {
     const application = await createApplication();
     const user = await createUser();

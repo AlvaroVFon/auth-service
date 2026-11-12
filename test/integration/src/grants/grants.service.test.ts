@@ -1174,3 +1174,118 @@ describe('GrantsService.listMembers', () => {
     assert.strictEqual(result.items[0]!.userId, member._id.toString());
   });
 });
+
+describe('GrantsService member mutations', () => {
+  const record = mock.fn(async () => {});
+  const service = () =>
+    new GrantsService(
+      GrantModel,
+      new ApplicationsService(ApplicationModel),
+      new UsersService(User, new CryptoService()),
+      { record } as never,
+    );
+
+  const setup = async (role: GrantRoles) => {
+    const application = await ApplicationModel.create(
+      ApplicationFactory.generate(),
+    );
+    const user = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate(),
+    );
+    await GrantModel.create({
+      userId: user._id,
+      applicationId: application._id,
+      role,
+    });
+
+    return { application, user };
+  };
+
+  beforeEach(() => {
+    record.mock.resetCalls();
+  });
+
+  test('changes the role and audits member.granted', async () => {
+    const { application, user } = await setup(GrantRoles.VIEWER);
+    const actorId = new Types.ObjectId().toString();
+
+    await service().changeMemberRole({
+      userId: user._id.toString(),
+      applicationId: application._id.toString(),
+      role: GrantRoles.EDITOR,
+      actorRole: Roles.USER,
+      actorId,
+    });
+
+    const stored = await GrantModel.findOne({ userId: user._id });
+    assert.strictEqual(stored?.role, GrantRoles.EDITOR);
+    const event = record.mock.calls[0]?.arguments[0] as Record<string, unknown>;
+    assert.strictEqual(event.event, AuditEvent.MEMBER_GRANTED);
+    assert.strictEqual(event.role, GrantRoles.EDITOR);
+    assert.strictEqual(event.actorId, actorId);
+    assert.strictEqual(event.targetUserId, user._id.toString());
+    assert.strictEqual(event.applicationId, application._id.toString());
+  });
+
+  test('removes the grant and audits member.revoked', async () => {
+    const { application, user } = await setup(GrantRoles.VIEWER);
+
+    await service().removeMember({
+      userId: user._id.toString(),
+      applicationId: application._id.toString(),
+      actorRole: Roles.USER,
+    });
+
+    assert.strictEqual(
+      await GrantModel.countDocuments({ userId: user._id }),
+      0,
+    );
+    assert.strictEqual(
+      record.mock.calls[0]?.arguments[0].event,
+      AuditEvent.MEMBER_REVOKED,
+    );
+  });
+
+  test('forbids a non-owner from touching an admin member', async () => {
+    const { application, user } = await setup(GrantRoles.ADMIN);
+
+    await assert.rejects(
+      service().removeMember({
+        userId: user._id.toString(),
+        applicationId: application._id.toString(),
+        actorRole: Roles.USER,
+      }),
+      ForbiddenError,
+    );
+    await assert.rejects(
+      service().changeMemberRole({
+        userId: user._id.toString(),
+        applicationId: application._id.toString(),
+        role: GrantRoles.VIEWER,
+        actorRole: Roles.USER,
+      }),
+      ForbiddenError,
+    );
+    assert.strictEqual(record.mock.callCount(), 0);
+  });
+
+  test('answers 404 when the grant does not exist', async () => {
+    const application = await ApplicationModel.create(
+      ApplicationFactory.generate(),
+    );
+    const user = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate(),
+    );
+
+    await assert.rejects(
+      service().removeMember({
+        userId: user._id.toString(),
+        applicationId: application._id.toString(),
+        actorRole: Roles.OWNER,
+      }),
+      EntityNotFoundError,
+    );
+  });
+});

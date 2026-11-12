@@ -215,31 +215,33 @@ Every route is declared in a module router and mounted by
 
 ### Users, applications and grants
 
-| Method   | Route                                         | Access           | Notes                                                           |
-| -------- | --------------------------------------------- | ---------------- | --------------------------------------------------------------- |
-| `POST`   | `/users`                                      | Owner            | Creates a verified user directly.                               |
-| `GET`    | `/users`                                      | Owner            | Lists users; paginated envelope (see below).                    |
-| `GET`    | `/users/:id`                                  | Owner            | Reads one user.                                                 |
-| `GET`    | `/users/:id/security`                         | Owner            | Aggregate security state and active session count.              |
-| `GET`    | `/users/:id/sessions`                         | Owner            | Lists the active sessions of a user.                            |
-| `DELETE` | `/users/:id/sessions/:sessionId`              | Owner            | Revokes one session of the user; audited.                       |
-| `DELETE` | `/users/:id/sessions`                         | Owner            | Revokes every session of the user; audited per session.         |
-| `PATCH`  | `/users/:id`                                  | Owner            | Updates profile fields only; any other field returns `400`.     |
-| `DELETE` | `/users/:id`                                  | Owner            | Deletes the user and cascades its grants; not the owner.        |
-| `POST`   | `/users/:id/unlock`                           | Owner            | Clears login and MFA lockout counters; audited.                 |
-| `POST`   | `/users/:id/verify`                           | Owner            | Marks the account as verified; audited.                         |
-| `POST`   | `/users/:id/mfa/reset`                        | Owner            | Removes every MFA artefact and closes all sessions; audited.    |
-| `POST`   | `/applications`                               | Owner            | Creates an application (name, slug, audience).                  |
-| `GET`    | `/applications`                               | Owner            | Lists applications; paginated envelope (see below).             |
-| `GET`    | `/applications/:id`                           | Owner, app admin | Reads one application; anyone else gets `404`.                  |
-| `PATCH`  | `/applications/:id`                           | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
-| `DELETE` | `/applications/:id`                           | Owner            | Archives the application (`active=false`); it is never deleted. |
-| `POST`   | `/applications/:applicationId/members`        | Owner, app admin | Grants by email or invites; neutral `{ email, role }` response. |
-| `GET`    | `/applications/:applicationId/members`        | Owner, app admin | Paginated member listing with readable user data.               |
-| `PUT`    | `/applications/:applicationId/grants`         | Owner, app admin | Upserts the role of a user in the application.                  |
-| `GET`    | `/applications/:applicationId/grants`         | Owner, app admin | Lists the application grants.                                   |
-| `GET`    | `/applications/:applicationId/grants/:userId` | Owner, app admin | Reads one grant.                                                |
-| `DELETE` | `/applications/:applicationId/grants/:userId` | Owner, app admin | Revokes a grant.                                                |
+| Method   | Route                                          | Access           | Notes                                                           |
+| -------- | ---------------------------------------------- | ---------------- | --------------------------------------------------------------- |
+| `POST`   | `/users`                                       | Owner            | Creates a verified user directly.                               |
+| `GET`    | `/users`                                       | Owner            | Lists users; paginated envelope (see below).                    |
+| `GET`    | `/users/:id`                                   | Owner            | Reads one user.                                                 |
+| `GET`    | `/users/:id/security`                          | Owner            | Aggregate security state and active session count.              |
+| `GET`    | `/users/:id/sessions`                          | Owner            | Lists the active sessions of a user.                            |
+| `DELETE` | `/users/:id/sessions/:sessionId`               | Owner            | Revokes one session of the user; audited.                       |
+| `DELETE` | `/users/:id/sessions`                          | Owner            | Revokes every session of the user; audited per session.         |
+| `PATCH`  | `/users/:id`                                   | Owner            | Updates profile fields only; any other field returns `400`.     |
+| `DELETE` | `/users/:id`                                   | Owner            | Deletes the user and cascades its grants; not the owner.        |
+| `POST`   | `/users/:id/unlock`                            | Owner            | Clears login and MFA lockout counters; audited.                 |
+| `POST`   | `/users/:id/verify`                            | Owner            | Marks the account as verified; audited.                         |
+| `POST`   | `/users/:id/mfa/reset`                         | Owner            | Removes every MFA artefact and closes all sessions; audited.    |
+| `POST`   | `/applications`                                | Owner            | Creates an application (name, slug, audience).                  |
+| `GET`    | `/applications`                                | Owner            | Lists applications; paginated envelope (see below).             |
+| `GET`    | `/applications/:id`                            | Owner, app admin | Reads one application; anyone else gets `404`.                  |
+| `PATCH`  | `/applications/:id`                            | Owner            | Renames or (de)activates; `slug` and `audience` are immutable.  |
+| `DELETE` | `/applications/:id`                            | Owner            | Archives the application (`active=false`); it is never deleted. |
+| `POST`   | `/applications/:applicationId/members`         | Owner, app admin | Grants by email or invites; neutral `{ email, role }` response. |
+| `GET`    | `/applications/:applicationId/members`         | Owner, app admin | Paginated member listing with readable user data.               |
+| `PATCH`  | `/applications/:applicationId/members/:userId` | Owner, app admin | Changes the member role; audited as `member.granted`.           |
+| `DELETE` | `/applications/:applicationId/members/:userId` | Owner, app admin | Revokes the member grant; audited as `member.revoked`.          |
+| `PUT`    | `/applications/:applicationId/grants`          | Owner, app admin | Upserts the role of a user in the application.                  |
+| `GET`    | `/applications/:applicationId/grants`          | Owner, app admin | Lists the application grants.                                   |
+| `GET`    | `/applications/:applicationId/grants/:userId`  | Owner, app admin | Reads one grant.                                                |
+| `DELETE` | `/applications/:applicationId/grants/:userId`  | Owner, app admin | Revokes a grant.                                                |
 
 `PATCH /users/:id` only accepts the profile allowlist: `username`, `email`,
 `password` and `telegramChatId` (use `null` to unregister the chat). Any other

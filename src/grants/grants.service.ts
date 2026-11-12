@@ -29,6 +29,7 @@ import type {
   GrantMember,
   GrantMemberInput,
   GrantMemberSortField,
+  MemberMutationInput,
   GrantsPort,
 } from './grants.port';
 
@@ -73,10 +74,22 @@ export class GrantsService implements GrantsPort {
       throw new EntityNotFoundError('User not found');
     }
 
-    const grant = await this.upsertGrant(userId, applicationId, role);
-    if (!grant) {
-      throw new EntityNotFoundError('Grant not found');
+    if (input.actorRole !== undefined) {
+      const existing = await this.grantModel.findOne({
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+      });
+      if (existing !== null) {
+        this.assertMemberEscalation(existing.role, role, input.actorRole);
+      }
     }
+
+    const grant = await this.applyMemberWrite(
+      userId,
+      applicationId,
+      role,
+      input.actorRole === undefined || input.actorRole === Roles.OWNER,
+    );
 
     await this.recordGrantEvent(AuditEvent.GRANT_ASSIGNED, {
       targetUserId: userId,
@@ -203,62 +216,12 @@ export class GrantsService implements GrantsPort {
       throw new ForbiddenError('Only the owner can manage an admin member');
     }
 
-    let grant: Grant | null;
-
-    if (isOwner) {
-      grant = await this.upsertGrant(userId, input.applicationId, input.role);
-    } else {
-      // Apply the admin guard in the write itself: a concurrent promotion to
-      // admin must not be overwritten by a non-owner caller.
-      try {
-        grant = await this.grantModel.findOneAndUpdate(
-          {
-            userId: new Types.ObjectId(userId),
-            applicationId: new Types.ObjectId(input.applicationId),
-            role: { $ne: GrantRoles.ADMIN },
-          },
-          { $set: { role: input.role } },
-          {
-            upsert: true,
-            returnDocument: 'after',
-            setDefaultsOnInsert: true,
-          },
-        );
-      } catch (error) {
-        if (!isDuplicateKeyError(error)) {
-          throw error;
-        }
-
-        // Two causes: the target already holds an admin grant, or a concurrent
-        // non-owner insert won the unique index. Re-read to tell them apart.
-        const current = await this.grantModel.findOne({
-          userId: new Types.ObjectId(userId),
-          applicationId: new Types.ObjectId(input.applicationId),
-        });
-
-        if (current?.role === GrantRoles.ADMIN) {
-          throw new ForbiddenError('Only the owner can manage an admin member');
-        }
-
-        grant = await this.grantModel.findOneAndUpdate(
-          {
-            userId: new Types.ObjectId(userId),
-            applicationId: new Types.ObjectId(input.applicationId),
-            role: { $ne: GrantRoles.ADMIN },
-          },
-          { $set: { role: input.role } },
-          { returnDocument: 'after' },
-        );
-
-        if (!grant) {
-          throw new ForbiddenError('Only the owner can manage an admin member');
-        }
-      }
-    }
-
-    if (!grant) {
-      throw new EntityNotFoundError('Grant not found');
-    }
+    await this.applyMemberWrite(
+      userId,
+      input.applicationId,
+      input.role,
+      isOwner,
+    );
 
     await this.recordGrantEvent(AuditEvent.MEMBER_GRANTED, {
       targetUserId: userId,
@@ -268,6 +231,116 @@ export class GrantsService implements GrantsPort {
     });
 
     return { email: normalizeEmail(input.email ?? ''), role: input.role };
+  }
+
+  async changeMemberRole(
+    input: MemberMutationInput & { role: GrantRoles },
+  ): Promise<Grant> {
+    const { userId, applicationId, role, actorId, actorRole } = input;
+    assertObjectId(userId, 'userId');
+    assertObjectId(applicationId, 'applicationId');
+    if (!Object.values(GrantRoles).includes(role)) {
+      throw new InvalidArgumentError('Invalid role');
+    }
+
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const existing = await this.grantModel.findOne({
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+    });
+    if (!existing) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+    this.assertMemberEscalation(existing.role, role, actorRole);
+
+    const writeFilter: Record<string, unknown> = {
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+      // A concurrent promotion to admin must not be overwritten by a non-owner.
+      ...(actorRole === Roles.OWNER ? {} : { role: { $ne: GrantRoles.ADMIN } }),
+    };
+    let grant = await this.grantModel.findOneAndUpdate(
+      writeFilter,
+      { $set: { role } },
+      { returnDocument: 'after' },
+    );
+    if (!grant) {
+      const current = await this.grantModel.exists({
+        userId: new Types.ObjectId(userId),
+        applicationId: new Types.ObjectId(applicationId),
+      });
+      if (!current) {
+        throw new EntityNotFoundError('Grant not found');
+      }
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
+
+    await this.recordGrantEvent(AuditEvent.MEMBER_GRANTED, {
+      targetUserId: userId,
+      applicationId,
+      role,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+
+    return grant;
+  }
+
+  async removeMember(input: MemberMutationInput): Promise<void> {
+    const { userId, applicationId, actorId, actorRole } = input;
+    assertObjectId(userId, 'userId');
+    assertObjectId(applicationId, 'applicationId');
+
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const existing = await this.grantModel.findOne({
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+    });
+    if (!existing) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+    this.assertMemberEscalation(existing.role, existing.role, actorRole);
+
+    const removed = await this.grantModel.deleteOne({
+      _id: existing._id,
+      ...(actorRole === Roles.OWNER ? {} : { role: { $ne: GrantRoles.ADMIN } }),
+    });
+    if (removed.deletedCount === 0) {
+      const current = await this.grantModel.exists({ _id: existing._id });
+      if (!current) {
+        throw new EntityNotFoundError('Grant not found');
+      }
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
+
+    await this.recordGrantEvent(AuditEvent.MEMBER_REVOKED, {
+      targetUserId: userId,
+      applicationId,
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+  }
+
+  /** Only the owner may create, modify or remove an admin member. */
+  private assertMemberEscalation(
+    currentRole: GrantRoles,
+    nextRole: GrantRoles,
+    actorRole?: Roles,
+  ): void {
+    if (
+      (currentRole === GrantRoles.ADMIN || nextRole === GrantRoles.ADMIN) &&
+      actorRole !== Roles.OWNER
+    ) {
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
   }
 
   setInvitationsPort(invitations: InvitationsPort): void {
@@ -435,17 +508,31 @@ export class GrantsService implements GrantsPort {
     userId: string,
     applicationId: string,
     actorId?: string,
+    actorRole?: Roles,
   ): Promise<void> {
     assertObjectId(userId, 'userId');
     assertObjectId(applicationId, 'applicationId');
 
-    const result = await this.grantModel.deleteOne({
+    const existing = await this.grantModel.findOne({
       userId: new Types.ObjectId(userId),
       applicationId: new Types.ObjectId(applicationId),
     });
+    if (!existing) {
+      throw new EntityNotFoundError('Grant not found');
+    }
+    this.assertMemberEscalation(existing.role, existing.role, actorRole);
+
+    const result = await this.grantModel.deleteOne({
+      _id: existing._id,
+      ...(actorRole === Roles.OWNER ? {} : { role: { $ne: GrantRoles.ADMIN } }),
+    });
 
     if (result.deletedCount === 0) {
-      throw new EntityNotFoundError('Grant not found');
+      const current = await this.grantModel.exists({ _id: existing._id });
+      if (!current) {
+        throw new EntityNotFoundError('Grant not found');
+      }
+      throw new ForbiddenError('Only the owner can manage an admin member');
     }
 
     await this.recordGrantEvent(AuditEvent.GRANT_REVOKED, {
@@ -555,6 +642,72 @@ export class GrantsService implements GrantsPort {
       result: AuditResult.SUCCESS,
       ...input,
     });
+  }
+
+  /**
+   * Writes a member role. Non-owner callers get the admin guard inside the
+   * write itself, so a concurrent promotion to admin is never overwritten by
+   * a read-then-write window. A duplicate key or a missed conditional update
+   * is resolved by re-reading: an admin grant means the actor is forbidden,
+   * anything else retries the conditional write.
+   */
+  private async applyMemberWrite(
+    userId: string,
+    applicationId: string,
+    role: GrantRoles,
+    isOwner: boolean,
+  ): Promise<Grant> {
+    if (isOwner) {
+      const grant = await this.upsertGrant(userId, applicationId, role);
+      if (!grant) {
+        throw new EntityNotFoundError('Grant not found');
+      }
+      return grant;
+    }
+
+    const filter = {
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+      role: { $ne: GrantRoles.ADMIN },
+    };
+
+    try {
+      const grant = await this.grantModel.findOneAndUpdate(
+        filter,
+        { $set: { role } },
+        {
+          upsert: true,
+          returnDocument: 'after',
+          setDefaultsOnInsert: true,
+        },
+      );
+      if (grant) {
+        return grant;
+      }
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
+    }
+
+    const current = await this.grantModel.findOne({
+      userId: new Types.ObjectId(userId),
+      applicationId: new Types.ObjectId(applicationId),
+    });
+    if (current?.role === GrantRoles.ADMIN) {
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
+
+    const retried = await this.grantModel.findOneAndUpdate(
+      filter,
+      { $set: { role } },
+      { returnDocument: 'after' },
+    );
+    if (!retried) {
+      throw new ForbiddenError('Only the owner can manage an admin member');
+    }
+
+    return retried;
   }
 
   private async upsertGrant(
