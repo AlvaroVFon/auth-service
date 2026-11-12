@@ -320,6 +320,8 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 
 ## Deployment
 
+Link records are retained for 30 days after `expiresAt`, so the invitation history can report expired entries; password-reset links share that retention window and remain unusable after expiry.
+
 After deploying the invitation-history retention change, run `pnpm migrate:link-ttl --apply` once so the existing `expiresAt_1` TTL index is recreated with the 30-day retention.
 
 ### Production image

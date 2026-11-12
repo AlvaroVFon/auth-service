@@ -1350,6 +1350,45 @@ describe('UsersService.recordLogin', () => {
   });
 });
 
+describe('UsersService.countUsers', () => {
+  test('should count verified, unverified and actively locked accounts', async () => {
+    await fixture.createMany<UserInterface>('User', [
+      UserFactory.generate({
+        email: generateRandomEmail('count-verified+'),
+        verified: true,
+      }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-unverified+'),
+        verified: false,
+      }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-locked+'),
+        verified: true,
+        lockoutUntil: new Date(Date.now() + 60_000),
+      }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-expired+'),
+        verified: false,
+        lockoutUntil: new Date(Date.now() - 60_000),
+      }),
+      UserFactory.generate({
+        email: generateRandomEmail('count-mfa-locked+'),
+        verified: true,
+        mfaLockoutUntil: new Date(Date.now() + 60_000),
+      }),
+    ]);
+
+    const service = new UsersService(User, new CryptoService());
+
+    assert.deepStrictEqual(await service.countUsers(), {
+      total: 5,
+      verified: 3,
+      unverified: 2,
+      locked: 2,
+    });
+  });
+});
+
 describe('UsersService.resetMfa', () => {
   const createUser = (overrides: Partial<UserInterface> = {}) =>
     fixture.create<UserInterface>('User', {

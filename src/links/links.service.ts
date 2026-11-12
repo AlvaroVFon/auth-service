@@ -22,6 +22,7 @@ import {
   CreateInvitationLinkInput,
   CreatePasswordResetLinkInput,
   CreatedLink,
+  InvitationCounts,
   INVITATION_STATES,
   type InvitationListItem,
   type InvitationListQuery,
@@ -137,6 +138,45 @@ export class LinksService implements LinksPort {
       facet?.total[0]?.value ?? 0,
       query,
     );
+  }
+
+  /**
+   * Counts unused invitation links. `pending` requires an unexpired and
+   * non-invalidated link; `expired` counts every unused link past its expiry,
+   * even if a later reissue invalidated it during the retention window.
+   */
+  async countInvitations(): Promise<InvitationCounts> {
+    const now = new Date();
+    const rows = await this.linkModel.aggregate<{
+      _id: 'pending' | 'expired';
+      count: number;
+    }>([
+      {
+        $match: {
+          type: LinkType.INVITATION,
+          usedAt: null,
+          $or: [
+            { expiresAt: { $lte: now } },
+            { invalidatedAt: null, expiresAt: { $gt: now } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [{ $gt: ['$expiresAt', now] }, 'pending', 'expired'],
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const counts: InvitationCounts = { pending: 0, expired: 0 };
+    for (const row of rows) {
+      counts[row._id] = row.count;
+    }
+
+    return counts;
   }
 
   async revokeInvitation(

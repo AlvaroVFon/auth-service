@@ -41,6 +41,7 @@ import type {
   UserSessionRevokerPort,
   UserSortField,
   UserSessionsPort,
+  UserCounts,
   UserSessionView,
   UsersPort,
 } from './users.port';
@@ -86,6 +87,31 @@ export class UsersService implements UsersPort {
     private readonly mfaCipher?: SecretCipher,
     private readonly auditService?: AuditPort,
   ) {}
+
+  async countUsers(): Promise<UserCounts> {
+    const now = new Date();
+    // `total` necessarily scans the collection; the verified count and the
+    // lockout `$or` use their own support indexes.
+    const [total, verified, locked] = await Promise.all([
+      this.usersModel.countDocuments({}),
+      this.usersModel.countDocuments({ verified: true }),
+      this.usersModel.countDocuments({
+        $or: [
+          { lockoutUntil: { $gt: now } },
+          { mfaLockoutUntil: { $gt: now } },
+        ],
+      }),
+    ]);
+
+    return {
+      total,
+      verified,
+      // Two independent counts can race with a verification/delete; never
+      // expose an impossible negative bucket.
+      unverified: Math.max(total - verified, 0),
+      locked,
+    };
+  }
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
     if (!data.email) {
