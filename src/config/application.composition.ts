@@ -33,6 +33,7 @@ import type { GrantsRateLimitConfig } from '../grants';
 import { GrantsModule } from '../grants/grants.module';
 import { GrantModel } from '../grants/grants.schema';
 import { HealthModule, isHealthProbe } from '../health';
+import { HoldersModule } from '../holders/holders.module';
 import { HoldersModel } from '../holders/holders.schema';
 import { HoldersService } from '../holders/holders.service';
 import { JwksModule } from '../jwks';
@@ -249,6 +250,12 @@ export const createApplicationComposition = (
   );
   const refreshTokenService = new RefreshTokenService(RefreshTokenModel);
   const holdersService = new HoldersService(HoldersModel, cryptoService);
+  const holdersModule = new HoldersModule(
+    holdersService,
+    authenticationMiddleware,
+    authorizationMiddleware,
+    logger,
+  );
   const applicationsModule = new ApplicationsModule(
     authenticationMiddleware,
     authorizationMiddleware,
@@ -475,6 +482,7 @@ export const createApplicationComposition = (
       applicationsModule.initialize(app, applicationAuthorizationMiddleware);
       grantsModule.initialize(app, applicationAuthorizationMiddleware);
       usersModule.initialize(app);
+      holdersModule.initialize(app);
       authModule.initialize(app);
       linksModule.initialize(app, applicationAuthorizationMiddleware);
       auditModule.initialize(app);

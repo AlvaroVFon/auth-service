@@ -213,6 +213,8 @@ Every route is declared in a module router and mounted by
 | `POST` | `/auth/password-reset-links`               | Owner            | Generates a shareable reset link.                                                      |
 | `POST` | `/auth/password-reset-links/accept`        | Public           | Consumes the link and rotates the password.                                            |
 
+| `GET` | `/holders` | Owner | Paginated pending holders; no password or verification secrets. |
+
 ### Users, applications and grants
 
 | Method   | Route                                         | Access           | Notes                                                           |

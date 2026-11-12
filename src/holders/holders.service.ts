@@ -8,9 +8,16 @@ import {
 import { normalizeEmail } from '../common/email';
 import { InvalidArgumentError } from '../common/exceptions/base.exception';
 import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
+import {
+  buildPaginatedResult,
+  buildSearchRegex,
+  buildSortObject,
+  type ListQuery,
+  type PaginatedResult,
+} from '../common/pagination';
 import { CryptoService } from '../libs/crypto';
-import { Holder } from './holders.interface';
-import type { HoldersPort } from './holders.port';
+import { Holder, HolderListItem } from './holders.interface';
+import type { HolderSortField, HoldersPort } from './holders.port';
 
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
@@ -19,6 +26,42 @@ export class HoldersService implements HoldersPort {
     private readonly holderModel: Model<Holder>,
     private readonly cryptoService: CryptoService,
   ) {}
+
+  async list(
+    query: ListQuery<HolderSortField>,
+  ): Promise<PaginatedResult<HolderListItem>> {
+    const filter = query.q ? { email: buildSearchRegex(query.q) } : {};
+    const [holders, total] = await Promise.all([
+      this.holderModel
+        .find(filter)
+        .select('email createdAt expiresAt')
+        .sort(buildSortObject(query.sort))
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit)
+        .lean<
+          Array<{
+            _id: { toString(): string };
+            email: string;
+            createdAt?: Date;
+            expiresAt: Date;
+          }>
+        >(),
+      this.holderModel.countDocuments(filter),
+    ]);
+
+    return buildPaginatedResult(
+      holders.map((holder) => ({
+        id: holder._id.toString(),
+        email: holder.email,
+        ...(holder.createdAt === undefined
+          ? {}
+          : { createdAt: holder.createdAt }),
+        expiresAt: holder.expiresAt,
+      })),
+      total,
+      query,
+    );
+  }
 
   async create(email: string, password: string): Promise<Holder> {
     if (!email) {
