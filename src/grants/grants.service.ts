@@ -11,16 +11,24 @@ import {
   InvalidArgumentError,
 } from '../common/exceptions/base.exception';
 import { isDuplicateKeyError } from '../common/mongo/duplicate-key';
+import {
+  buildPaginatedResult,
+  buildSortObject,
+  type ListQuery,
+  type PaginatedResult,
+} from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
 import type { InvitationsPort } from '../links';
-import type { UsersPort } from '../users';
+import { USERS_COLLECTION_NAME, type UsersPort } from '../users';
 import { Grant, GrantRoles } from './grants.interface';
 import type {
   AssignRoleInput,
   GrantApplicationScope,
   GrantedApplication,
   GrantedMember,
+  GrantMember,
   GrantMemberInput,
+  GrantMemberSortField,
   GrantsPort,
 } from './grants.port';
 
@@ -316,6 +324,98 @@ export class GrantsService implements GrantsPort {
     return (await this.loadActiveGrants(userId)).map(
       ({ grant, application }) => ({ application, role: grant.role }),
     );
+  }
+
+  async listMembers(
+    applicationId: string,
+    query: ListQuery<GrantMemberSortField>,
+    scope?: GrantApplicationScope,
+  ): Promise<PaginatedResult<GrantMember>> {
+    assertObjectId(applicationId, 'applicationId');
+    await this.resolveApplication(applicationId, scope);
+
+    const applicationObjectId = new Types.ObjectId(applicationId);
+    // Match and sort on the base collection so the compound indexes serve the
+    // ordering, then join users to drop orphan grants and finally skip/limit on
+    // that hydratable set. The count runs the same existence filter, so `total`
+    // always describes the set the pages are drawn from even with orphans.
+    const userLookup = {
+      $lookup: {
+        from: USERS_COLLECTION_NAME,
+        let: { userId: '$userId' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$_id', '$$userId'] } } },
+          // Only existence matters here; the safe profile fields are loaded
+          // through UsersPort once the page is bounded.
+          { $project: { _id: 1 } },
+        ],
+        as: 'user',
+      },
+    };
+
+    // One shared lookup feeds both the page and the count: `$facet` splits the
+    // hydratable grants after the index-backed sort and the orphan filter.
+    const [facet] = await this.grantModel.aggregate<{
+      items: Array<{
+        userId: string;
+        role: GrantRoles;
+        createdAt?: Date;
+      }>;
+      total: Array<{ value: number }>;
+    }>(
+      [
+        { $match: { applicationId: applicationObjectId } },
+        { $sort: buildSortObject(query.sort) },
+        userLookup,
+        { $unwind: '$user' },
+        {
+          $facet: {
+            items: [
+              { $skip: (query.page - 1) * query.limit },
+              { $limit: query.limit },
+              {
+                $project: {
+                  _id: 0,
+                  userId: { $toString: '$userId' },
+                  role: 1,
+                  // The membership date, matching the `createdAt` ordering.
+                  createdAt: 1,
+                },
+              },
+            ],
+            total: [{ $count: 'value' }],
+          },
+        },
+      ],
+      { allowDiskUse: true },
+    );
+
+    const page = facet?.items ?? [];
+    const summaries = await this.usersService.findSummariesByIds(
+      page.map((grant) => grant.userId),
+    );
+    const byUserId = new Map(
+      summaries.map((summary) => [summary.userId, summary]),
+    );
+    const items = page.flatMap((grant): GrantMember[] => {
+      const summary = byUserId.get(grant.userId);
+      if (!summary) {
+        return [];
+      }
+
+      return [
+        {
+          ...summary,
+          userId: grant.userId,
+          role: grant.role,
+          ...(grant.createdAt === undefined
+            ? {}
+            : { createdAt: grant.createdAt }),
+        },
+      ];
+    });
+
+    return buildPaginatedResult(items, facet?.total[0]?.value ?? 0, query);
   }
 
   async listByApplication(

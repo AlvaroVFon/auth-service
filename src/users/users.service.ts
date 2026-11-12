@@ -29,14 +29,19 @@ import {
 import type { RequestAuditContext } from '../common/request-context';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
-import { User as UserInterface } from '../users/users.interface';
+import {
+  User as UserInterface,
+  UserSecurityOverview,
+} from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
+  UserSummary,
   UserListItem,
   UserSessionRevokerPort,
   UserSortField,
   UserSessionsPort,
+  UserCounts,
   UserSessionView,
   UsersPort,
 } from './users.port';
@@ -50,6 +55,14 @@ export interface UserSupportActionContext extends RequestAuditContext {
  * Inclusion projection: a path added to the schema later is not shipped until
  * it is listed here, so the listing fails closed instead of leaking a secret.
  */
+const USER_SUMMARY_PROJECTION = [
+  'email',
+  'username',
+  'verified',
+  'mfaEnabled',
+  'lastLoginAt',
+].join(' ');
+
 const USER_LIST_PROJECTION = [
   'username',
   'email',
@@ -74,6 +87,31 @@ export class UsersService implements UsersPort {
     private readonly mfaCipher?: SecretCipher,
     private readonly auditService?: AuditPort,
   ) {}
+
+  async countUsers(): Promise<UserCounts> {
+    const now = new Date();
+    // `total` necessarily scans the collection; the verified count and the
+    // lockout `$or` use their own support indexes.
+    const [total, verified, locked] = await Promise.all([
+      this.usersModel.countDocuments({}),
+      this.usersModel.countDocuments({ verified: true }),
+      this.usersModel.countDocuments({
+        $or: [
+          { lockoutUntil: { $gt: now } },
+          { mfaLockoutUntil: { $gt: now } },
+        ],
+      }),
+    ]);
+
+    return {
+      total,
+      verified,
+      // Two independent counts can race with a verification/delete; never
+      // expose an impossible negative bucket.
+      unverified: Math.max(total - verified, 0),
+      locked,
+    };
+  }
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
     if (!data.email) {
@@ -209,6 +247,42 @@ export class UsersService implements UsersPort {
     }
 
     return user;
+  }
+
+  /**
+   * Batched profile projection for a known id set. The inclusion select never
+   * returns credentials, lockout counters or MFA material.
+   */
+  async findSummariesByIds(ids: string[]): Promise<UserSummary[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    for (const id of ids) {
+      this.assertValidId(id);
+    }
+
+    const users = await this.usersModel
+      .find({ _id: { $in: ids } })
+      .select(USER_SUMMARY_PROJECTION)
+      .lean<
+        Array<{
+          _id: { toString(): string };
+          email: string;
+          username?: string;
+          verified: boolean;
+          mfaEnabled?: boolean;
+          lastLoginAt?: Date | null;
+        }>
+      >();
+
+    return users.map((user) => ({
+      userId: user._id.toString(),
+      email: user.email,
+      ...(user.username === undefined ? {} : { username: user.username }),
+      verified: user.verified,
+      mfaEnabled: user.mfaEnabled ?? false,
+      lastLoginAt: user.lastLoginAt ?? null,
+    }));
   }
 
   /**
@@ -430,6 +504,56 @@ export class UsersService implements UsersPort {
     if (!complete) {
       throw new Error('Session revocation incomplete');
     }
+  }
+
+  /**
+   * Aggregate security state of a target. The owner and unknown ids are both
+   * reported as missing, and the projection only selects the public counters.
+   */
+  async getSecurityOverview(id: string): Promise<UserSecurityOverview> {
+    this.assertValidId(id);
+
+    const user = await this.usersModel
+      .findOne({ _id: id, role: { $ne: Roles.OWNER } })
+      .select(
+        'verified mfaEnabled loginAttempts lockoutUntil mfaFailedAttempts mfaLockoutUntil',
+      )
+      .lean<{
+        verified: boolean;
+        mfaEnabled?: boolean;
+        loginAttempts?: number;
+        lockoutUntil?: Date | null;
+        mfaFailedAttempts?: number;
+        mfaLockoutUntil?: Date | null;
+      }>();
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    const sessions = await this.requireSessionPort().listSessions(id);
+    // The endpoint contract defines this as the latest activity of the active
+    // sessions, so it is null after a full logout even though `lastLoginAt`
+    // persists on the user document.
+    const lastLoginAt =
+      sessions.length === 0
+        ? null
+        : new Date(
+            Math.max(
+              ...sessions.map((session) => session.lastActivityAt.getTime()),
+            ),
+          );
+
+    return {
+      verified: user.verified,
+      mfaEnabled: user.mfaEnabled ?? false,
+      loginAttempts: user.loginAttempts ?? 0,
+      lockoutUntil: user.lockoutUntil ?? null,
+      mfaFailedAttempts: user.mfaFailedAttempts ?? 0,
+      mfaLockoutUntil: user.mfaLockoutUntil ?? null,
+      lastLoginAt,
+      activeSessions: sessions.length,
+    };
   }
 
   /** Validates the id and resolves the target, excluding the owner. */

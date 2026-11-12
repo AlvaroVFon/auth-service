@@ -11,4 +11,6 @@ export interface Grant {
   userId: Types.ObjectId;
   applicationId: Types.ObjectId;
   role: GrantRoles;
+  createdAt?: Date;
+  updatedAt?: Date;
 }

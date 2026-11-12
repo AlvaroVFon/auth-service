@@ -24,5 +24,9 @@ const grantSchema = new Schema<Grant>(
 );
 
 grantSchema.index({ userId: 1, applicationId: 1 }, { unique: true });
+// The member listing matches applicationId and sorts before joining users, so
+// these indexes serve both the equality filter and the per-field ordering.
+grantSchema.index({ applicationId: 1, createdAt: 1, _id: 1 });
+grantSchema.index({ applicationId: 1, role: 1, _id: 1 });
 
 export const GrantModel = model<Grant>('Grant', grantSchema);
