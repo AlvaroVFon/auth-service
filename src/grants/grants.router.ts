@@ -47,6 +47,12 @@ export class GrantsRouter {
     );
 
     this.app.get(
+      '/applications/:applicationId/members',
+      ...appAdminOnly,
+      this.grantsController.listMembers.bind(this.grantsController),
+    );
+
+    this.app.get(
       '/applications/:applicationId/grants',
       ...appAdminOnly,
       this.grantsController.list.bind(this.grantsController),
