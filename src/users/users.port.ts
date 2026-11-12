@@ -80,6 +80,15 @@ export interface UserSessionsPort {
   ): Promise<{ sessionIds: string[]; complete: boolean }>;
 }
 
+/** Management counters used by the admin overview. */
+export interface UserCounts {
+  total: number;
+  verified: number;
+  unverified: number;
+  /** Accounts with a login or MFA lockout that is still in force. */
+  locked: number;
+}
+
 /** Readable member projection; never includes credentials or MFA secrets. */
 export interface UserSummary {
   userId: string;
@@ -91,6 +100,7 @@ export interface UserSummary {
 }
 
 export interface UsersPort {
+  countUsers(): Promise<UserCounts>;
   findSummariesByIds(ids: string[]): Promise<UserSummary[]>;
   findAll(
     query: ListQuery<UserSortField>,
