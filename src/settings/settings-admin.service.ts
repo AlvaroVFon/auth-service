@@ -9,6 +9,7 @@ import type {
 import type {
   ResolvedSettings,
   SettingSource,
+  SettingsChanges,
   SettingsPort,
 } from './settings.port';
 import { SETTINGS_FIELDS, type SettingsField } from './settings.validation';
@@ -98,13 +99,14 @@ export class SettingsAdminService {
       throw new EntityNotFoundError('Application not found');
     }
 
-    const before =
-      await this.settingsService.resolveForApplication(applicationId);
-    const resolved = await this.settingsService.updateApplicationSettings(
-      applicationId,
-      patch,
-    );
-    const fields = this.changedFields(before, resolved);
+    const { resolved, applied } =
+      await this.settingsService.updateApplicationSettings(
+        applicationId,
+        patch,
+      );
+    // The writer reports the overrides it actually changed, so a concurrent
+    // writer can never attribute its fields to this request.
+    const fields = this.appliedFields(applied);
 
     if (fields.length > 0 && this.auditService) {
       await this.auditService.record({
@@ -128,6 +130,15 @@ export class SettingsAdminService {
       (field) =>
         before[field].value !== resolved[field].value ||
         before[field].source !== resolved[field].source,
+    );
+  }
+
+  /** Changes applied to the stored overrides, in the documented field order. */
+  private appliedFields(applied: SettingsChanges): SettingsField[] {
+    const unset = new Set(applied.unset);
+
+    return SETTINGS_FIELDS.filter(
+      (field) => applied.set[field] !== undefined || unset.has(field),
     );
   }
 

@@ -14,6 +14,7 @@ export {
   resolveEnvironmentSettings,
 } from './settings.defaults';
 export {
+  type ApplicationSettingsUpdate,
   type ApplicationSettingsWriterPort,
   type GlobalSettingsPort,
   type ResolvedSetting,

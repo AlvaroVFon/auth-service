@@ -62,19 +62,19 @@ describe('SettingsAdminService application writes', () => {
       'application',
     );
 
-    const events = await fixture.find('AuditEvent', {
+    const events = (await fixture.find('AuditEvent', {
       event: 'settings.updated',
       applicationId: application._id,
-    });
-    assert.strictEqual(events.length, 2);
-    const first = events[0] as {
+    })) as Array<{
       actorId?: { toString(): string };
       fields?: string[];
-    };
-    const second = events[1] as { fields?: string[] };
-    assert.strictEqual(first?.actorId?.toString(), ACTOR_ID);
-    assert.deepStrictEqual(first?.fields, ['accessTokenTtlSeconds']);
-    assert.deepStrictEqual(second?.fields, ['accessTokenTtlSeconds']);
+    }>;
+    assert.strictEqual(events.length, 2);
+    // Assert by content instead of position: `find` has no deterministic order.
+    for (const event of events) {
+      assert.strictEqual(event.actorId?.toString(), ACTOR_ID);
+      assert.deepStrictEqual(event.fields, ['accessTokenTtlSeconds']);
+    }
   });
 
   test('rejects an invalid patch without modifying the document', async () => {

@@ -58,9 +58,13 @@ export interface ApplicationsPort {
   findAllForContext(): Promise<Application[]>;
   /**
    * Persists the settings overrides of an active application. Unknown or
-   * archived applications raise `EntityNotFoundError`.
+   * archived applications raise `EntityNotFoundError`. Returns the changes
+   * that actually altered the stored overrides.
    */
-  updateSettings(id: string, changes: SettingsChanges): Promise<void>;
+  updateSettings(
+    id: string,
+    changes: SettingsChanges,
+  ): Promise<SettingsChanges>;
   findActiveByIds(ids: string[]): Promise<Application[]>;
   findAssignableById(id: string): Promise<Application | null>;
 }

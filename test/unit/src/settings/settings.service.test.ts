@@ -291,6 +291,7 @@ describe('SettingsService writes and cache', () => {
         for (const field of changes.unset) {
           delete (store.settings as Record<string, unknown>)[field];
         }
+        return changes;
       },
     );
     const writer: ApplicationSettingsWriterPort = {
@@ -338,9 +339,12 @@ describe('SettingsService writes and cache', () => {
       source: 'application',
     });
 
-    const after = await service.updateApplicationSettings(APP_ID, {
-      appName: 'New',
-    });
+    const { resolved: after } = await service.updateApplicationSettings(
+      APP_ID,
+      {
+        appName: 'New',
+      },
+    );
 
     assert.deepStrictEqual(after.appName, {
       value: 'New',
@@ -372,6 +376,7 @@ describe('SettingsService writes and cache', () => {
           for (const [field, value] of Object.entries(changes.set)) {
             (application!.settings as Record<string, unknown>)[field] = value;
           }
+          return changes;
         },
       },
       new SettingsCache(60_000),
@@ -455,7 +460,7 @@ describe('SettingsService writes and cache', () => {
     store.global = { appName: 'Global name' };
     await service.resolveForApplication(APP_ID);
 
-    const resolved = await service.updateApplicationSettings(APP_ID, {
+    const { resolved } = await service.updateApplicationSettings(APP_ID, {
       appName: null,
     });
 
@@ -558,6 +563,7 @@ describe('SettingsService writes and cache', () => {
         updateSettings: async (_id, changes) => {
           (application.settings as Record<string, unknown>).appName =
             changes.set.appName;
+          return changes;
         },
       },
       new SettingsCache(60_000),
@@ -666,6 +672,7 @@ describe('SettingsService.resolveApplicationWithGlobal cache', () => {
           for (const field of changes.unset) {
             delete applicationSettings[field];
           }
+          return changes;
         },
       } as ApplicationSettingsWriterPort,
     );

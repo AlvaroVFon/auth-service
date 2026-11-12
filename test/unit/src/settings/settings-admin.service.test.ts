@@ -8,6 +8,7 @@ import {
   SETTINGS_FIELDS,
   SettingsAdminService,
   type ResolvedSettings,
+  type SettingsChanges,
   type SettingsPort,
 } from '../../../../src/settings';
 
@@ -47,7 +48,10 @@ describe('SettingsAdminService', () => {
           global: buildResolved(),
         }),
         resolveGlobal: async () => buildResolved(),
-        updateApplicationSettings: async () => buildResolved(),
+        updateApplicationSettings: async () => ({
+          resolved: buildResolved(),
+          applied: { set: {}, unset: [] },
+        }),
         updateGlobalSettings,
       } satisfies SettingsPort,
       { record } as never,
@@ -92,7 +96,10 @@ describe('SettingsAdminService', () => {
           global: buildResolved(),
         }),
         resolveGlobal: async () => buildResolved(),
-        updateApplicationSettings: async () => buildResolved(),
+        updateApplicationSettings: async () => ({
+          resolved: buildResolved(),
+          applied: { set: {}, unset: [] },
+        }),
         updateGlobalSettings: async () => buildResolved(),
       } satisfies SettingsPort,
       { record } as never,
@@ -123,7 +130,10 @@ describe('SettingsAdminService', () => {
           global: inherited,
         }),
         resolveGlobal: async () => inherited,
-        updateApplicationSettings: async () => inherited,
+        updateApplicationSettings: async () => ({
+          resolved: inherited,
+          applied: { set: {}, unset: [] },
+        }),
         updateGlobalSettings: async () => overridden,
       } satisfies SettingsPort,
       { record } as never,
@@ -164,7 +174,7 @@ describe('SettingsAdminService.updateApplication', () => {
   const build = (
     options: {
       found?: boolean;
-      before?: ResolvedSettings;
+      applied?: SettingsChanges;
       after?: ResolvedSettings;
       updateError?: Error;
       findError?: Error;
@@ -175,10 +185,12 @@ describe('SettingsAdminService.updateApplication', () => {
       if (options.updateError) {
         throw options.updateError;
       }
-      return (
-        options.after ??
-        buildResolvedWith({ value: 'Panel', source: 'application' })
-      );
+      return {
+        resolved:
+          options.after ??
+          buildResolvedWith({ value: 'Panel', source: 'application' }),
+        applied: options.applied ?? { set: { appName: 'Panel' }, unset: [] },
+      };
     });
     const findAssignableById = mock.fn(async () => {
       if (options.findError) {
@@ -189,7 +201,6 @@ describe('SettingsAdminService.updateApplication', () => {
     const service = new SettingsAdminService(
       {
         resolveForApplication: async () =>
-          options.before ??
           buildResolvedWith({ value: 'Global', source: 'global' }),
         resolveGlobal: async () => buildResolved(),
         resolveApplicationWithGlobal: async () => ({
@@ -233,8 +244,8 @@ describe('SettingsAdminService.updateApplication', () => {
       source: 'application',
     });
     const { service, record } = build({
-      before: unchanged,
       after: unchanged,
+      applied: { set: {}, unset: [] },
     });
 
     await service.updateApplication('app-1', { appName: 'Panel' }, 'actor-1');
@@ -256,11 +267,10 @@ describe('SettingsAdminService.updateApplication', () => {
   });
 
   test('forwards a null removal and audits the source transition', async () => {
-    const before = buildResolvedWith({ value: 'Panel', source: 'application' });
     const after = buildResolvedWith({ value: 'Global', source: 'global' });
     const { service, record, updateApplicationSettings } = build({
-      before,
       after,
+      applied: { set: {}, unset: ['appName'] },
     });
 
     await service.updateApplication('app-1', { appName: null }, 'actor-1');
@@ -274,13 +284,15 @@ describe('SettingsAdminService.updateApplication', () => {
   });
 
   test('forwards a mixed patch unchanged and audits both changes', async () => {
-    const before = buildResolved();
     const after = buildResolved();
     after.appName = { value: 'Panel', source: 'application' };
     after.accessTokenTtlSeconds = { value: 120, source: 'application' };
     const { service, record, updateApplicationSettings } = build({
-      before,
       after,
+      applied: {
+        set: { appName: 'Panel', accessTokenTtlSeconds: 120 },
+        unset: [],
+      },
     });
 
     await service.updateApplication(
@@ -297,12 +309,38 @@ describe('SettingsAdminService.updateApplication', () => {
     assert.deepStrictEqual(event.fields, ['accessTokenTtlSeconds', 'appName']);
   });
 
+  test('forwards a mixed null and value patch and audits both changes', async () => {
+    const after = buildResolved();
+    after.appName = { value: 'Global', source: 'global' };
+    after.accessTokenTtlSeconds = { value: 120, source: 'application' };
+    const { service, record, updateApplicationSettings } = build({
+      after,
+      applied: { set: { accessTokenTtlSeconds: 120 }, unset: ['appName'] },
+    });
+
+    await service.updateApplication(
+      'app-1',
+      { appName: null, accessTokenTtlSeconds: 120 },
+      'actor-1',
+    );
+
+    assert.deepStrictEqual(updateApplicationSettings.mock.calls[0]?.arguments, [
+      'app-1',
+      { appName: null, accessTokenTtlSeconds: 120 },
+    ]);
+    const event = record.mock.calls[0]?.arguments[0] as Record<string, unknown>;
+    assert.deepStrictEqual(event.fields, ['accessTokenTtlSeconds', 'appName']);
+  });
+
   test('does not audit a null-only no-op', async () => {
     const unchanged = buildResolvedWith({
       value: 'Global',
       source: 'global',
     });
-    const { service, record } = build({ before: unchanged, after: unchanged });
+    const { service, record } = build({
+      after: unchanged,
+      applied: { set: {}, unset: [] },
+    });
 
     await service.updateApplication('app-1', { appName: null }, 'actor-1');
 

@@ -8,6 +8,7 @@ import {
 } from './settings.defaults';
 import type { ApplicationSettings } from './settings.interface';
 import type {
+  ApplicationSettingsUpdate,
   ApplicationSettingsWriterPort,
   GlobalSettingsPort,
   ResolvedSetting,
@@ -180,20 +181,26 @@ export class SettingsService implements SettingsPort {
   async updateApplicationSettings(
     applicationId: string,
     patch: Record<string, unknown>,
-  ): Promise<ResolvedSettings> {
+  ): Promise<ApplicationSettingsUpdate> {
     const changes = parseSettingsPatch(patch);
 
     if (!this.applicationSettingsWriter) {
       throw new Error('Application settings writer is not configured');
     }
 
-    await this.applicationSettingsWriter.updateSettings(applicationId, changes);
+    const applied = await this.applicationSettingsWriter.updateSettings(
+      applicationId,
+      changes,
+    );
     this.writeGeneration += 1;
     const key = applicationCacheKey(applicationId);
     this.cache.invalidate(key);
     this.pairCache.invalidate(key);
 
-    return this.resolveForApplication(applicationId);
+    return {
+      resolved: await this.resolveForApplication(applicationId),
+      applied,
+    };
   }
 
   async updateGlobalSettings(
