@@ -1,8 +1,9 @@
 import type { Application } from 'express';
 
+import type { RateLimitPolicyResolver } from '../auth/auth.router';
 import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
-import { createRateLimiter } from '../common/middlewares/rate-limiter.middleware';
+import { createDynamicRateLimiter } from '../common/middlewares/rate-limiter.middleware';
 import type { GrantsController } from './grants.controller';
 
 export interface GrantsRateLimitConfig {
@@ -18,8 +19,12 @@ export class GrantsRouter {
     private readonly applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware,
     private readonly grantsController: GrantsController,
     private readonly rateLimitConfig: GrantsRateLimitConfig,
+    private readonly rateLimitPolicy: RateLimitPolicyResolver,
     private readonly app: Application,
   ) {
+    // Kept for callers that still pass `grantsRateLimit`; the settings layer is
+    // now authoritative and resolves the policy per request.
+    void this.rateLimitConfig;
     this.initializeRoutes();
   }
 
@@ -28,10 +33,17 @@ export class GrantsRouter {
       this.authenticationMiddleware.authenticateAny,
       this.applicationAuthorizationMiddleware.allowApplicationAdmin,
     ];
-    const membersWriteRateLimiter = createRateLimiter(
-      this.rateLimitConfig.membersWrite.windowMs,
-      this.rateLimitConfig.membersWrite.max,
-    );
+    const membersWriteRateLimiter = createDynamicRateLimiter({
+      resolveApplicationId: async (request) => {
+        const applicationId = request.params.applicationId;
+        return typeof applicationId === 'string' ? applicationId : undefined;
+      },
+      resolvePolicy: (applicationId) =>
+        this.rateLimitPolicy.resolveRateLimitPolicy(
+          applicationId,
+          'management',
+        ),
+    });
 
     this.app.post(
       '/applications/:applicationId/members',

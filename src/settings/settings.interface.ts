@@ -29,6 +29,22 @@ export interface ApplicationSettings {
   invitationTtlMs?: number;
   /** Display name of the application in emails and authenticator entries. */
   appName?: string;
+  /** Maximum login attempts per window for this application. */
+  loginRateLimitMax?: number;
+  /** Login rate-limit window in **milliseconds**. */
+  loginRateLimitWindowMs?: number;
+  /** Maximum refresh requests per window for this application. */
+  refreshRateLimitMax?: number;
+  /** Refresh rate-limit window in **milliseconds**. */
+  refreshRateLimitWindowMs?: number;
+  /** Maximum MFA verifications per window for this application. */
+  mfaRateLimitMax?: number;
+  /** MFA rate-limit window in **milliseconds**. */
+  mfaRateLimitWindowMs?: number;
+  /** Maximum management writes per window for this application. */
+  managementRateLimitMax?: number;
+  /** Management rate-limit window in **milliseconds**. */
+  managementRateLimitWindowMs?: number;
 }
 
 export type ApplicationSettingsInput = Partial<ApplicationSettings>;

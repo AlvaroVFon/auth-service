@@ -16,6 +16,14 @@ export const SETTINGS_CODE_DEFAULTS: Readonly<Required<ApplicationSettings>> =
     requireVerifiedEmail: true,
     invitationTtlMs: 604800000,
     appName: 'Auth Service',
+    loginRateLimitMax: 5,
+    loginRateLimitWindowMs: 900000,
+    refreshRateLimitMax: 60,
+    refreshRateLimitWindowMs: 900000,
+    mfaRateLimitMax: 10,
+    mfaRateLimitWindowMs: 900000,
+    managementRateLimitMax: 30,
+    managementRateLimitWindowMs: 900000,
   });
 
 const readInteger = (name: string): number | undefined => {
@@ -92,6 +100,28 @@ export const resolveEnvironmentSettings = (): Partial<ApplicationSettings> => {
   const appName = readString('APP_NAME');
   if (appName !== undefined) {
     settings.appName = appName;
+  }
+
+  const rateLimits = [
+    ['loginRateLimitMax', 'RATE_LIMIT_LOGIN_MAX', readNumber],
+    ['loginRateLimitWindowMs', 'RATE_LIMIT_LOGIN_WINDOW_MS', readNumber],
+    ['refreshRateLimitMax', 'RATE_LIMIT_REFRESH_MAX', readNumber],
+    ['refreshRateLimitWindowMs', 'RATE_LIMIT_REFRESH_WINDOW_MS', readNumber],
+    ['mfaRateLimitMax', 'RATE_LIMIT_MFA_VERIFY_MAX', readNumber],
+    ['mfaRateLimitWindowMs', 'RATE_LIMIT_MFA_VERIFY_WINDOW_MS', readNumber],
+    ['managementRateLimitMax', 'RATE_LIMIT_MEMBERS_WRITE_MAX', readNumber],
+    [
+      'managementRateLimitWindowMs',
+      'RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS',
+      readNumber,
+    ],
+  ] as const;
+
+  for (const [field, variable, read] of rateLimits) {
+    const value = read(variable);
+    if (value !== undefined) {
+      settings[field] = value;
+    }
   }
 
   return settings;

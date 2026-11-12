@@ -94,6 +94,48 @@ export const SETTINGS_FIELD_DESCRIPTORS = Object.freeze({
     message: 'appName must be a non-empty string',
     trim: true,
   }),
+  loginRateLimitMax: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message: 'loginRateLimitMax must be a positive integer',
+  }),
+  loginRateLimitWindowMs: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message: 'loginRateLimitWindowMs must be a positive integer (milliseconds)',
+  }),
+  refreshRateLimitMax: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message: 'refreshRateLimitMax must be a positive integer',
+  }),
+  refreshRateLimitWindowMs: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message:
+      'refreshRateLimitWindowMs must be a positive integer (milliseconds)',
+  }),
+  mfaRateLimitMax: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message: 'mfaRateLimitMax must be a positive integer',
+  }),
+  mfaRateLimitWindowMs: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message: 'mfaRateLimitWindowMs must be a positive integer (milliseconds)',
+  }),
+  managementRateLimitMax: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message: 'managementRateLimitMax must be a positive integer',
+  }),
+  managementRateLimitWindowMs: frozen({
+    type: 'number',
+    validate: isPositiveInteger,
+    message:
+      'managementRateLimitWindowMs must be a positive integer (milliseconds)',
+  }),
 } satisfies Record<SettingsField, SettingsFieldDescriptor>);
 
 export const SETTINGS_FIELDS = Object.freeze(

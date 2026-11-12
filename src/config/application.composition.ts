@@ -281,6 +281,7 @@ export const createApplicationComposition = (
     auditService,
     logger,
     options.grantsRateLimit ?? getDefaultGrantsRateLimitConfig(),
+    settingsService,
   );
   usersModule.service.setGrantsCleaner(grantsModule.service);
   // Single authorization policy shared by the applications, grants and links
@@ -400,6 +401,9 @@ export const createApplicationComposition = (
     authController: new AuthController(authService, profileService, mfaService),
     authenticationMiddleware,
     rateLimitConfig: options.rateLimitConfig ?? getDefaultRateLimitConfig(),
+    rateLimitPolicy: settingsService,
+    applicationsService: applicationsModule.service,
+    jwtService,
     logger,
   });
   const settingsModule = new SettingsModule({
@@ -408,6 +412,7 @@ export const createApplicationComposition = (
     authenticationMiddleware,
     authorizationMiddleware,
     applicationAuthorizationMiddleware,
+    rateLimitPolicy: settingsService,
     logger,
   });
   const configuredExportMax = getNumberEnvVariable(

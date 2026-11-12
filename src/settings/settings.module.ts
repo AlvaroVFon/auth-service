@@ -1,6 +1,7 @@
 import type { Application } from 'express';
 
 import type { AuditPort } from '../audit';
+import type { RateLimitPolicyResolver } from '../auth/auth.router';
 import { assertDependencies } from '../common/depencencies-validator';
 import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
@@ -17,6 +18,7 @@ export interface SettingsModuleDependencies {
   authenticationMiddleware: AuthenticationMiddleware;
   authorizationMiddleware: AuthorizationMiddleware;
   applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware;
+  rateLimitPolicy: RateLimitPolicyResolver;
   logger: LoggerInterface;
 }
 
@@ -25,6 +27,7 @@ export class SettingsModule {
   private readonly authenticationMiddleware: AuthenticationMiddleware;
   private readonly authorizationMiddleware: AuthorizationMiddleware;
   private readonly applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware;
+  private readonly rateLimitPolicy: RateLimitPolicyResolver;
   private readonly logger: LoggerInterface;
 
   constructor(dependencies: SettingsModuleDependencies) {
@@ -50,6 +53,7 @@ export class SettingsModule {
     this.authorizationMiddleware = dependencies.authorizationMiddleware;
     this.applicationAuthorizationMiddleware =
       dependencies.applicationAuthorizationMiddleware;
+    this.rateLimitPolicy = dependencies.rateLimitPolicy;
     this.logger = dependencies.logger;
   }
 
@@ -59,6 +63,7 @@ export class SettingsModule {
       this.authorizationMiddleware,
       this.applicationAuthorizationMiddleware,
       this.controller,
+      this.rateLimitPolicy,
       app,
     );
     this.logger.info('Init Module - Settings - OK');

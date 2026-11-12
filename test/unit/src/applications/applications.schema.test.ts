@@ -26,6 +26,14 @@ describe('Application settings subdocument', () => {
       'requireVerifiedEmail',
       'invitationTtlMs',
       'appName',
+      'loginRateLimitMax',
+      'loginRateLimitWindowMs',
+      'refreshRateLimitMax',
+      'refreshRateLimitWindowMs',
+      'mfaRateLimitMax',
+      'mfaRateLimitWindowMs',
+      'managementRateLimitMax',
+      'managementRateLimitWindowMs',
     ]);
   });
 
