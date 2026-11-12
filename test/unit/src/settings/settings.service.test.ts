@@ -40,12 +40,14 @@ const buildService = ({
   findById,
   writer,
   cache,
+  instanceDefaults,
 }: {
   application?: Application | null;
   global?: Partial<ApplicationSettings>;
   findById?: (id: string) => Promise<Application | null>;
   writer?: ApplicationSettingsWriterPort;
   cache?: SettingsCache<unknown>;
+  instanceDefaults?: Partial<ApplicationSettings>;
 }) =>
   new SettingsService(
     {
@@ -56,6 +58,7 @@ const buildService = ({
     } as GlobalSettingsPort,
     writer,
     cache as never,
+    instanceDefaults,
   );
 
 describe('SettingsService', () => {
@@ -223,6 +226,26 @@ describe('SettingsService', () => {
     });
 
     await assert.rejects(() => service.resolveGlobal(), InvalidArgumentError);
+  });
+
+  test('instance defaults rank above the environment for the fields provided', async () => {
+    process.env.JWT_EXPIRATION = '100';
+    const service = buildService({
+      application: buildApplication(),
+      instanceDefaults: { accessTokenTtlSeconds: 900 },
+    });
+
+    const resolved = await service.resolveForApplication(APP_ID);
+
+    assert.deepStrictEqual(resolved.accessTokenTtlSeconds, {
+      value: 900,
+      source: 'environment',
+    });
+    // Fields without an instance default keep reading the environment.
+    assert.strictEqual(
+      resolved.refreshTokenTtlSeconds.value,
+      SETTINGS_CODE_DEFAULTS.refreshTokenTtlSeconds,
+    );
   });
 
   test('reads the environment at resolution time, not in the constructor', async () => {

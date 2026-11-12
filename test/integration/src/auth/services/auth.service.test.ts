@@ -1848,6 +1848,210 @@ describe('Auth Service', () => {
     });
   });
 
+  describe('application session policy', () => {
+    const resolvedApplicationIds: string[] = [];
+    let secondApplicationId: string | undefined;
+
+    beforeEach(() => {
+      resolvedApplicationIds.length = 0;
+      secondApplicationId = undefined;
+    });
+    const settings = {
+      resolveForApplication: async (id: string) => {
+        resolvedApplicationIds.push(id);
+        return id === secondApplicationId
+          ? {
+              accessTokenTtlSeconds: { value: 300, source: 'application' },
+              refreshTokenTtlSeconds: { value: 3600, source: 'application' },
+              maxSessionsPerUser: { value: 2, source: 'application' },
+            }
+          : {
+              accessTokenTtlSeconds: { value: 600, source: 'application' },
+              refreshTokenTtlSeconds: { value: 7200, source: 'application' },
+              maxSessionsPerUser: { value: 2, source: 'application' },
+            };
+      },
+    } as never;
+
+    const buildPolicyService = (settingsService: unknown = settings) =>
+      new AuthService(
+        userService,
+        mockAuthMailer,
+        codeService,
+        sessionService,
+        blacklistService,
+        holdersService,
+        applicationTokens,
+        jwtService,
+        mockAuditService,
+        mockMfaService,
+        mockLogger,
+        settingsService as never,
+      );
+
+    test('applies the application TTLs to login and refresh rotation', async () => {
+      const policyAuth = buildPolicyService();
+      const result = await policyAuth.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+      const tokens = asTokens(result);
+
+      assert.strictEqual(
+        resolvedApplicationIds[0],
+        DEFAULT_APPLICATION._id.toString(),
+      );
+      const access = jwtService.verifyToken(tokens.accessToken);
+      const refresh = jwtService.verifyToken(tokens.refreshToken);
+      assert.strictEqual(access.exp - (access.iat ?? 0), 600);
+      assert.strictEqual(refresh.exp - (refresh.iat ?? 0), 7200);
+
+      const rotated = await policyAuth.refreshToken(tokens.refreshToken);
+      const rotatedAccess = jwtService.verifyToken(rotated.accessToken);
+      const rotatedRefresh = jwtService.verifyToken(rotated.refreshToken);
+      assert.strictEqual(rotatedAccess.exp - (rotatedAccess.iat ?? 0), 600);
+      assert.strictEqual(rotatedRefresh.exp - (rotatedRefresh.iat ?? 0), 7200);
+
+      const second = await createApplication();
+      secondApplicationId = second._id.toString();
+      await grantRole(
+        DEFAULT_USER._id.toString(),
+        secondApplicationId,
+        GrantRoles.VIEWER,
+      );
+      const secondResult = await policyAuth.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: second.slug,
+      });
+      const secondTokens = asTokens(secondResult);
+      const secondAccess = jwtService.verifyToken(secondTokens.accessToken);
+      const secondRefresh = jwtService.verifyToken(secondTokens.refreshToken);
+      assert.strictEqual(secondAccess.exp - (secondAccess.iat ?? 0), 300);
+      assert.strictEqual(secondRefresh.exp - (secondRefresh.iat ?? 0), 3600);
+    });
+
+    test('falls back to the instance TTLs when the resolver fails', async () => {
+      const policyAuth = buildPolicyService({
+        resolveForApplication: async () => {
+          throw new Error('settings unavailable');
+        },
+      });
+      const result = await policyAuth.login({
+        email: DEFAULT_USER.email,
+        password: 'password123',
+        application: DEFAULT_APPLICATION.slug,
+      });
+      const tokens = asTokens(result);
+      const access = jwtService.verifyToken(tokens.accessToken);
+
+      assert.strictEqual(access.exp - (access.iat ?? 0), jwtExpiresIn);
+    });
+
+    test('caps the sessions of the login application without touching other audiences', async () => {
+      const policyAuth = buildPolicyService();
+      const second = await createApplication();
+      secondApplicationId = second._id.toString();
+      await grantRole(
+        DEFAULT_USER._id.toString(),
+        secondApplicationId,
+        GrantRoles.VIEWER,
+      );
+
+      const credentials = {
+        email: DEFAULT_USER.email,
+        password: 'password123',
+      };
+      const first = asTokens(
+        await policyAuth.login({
+          ...credentials,
+          application: DEFAULT_APPLICATION.slug,
+        }),
+      );
+      const otherAudience = asTokens(
+        await policyAuth.login({
+          ...credentials,
+          application: second.slug,
+        }),
+      );
+      await policyAuth.login({
+        ...credentials,
+        application: DEFAULT_APPLICATION.slug,
+      });
+      await policyAuth.login({
+        ...credentials,
+        application: DEFAULT_APPLICATION.slug,
+      });
+
+      const firstApplicationSessions = await fixture.find<RefreshToken>(
+        'RefreshToken',
+        {
+          userId: DEFAULT_USER._id,
+          audience: DEFAULT_APPLICATION.audience,
+          revokedAt: null,
+        },
+      );
+      const secondApplicationSessions = await fixture.find<RefreshToken>(
+        'RefreshToken',
+        {
+          userId: DEFAULT_USER._id,
+          audience: second.audience,
+          revokedAt: null,
+        },
+      );
+
+      assert.strictEqual(firstApplicationSessions.length, 2);
+      assert.strictEqual(secondApplicationSessions.length, 1);
+
+      const oldestJti = jwtService.verifyToken(first.refreshToken).jti;
+      if (!oldestJti) {
+        throw new Error('Expected the refresh token to carry a jti');
+      }
+      const revoked = await fixture.findOne<RefreshToken>('RefreshToken', {
+        jti: oldestJti,
+      });
+      assert.ok(revoked?.revokedAt);
+      assert.strictEqual(
+        jwtService.verifyToken(otherAudience.refreshToken).aud,
+        second.audience,
+      );
+    });
+
+    test('applies the application policy to the MFA completion', async () => {
+      const policyAuth = buildPolicyService();
+      const member = await fixture.create<UserInterface>('User', {
+        _id: new Types.ObjectId(),
+        email: generateRandomEmail('policy-mfa+'),
+        password: DEFAULT_USER.password,
+        role: Roles.USER,
+        verified: true,
+        mfaEnabled: true,
+      });
+      await grantRole(
+        member._id.toString(),
+        DEFAULT_APPLICATION._id.toString(),
+        GrantRoles.VIEWER,
+      );
+      mockMfaService.verify = mock.fn(() => Promise.resolve());
+      const challenge = jwtService.signMfaChallenge(member._id.toString(), {
+        application: DEFAULT_APPLICATION.slug,
+        audience: DEFAULT_APPLICATION.audience,
+      });
+
+      const tokens = await policyAuth.verifyMfa(challenge, '123456');
+
+      assert.strictEqual(
+        resolvedApplicationIds.at(-1),
+        DEFAULT_APPLICATION._id.toString(),
+      );
+      const access = jwtService.verifyToken(tokens.accessToken);
+      const refresh = jwtService.verifyToken(tokens.refreshToken);
+      assert.strictEqual(access.exp - (access.iat ?? 0), 600);
+      assert.strictEqual(refresh.exp - (refresh.iat ?? 0), 7200);
+    });
+  });
+
   describe('verifyMfa audit outcomes', () => {
     const createOwner = () =>
       fixture.create<UserInterface>('User', {

@@ -95,6 +95,12 @@ export class SettingsService implements SettingsPort {
     private readonly globalSettings: GlobalSettingsPort,
     private readonly applicationSettingsWriter?: ApplicationSettingsWriterPort,
     private readonly cache: SettingsCache<ResolvedSettings> = new SettingsCache(),
+    /**
+     * Values the composition resolved from embedder options (for example the
+     * instance token TTLs). They rank with the environment layer so an
+     * application-scoped session and the raw token service never disagree.
+     */
+    private readonly instanceDefaults: Partial<ApplicationSettings> = {},
   ) {}
 
   async resolveForApplication(
@@ -237,9 +243,10 @@ export class SettingsService implements SettingsPort {
       toPlainSettings(application),
     );
     const globalSettings = validateApplicationSettings(toPlainSettings(global));
-    const environment = validateApplicationSettings(
-      resolveEnvironmentSettings(),
-    );
+    const environment = validateApplicationSettings({
+      ...resolveEnvironmentSettings(),
+      ...this.instanceDefaults,
+    });
 
     const resolved = {} as ResolvedSettings;
 

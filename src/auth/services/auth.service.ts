@@ -23,6 +23,7 @@ import { Holder, HoldersPort } from '../../holders';
 import { JwtService, TokenTypes, type TokenClaims } from '../../libs/jwt';
 import type { TokenRole } from '../../libs/jwt';
 import { LoggerInterface } from '../../libs/logger/logger.interface';
+import type { SettingsPort } from '../../settings';
 import { User, UsersPort } from '../../users';
 import {
   Credentials,
@@ -36,6 +37,7 @@ import { CodesService } from '../codes/codes.service';
 import { MfaService } from '../mfa';
 import { ApplicationTokenService } from '../tokens/application-token.service';
 import { RequestContext } from '../tokens/request-context.type';
+import type { SessionPolicy } from '../tokens/session.service';
 import { SessionService, SessionView } from '../tokens/session.service';
 import { AuthMailer } from './auth-mailer';
 
@@ -52,7 +54,41 @@ export class AuthService {
     private readonly auditService: AuditPort,
     private readonly mfaService: MfaService,
     private readonly logger: LoggerInterface,
+    private readonly settingsService?: SettingsPort,
   ) {}
+
+  /**
+   * Maps the effective settings of the application to the session policy. The
+   * cached resolver already applies overrides, global values, environment and
+   * code defaults, so the instance TTLs remain the fallback when the service is
+   * not wired (tests and embedders).
+   */
+  private async resolveSessionPolicy(
+    applicationId?: string,
+  ): Promise<SessionPolicy | undefined> {
+    if (!applicationId || !this.settingsService) {
+      return undefined;
+    }
+
+    try {
+      const resolved =
+        await this.settingsService.resolveForApplication(applicationId);
+
+      return {
+        accessTokenTtl: resolved.accessTokenTtlSeconds.value,
+        refreshTokenTtl: resolved.refreshTokenTtlSeconds.value,
+        maxSessionsPerUser: resolved.maxSessionsPerUser.value,
+      };
+    } catch (error) {
+      // A settings outage must not turn a valid login into a failure or revoke
+      // a still-valid refresh token: fall back to the instance policy.
+      this.logger.warn(
+        `Failed to resolve the session policy of application ${applicationId}`,
+        error,
+      );
+      return undefined;
+    }
+  }
 
   private async resolveResetPasswordCode(userId: string): Promise<Code> {
     try {
@@ -191,11 +227,15 @@ export class AuthService {
           );
         }
 
+        const policy = await this.resolveSessionPolicy(
+          access.application._id.toString(),
+        );
         const session = await this.sessionService.create(
           userId,
           access.role,
           ctx,
           access.application.audience,
+          policy,
         );
         await this.recordLogin(userId);
         await this.auditService.record({
@@ -370,11 +410,15 @@ export class AuthService {
           throw new UnauthorizedError('Invalid MFA challenge');
         }
 
+        const policy = await this.resolveSessionPolicy(
+          access.application._id.toString(),
+        );
         const session = await this.sessionService.create(
           userId,
           access.role,
           ctx,
           access.application.audience,
+          policy,
         );
         await this.recordLogin(userId);
         await this.auditService.record({
@@ -670,6 +714,7 @@ export class AuthService {
     const audience = claims.aud;
     let role: TokenRole = user.role;
     let applicationId: string | undefined;
+    let policy: SessionPolicy | undefined;
 
     if (audience === undefined) {
       // Global tokens are owner-only. Refresh tokens issued before the
@@ -701,7 +746,13 @@ export class AuthService {
       }
     }
 
-    const session = await this.sessionService.rotate(claims, role, ctx);
+    // Resolve outside the authorization try/catch: a settings outage must not
+    // revoke a refresh token whose grant is still valid.
+    if (applicationId !== undefined) {
+      policy = await this.resolveSessionPolicy(applicationId);
+    }
+
+    const session = await this.sessionService.rotate(claims, role, ctx, policy);
     await this.auditService.record({
       event: AuditEvent.TOKEN_REFRESHED,
       result: AuditResult.SUCCESS,
