@@ -404,6 +404,7 @@ export const createApplicationComposition = (
   });
   const settingsModule = new SettingsModule({
     settingsService,
+    applicationsService: applicationsModule.service,
     auditService,
     authenticationMiddleware,
     authorizationMiddleware,

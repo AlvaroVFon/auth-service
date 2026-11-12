@@ -2,6 +2,7 @@ export {
   MfaPolicy,
   type ApplicationSettings,
   type ApplicationSettingsInput,
+  type ApplicationSettingsPatch,
 } from './settings.interface';
 export {
   SETTINGS_CACHE_MAX_ENTRIES,
@@ -13,6 +14,7 @@ export {
   resolveEnvironmentSettings,
 } from './settings.defaults';
 export {
+  type ApplicationSettingsUpdate,
   type ApplicationSettingsWriterPort,
   type GlobalSettingsPort,
   type ResolvedSetting,
@@ -32,6 +34,7 @@ export {
   SettingsAdminService,
   type ApplicationSettingsView,
   type GlobalSettingsView,
+  type SettingsView,
 } from './settings-admin.service';
 export { SettingsController } from './settings.controller';
 export { SettingsModule } from './settings.module';

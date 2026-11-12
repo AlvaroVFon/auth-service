@@ -20,6 +20,7 @@ import {
   InvalidArgumentError,
 } from '../../../../src/common/exceptions/base.exception';
 import type { ListQuery } from '../../../../src/common/pagination';
+import type { ApplicationSettings } from '../../../../src/settings/settings.interface';
 import fixture from '../../../fixtures';
 import { ApplicationFactory } from '../../../helpers/factories/application.factory';
 import { silentLogger } from '../../../mocks/logger.mock';
@@ -796,6 +797,66 @@ describe('ApplicationsService', () => {
         InvalidArgumentError,
       );
     });
+  });
+});
+
+describe('ApplicationsService.updateSettings on archived applications', () => {
+  const serviceFor = () => new ApplicationsService(ApplicationModel);
+
+  test('rejects a settings write after the application is archived', async () => {
+    const application = await serviceFor().create({
+      name: 'Archived settings',
+      slug: `archived-settings-${Date.now()}`,
+      audience: `archived-settings-aud-${Date.now()}`,
+    });
+    await fixture.updateOne<Application>(
+      'Application',
+      { _id: application._id },
+      { $set: { active: false } } as never,
+    );
+
+    assert.strictEqual(
+      (await ApplicationModel.findById(application._id).lean<Application>())
+        ?.active,
+      false,
+    );
+
+    await assert.rejects(
+      serviceFor().updateSettings(application._id.toString(), {
+        set: { appName: 'Nope' },
+        unset: [],
+      }),
+      new EntityNotFoundError('Application not found'),
+    );
+
+    const stored = await ApplicationModel.findById(
+      application._id,
+    ).lean<Application>();
+    assert.strictEqual(
+      (stored?.settings as ApplicationSettings | undefined)?.appName,
+      undefined,
+    );
+  });
+
+  test('rejects an empty patch after the application is archived', async () => {
+    const application = await serviceFor().create({
+      name: 'Archived empty',
+      slug: `archived-empty-${Date.now()}`,
+      audience: `archived-empty-aud-${Date.now()}`,
+    });
+    await fixture.updateOne<Application>(
+      'Application',
+      { _id: application._id },
+      { $set: { active: false } } as never,
+    );
+
+    await assert.rejects(
+      serviceFor().updateSettings(application._id.toString(), {
+        set: {},
+        unset: [],
+      }),
+      new EntityNotFoundError('Application not found'),
+    );
   });
 });
 

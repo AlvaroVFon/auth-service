@@ -1,5 +1,6 @@
 import type { Application } from 'express';
 
+import type { ApplicationsPort } from '../applications';
 import type { AuditPort } from '../audit';
 import { assertDependencies } from '../common/depencencies-validator';
 import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
@@ -13,6 +14,7 @@ import { SettingsRouter } from './settings.router';
 
 export interface SettingsModuleDependencies {
   settingsService: SettingsPort;
+  applicationsService: ApplicationsPort;
   auditService?: AuditPort;
   authenticationMiddleware: AuthenticationMiddleware;
   authorizationMiddleware: AuthorizationMiddleware;
@@ -31,6 +33,7 @@ export class SettingsModule {
     assertDependencies(
       {
         settingsService: dependencies.settingsService,
+        applicationsService: dependencies.applicationsService,
         authenticationMiddleware: dependencies.authenticationMiddleware,
         authorizationMiddleware: dependencies.authorizationMiddleware,
         applicationAuthorizationMiddleware:
@@ -44,6 +47,7 @@ export class SettingsModule {
       new SettingsAdminService(
         dependencies.settingsService,
         dependencies.auditService,
+        dependencies.applicationsService,
       ),
     );
     this.authenticationMiddleware = dependencies.authenticationMiddleware;

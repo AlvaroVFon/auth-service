@@ -1,18 +1,27 @@
+import type { ApplicationsPort } from '../applications';
 import { AuditEvent, AuditPort, AuditResult } from '../audit';
+import { EntityNotFoundError } from '../common/exceptions/base.exception';
 import { SETTINGS_CODE_DEFAULTS } from './settings.defaults';
-import type { ApplicationSettings } from './settings.interface';
+import type {
+  ApplicationSettings,
+  ApplicationSettingsPatch,
+} from './settings.interface';
 import type {
   ResolvedSettings,
   SettingSource,
+  SettingsChanges,
   SettingsPort,
 } from './settings.port';
 import { SETTINGS_FIELDS, type SettingsField } from './settings.validation';
 
-export interface GlobalSettingsView {
+export interface SettingsView {
   settings: Record<SettingsField, unknown>;
   sources: Record<SettingsField, SettingSource>;
   defaults: Readonly<Required<ApplicationSettings>>;
 }
+
+/** Kept for callers that only deal with the global scope. */
+export type GlobalSettingsView = SettingsView;
 
 /** Effective policy of one application plus the global layer it inherits from. */
 export interface ApplicationSettingsView {
@@ -24,7 +33,8 @@ export interface ApplicationSettingsView {
 export class SettingsAdminService {
   constructor(
     private readonly settingsService: SettingsPort,
-    private readonly auditService?: AuditPort,
+    private readonly auditService: AuditPort | undefined,
+    private readonly applicationsService: ApplicationsPort,
   ) {}
 
   async getGlobal(): Promise<GlobalSettingsView> {
@@ -57,11 +67,7 @@ export class SettingsAdminService {
     const before = await this.settingsService.resolveGlobal();
     const resolved = await this.settingsService.updateGlobalSettings(patch);
     // A repeated value is a no-op; only real transitions are audited.
-    const fields = SETTINGS_FIELDS.filter(
-      (field) =>
-        before[field].value !== resolved[field].value ||
-        before[field].source !== resolved[field].source,
-    );
+    const fields = this.changedFields(before, resolved);
 
     if (fields.length > 0 && this.auditService) {
       await this.auditService.record({
@@ -75,7 +81,68 @@ export class SettingsAdminService {
     return this.toView(resolved);
   }
 
-  private toView(resolved: ResolvedSettings): GlobalSettingsView {
+  /**
+   * Writes the overrides of one active application: null removes an override,
+   * absent fields are untouched, and only real value/source transitions are
+   * audited. Validation happens inside the settings port before it writes or
+   * invalidates the cache.
+   */
+  async updateApplication(
+    applicationId: string,
+    patch: ApplicationSettingsPatch,
+    actorId?: string,
+  ): Promise<SettingsView> {
+    const application =
+      await this.applicationsService.findAssignableById(applicationId);
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const { resolved, applied } =
+      await this.settingsService.updateApplicationSettings(
+        applicationId,
+        patch,
+      );
+    // The writer reports the overrides it actually changed, so a concurrent
+    // writer can never attribute its fields to this request.
+    const fields = this.appliedFields(applied);
+
+    if (fields.length > 0 && this.auditService) {
+      await this.auditService.record({
+        event: AuditEvent.SETTINGS_UPDATED,
+        result: AuditResult.SUCCESS,
+        ...(actorId === undefined ? {} : { actorId }),
+        applicationId,
+        fields,
+      });
+    }
+
+    return this.toView(resolved);
+  }
+
+  /** Fields whose effective value or provenance changed. */
+  private changedFields(
+    before: ResolvedSettings,
+    resolved: ResolvedSettings,
+  ): SettingsField[] {
+    return SETTINGS_FIELDS.filter(
+      (field) =>
+        before[field].value !== resolved[field].value ||
+        before[field].source !== resolved[field].source,
+    );
+  }
+
+  /** Changes applied to the stored overrides, in the documented field order. */
+  private appliedFields(applied: SettingsChanges): SettingsField[] {
+    const unset = new Set(applied.unset);
+
+    return SETTINGS_FIELDS.filter(
+      (field) => applied.set[field] !== undefined || unset.has(field),
+    );
+  }
+
+  private toView(resolved: ResolvedSettings): SettingsView {
     const settings = {} as Record<SettingsField, unknown>;
     const sources = {} as Record<SettingsField, SettingSource>;
 

@@ -2,7 +2,10 @@ import { Types } from 'mongoose';
 
 import type { ApplicationsPort } from '../../../../src/applications';
 import type { Application } from '../../../../src/applications/applications.interface';
-import { InvalidArgumentError } from '../../../../src/common/exceptions/base.exception';
+import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../../../../src/common/exceptions/base.exception';
 import {
   MfaPolicy,
   SETTINGS_CODE_DEFAULTS,
@@ -288,6 +291,7 @@ describe('SettingsService writes and cache', () => {
         for (const field of changes.unset) {
           delete (store.settings as Record<string, unknown>)[field];
         }
+        return changes;
       },
     );
     const writer: ApplicationSettingsWriterPort = {
@@ -335,9 +339,12 @@ describe('SettingsService writes and cache', () => {
       source: 'application',
     });
 
-    const after = await service.updateApplicationSettings(APP_ID, {
-      appName: 'New',
-    });
+    const { resolved: after } = await service.updateApplicationSettings(
+      APP_ID,
+      {
+        appName: 'New',
+      },
+    );
 
     assert.deepStrictEqual(after.appName, {
       value: 'New',
@@ -369,6 +376,7 @@ describe('SettingsService writes and cache', () => {
           for (const [field, value] of Object.entries(changes.set)) {
             (application!.settings as Record<string, unknown>)[field] = value;
           }
+          return changes;
         },
       },
       new SettingsCache(60_000),
@@ -452,7 +460,7 @@ describe('SettingsService writes and cache', () => {
     store.global = { appName: 'Global name' };
     await service.resolveForApplication(APP_ID);
 
-    const resolved = await service.updateApplicationSettings(APP_ID, {
+    const { resolved } = await service.updateApplicationSettings(APP_ID, {
       appName: null,
     });
 
@@ -555,6 +563,7 @@ describe('SettingsService writes and cache', () => {
         updateSettings: async (_id, changes) => {
           (application.settings as Record<string, unknown>).appName =
             changes.set.appName;
+          return changes;
         },
       },
       new SettingsCache(60_000),
@@ -663,6 +672,7 @@ describe('SettingsService.resolveApplicationWithGlobal cache', () => {
           for (const field of changes.unset) {
             delete applicationSettings[field];
           }
+          return changes;
         },
       } as ApplicationSettingsWriterPort,
     );
@@ -713,5 +723,23 @@ describe('SettingsService.resolveApplicationWithGlobal cache', () => {
     await service.resolveApplicationWithGlobal(unknown);
 
     assert.strictEqual(stats().findByIdCalls, 2);
+  });
+});
+
+describe('SettingsService archived write propagation', () => {
+  test('propagates the writer rejection for an archived application', async () => {
+    const service = buildService({
+      application: buildApplication(),
+      writer: {
+        updateSettings: async () => {
+          throw new EntityNotFoundError('Application not found');
+        },
+      },
+    });
+
+    await assert.rejects(
+      service.updateApplicationSettings(APP_ID, { appName: 'Panel' }),
+      new EntityNotFoundError('Application not found'),
+    );
   });
 });

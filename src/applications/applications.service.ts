@@ -20,7 +20,7 @@ import {
   type PaginatedResult,
 } from '../common/pagination';
 import { assertObjectId } from '../common/validators/object-id';
-import type { SettingsChanges } from '../settings';
+import type { ApplicationSettings, SettingsChanges } from '../settings';
 import { Application } from './applications.interface';
 import {
   type ApplicationCounts,
@@ -309,7 +309,10 @@ export class ApplicationsService implements ApplicationsPort {
   }
 
   /** Applies validated settings changes to the application subdocument. */
-  async updateSettings(id: string, changes: SettingsChanges): Promise<void> {
+  async updateSettings(
+    id: string,
+    changes: SettingsChanges,
+  ): Promise<SettingsChanges> {
     assertObjectId(id);
 
     const $set: Record<string, unknown> = {};
@@ -325,25 +328,49 @@ export class ApplicationsService implements ApplicationsPort {
     if (Object.keys($set).length === 0 && Object.keys($unset).length === 0) {
       // An empty patch is a no-op, but it must still distinguish a missing
       // application from an existing one so the HTTP layer can answer 404.
-      const exists = await this.applicationModel.exists({ _id: id });
+      const exists = await this.applicationModel.exists({
+        _id: id,
+        active: true,
+      });
       if (!exists) {
         throw new EntityNotFoundError('Application not found');
       }
-      return;
+      return { set: {}, unset: [] };
     }
 
-    const updated = await this.applicationModel.findByIdAndUpdate(
-      id,
+    // Conditional on active so an application archived between the facade
+    // guard and this write cannot receive overrides. The pre-image tells this
+    // request exactly which overrides it changed.
+    const before = await this.applicationModel.findOneAndUpdate(
+      { _id: id, active: true },
       {
         ...(Object.keys($set).length === 0 ? {} : { $set }),
         ...(Object.keys($unset).length === 0 ? {} : { $unset }),
       },
-      { returnDocument: 'after' },
+      { returnDocument: 'before' },
     );
 
-    if (!updated) {
+    if (!before) {
       throw new EntityNotFoundError('Application not found');
     }
+
+    const previous = (before.settings ?? {}) as ApplicationSettings;
+    const appliedSet: ApplicationSettings = {};
+    for (const [field, value] of Object.entries(changes.set) as Array<
+      [
+        keyof ApplicationSettings,
+        ApplicationSettings[keyof ApplicationSettings],
+      ]
+    >) {
+      if (previous[field] !== value) {
+        (appliedSet as Record<string, unknown>)[field] = value;
+      }
+    }
+    const appliedUnset = changes.unset.filter(
+      (field) => previous[field] !== undefined,
+    );
+
+    return { set: appliedSet, unset: appliedUnset };
   }
 
   async findAssignableById(id: string): Promise<Application | null> {

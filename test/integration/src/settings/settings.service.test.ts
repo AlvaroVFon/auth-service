@@ -98,11 +98,16 @@ describe('SettingsService persistence of writes', () => {
     const before = await service.resolveForApplication(applicationId);
     assert.strictEqual(before.appName.source, 'default');
 
-    const updated = await service.updateApplicationSettings(applicationId, {
-      accessTokenTtlSeconds: 120,
-      appName: 'Panel',
-    });
+    const { resolved: updated, applied } =
+      await service.updateApplicationSettings(applicationId, {
+        accessTokenTtlSeconds: 120,
+        appName: 'Panel',
+      });
 
+    assert.deepStrictEqual(applied, {
+      set: { accessTokenTtlSeconds: 120, appName: 'Panel' },
+      unset: [],
+    });
     assert.deepStrictEqual(updated.accessTokenTtlSeconds, {
       value: 120,
       source: 'application',
@@ -135,11 +140,12 @@ describe('SettingsService persistence of writes', () => {
       applications,
     );
 
-    const resolved = await service.updateApplicationSettings(
+    const { resolved, applied } = await service.updateApplicationSettings(
       application._id.toString(),
       { appName: null },
     );
 
+    assert.deepStrictEqual(applied, { set: {}, unset: ['appName'] });
     assert.strictEqual(resolved.appName.source, 'default');
 
     const persisted = await ApplicationModel.findById(application._id);
@@ -175,11 +181,12 @@ describe('SettingsService empty patches', () => {
       applications,
     );
 
-    const resolved = await service.updateApplicationSettings(
+    const { resolved, applied } = await service.updateApplicationSettings(
       application._id.toString(),
       {},
     );
 
+    assert.deepStrictEqual(applied, { set: {}, unset: [] });
     assert.deepStrictEqual(resolved.appName, {
       value: 'Kept',
       source: 'application',

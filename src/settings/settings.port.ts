@@ -27,12 +27,26 @@ export interface SettingsChanges {
   unset: SettingsField[];
 }
 
+/** Result of a settings write: the effective policy and the applied changes. */
+export interface ApplicationSettingsUpdate {
+  resolved: ResolvedSettings;
+  /** Only the changes that altered the stored overrides. */
+  applied: SettingsChanges;
+}
+
 /** Persists the overrides of one application. */
 export interface ApplicationSettingsWriterPort {
+  /**
+   * Applies the changes to an **active** application. Rejects an unknown or
+   * archived application with `EntityNotFoundError`; the update must be
+   * conditional on `active: true` so an archive racing the write wins.
+   * Returns the subset of changes that altered the stored document, so the
+   * caller audits exactly what this write applied.
+   */
   updateSettings(
     applicationId: string,
     changes: SettingsChanges,
-  ): Promise<void>;
+  ): Promise<SettingsChanges>;
 }
 
 /** Reads and writes the global settings stored in the database. */
@@ -54,7 +68,7 @@ export interface SettingsPort {
   updateApplicationSettings(
     applicationId: string,
     patch: Record<string, unknown>,
-  ): Promise<ResolvedSettings>;
+  ): Promise<ApplicationSettingsUpdate>;
   updateGlobalSettings(
     patch: Record<string, unknown>,
   ): Promise<ResolvedSettings>;

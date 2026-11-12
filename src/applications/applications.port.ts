@@ -64,7 +64,15 @@ export interface ApplicationsPort {
   ): Promise<PaginatedResult<Application>>;
   /** Every application, used to build the owner's auth context. */
   findAllForContext(): Promise<Application[]>;
-  updateSettings(id: string, changes: SettingsChanges): Promise<void>;
+  /**
+   * Persists the settings overrides of an active application. Unknown or
+   * archived applications raise `EntityNotFoundError`. Returns the changes
+   * that actually altered the stored overrides.
+   */
+  updateSettings(
+    id: string,
+    changes: SettingsChanges,
+  ): Promise<SettingsChanges>;
   findActiveByIds(ids: string[]): Promise<Application[]>;
   findAssignableById(id: string): Promise<Application | null>;
 }
