@@ -859,3 +859,18 @@ describe('ApplicationsService.updateSettings on archived applications', () => {
     );
   });
 });
+
+describe('ApplicationsService.countApplications', () => {
+  test('should count active and inactive applications', async () => {
+    await fixture.createMany<Application>('Application', [
+      ApplicationFactory.generate({ active: true }),
+      ApplicationFactory.generate({ active: true }),
+      ApplicationFactory.generate({ active: false }),
+    ]);
+
+    assert.deepStrictEqual(
+      await new ApplicationsService(ApplicationModel).countApplications(),
+      { total: 3, active: 2, inactive: 1 },
+    );
+  });
+});

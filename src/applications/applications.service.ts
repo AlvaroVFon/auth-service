@@ -23,6 +23,7 @@ import { assertObjectId } from '../common/validators/object-id';
 import type { ApplicationSettings, SettingsChanges } from '../settings';
 import { Application } from './applications.interface';
 import {
+  type ApplicationCounts,
   type ApplicationSortField,
   ApplicationsPort,
   CreateApplicationInput,
@@ -36,6 +37,26 @@ export class ApplicationsService implements ApplicationsPort {
     private readonly applicationModel: Model<Application>,
     private readonly auditService?: AuditPort,
   ) {}
+
+  async countApplications(): Promise<ApplicationCounts> {
+    const [row] = await this.applicationModel.aggregate<{
+      total: number;
+      active: number;
+    }>([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          active: { $sum: { $cond: ['$active', 1, 0] } },
+        },
+      },
+    ]);
+
+    const total = row?.total ?? 0;
+    const active = row?.active ?? 0;
+
+    return { total, active, inactive: total - active };
+  }
 
   async create(input: CreateApplicationInput): Promise<Application> {
     const name = input.name?.trim();

@@ -1,13 +1,43 @@
 import { Request, Response } from 'express';
 
+import { resolveGlobalActorRole } from '../common/actor-role';
 import { Catch } from '../common/decorators/catch.decorator';
 import { Roles } from '../common/enums/roles.enum';
-import { EntityNotFoundError } from '../common/exceptions/base.exception';
-import type { GrantApplicationScope } from './grants.port';
+import {
+  EntityNotFoundError,
+  InvalidArgumentError,
+} from '../common/exceptions/base.exception';
+import { parseListQuery } from '../common/pagination';
+import type { GrantRoles } from './grants.interface';
+import {
+  GRANT_MEMBER_LIST_OPTIONS,
+  type GrantApplicationScope,
+  type GrantMemberSortField,
+} from './grants.port';
 import { GrantsService } from './grants.service';
 
 export class GrantsController {
   constructor(private readonly grantsService: GrantsService) {}
+
+  @Catch()
+  async createMember(req: Request, res: Response): Promise<void> {
+    const { email, role } = req.body as {
+      email: string;
+      role: GrantRoles;
+    };
+    const user = req.user;
+    const actorRole = resolveGlobalActorRole(user);
+
+    const member = await this.grantsService.grantMemberByEmail({
+      email,
+      applicationId: req.params.applicationId as string,
+      role,
+      ...(actorRole === undefined ? {} : { actorRole }),
+      ...(user?.id === undefined ? {} : { actorId: user.id }),
+    });
+
+    res.status(201).json(member);
+  }
 
   @Catch()
   async upsert(req: Request, res: Response): Promise<void> {
@@ -18,12 +48,33 @@ export class GrantsController {
         userId,
         applicationId,
         role,
+        actorRole: resolveGlobalActorRole(req.user) ?? Roles.USER,
         ...(req.user?.id === undefined ? {} : { actorId: req.user.id }),
       },
       this.scopeFor(req),
     );
 
     res.status(200).json(grant);
+  }
+
+  @Catch()
+  async listMembers(req: Request, res: Response): Promise<void> {
+    const applicationId = req.params.applicationId as string;
+    const query = parseListQuery<GrantMemberSortField>(
+      req.query as Record<string, unknown>,
+      GRANT_MEMBER_LIST_OPTIONS,
+    );
+    if (query.q !== undefined) {
+      throw new InvalidArgumentError('q is not supported on this listing');
+    }
+
+    const members = await this.grantsService.listMembers(
+      applicationId,
+      query,
+      this.scopeFor(req),
+    );
+
+    res.status(200).json(members);
   }
 
   @Catch()

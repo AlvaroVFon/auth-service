@@ -51,6 +51,12 @@ export interface AuditEventFilter extends ListQuery<AuditSortField> {
   to?: Date;
 }
 
+/** Login outcomes inside one time window. */
+export interface LoginCount {
+  succeeded: number;
+  failed: number;
+}
+
 /** Filters shared by the listing and the unbounded export. */
 export type AuditExportFilter = Omit<
   AuditEventFilter,
@@ -59,7 +65,11 @@ export type AuditExportFilter = Omit<
 
 export interface AuditPort {
   record(input: RecordAuditEventInput): Promise<void>;
+  /** Best-effort batch write, used for one event per revoked session. */
+  recordMany?(inputs: RecordAuditEventInput[]): Promise<void>;
   list(filter: AuditEventFilter): Promise<PaginatedResult<AuditEventRecord>>;
+  /** Counts login events since `since`, grouped by outcome. */
+  countLogins(since: Date): Promise<LoginCount>;
   /** Counts the rows a CSV export would contain. */
   countForExport(filter: AuditExportFilter): Promise<number>;
   /** Streams the export rows in creation order without pagination. */

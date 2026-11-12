@@ -29,14 +29,19 @@ import {
 import type { RequestAuditContext } from '../common/request-context';
 import { normalizeTelegramChatId } from '../common/telegram-chat-id';
 import { CryptoService, SecretCipher } from '../libs/crypto';
-import { User as UserInterface } from '../users/users.interface';
+import {
+  User as UserInterface,
+  UserSecurityOverview,
+} from '../users/users.interface';
 import type { UserUpdatePayload } from './user-update-payload';
 import type {
   UserGrantsCleanerPort,
+  UserSummary,
   UserListItem,
   UserSessionRevokerPort,
   UserSortField,
   UserSessionsPort,
+  UserCounts,
   UserSessionView,
   UsersPort,
 } from './users.port';
@@ -50,6 +55,14 @@ export interface UserSupportActionContext extends RequestAuditContext {
  * Inclusion projection: a path added to the schema later is not shipped until
  * it is listed here, so the listing fails closed instead of leaking a secret.
  */
+const USER_SUMMARY_PROJECTION = [
+  'email',
+  'username',
+  'verified',
+  'mfaEnabled',
+  'lastLoginAt',
+].join(' ');
+
 const USER_LIST_PROJECTION = [
   'username',
   'email',
@@ -64,7 +77,7 @@ const USER_LIST_PROJECTION = [
 export class UsersService implements UsersPort {
   private grantsCleaner?: UserGrantsCleanerPort;
   private sessionRevoker?: UserSessionRevokerPort;
-  private sessionLister?: UserSessionsPort;
+  private sessionManager?: UserSessionsPort;
 
   constructor(
     private readonly usersModel: Model<UserInterface>,
@@ -74,6 +87,31 @@ export class UsersService implements UsersPort {
     private readonly mfaCipher?: SecretCipher,
     private readonly auditService?: AuditPort,
   ) {}
+
+  async countUsers(): Promise<UserCounts> {
+    const now = new Date();
+    // `total` necessarily scans the collection; the verified count and the
+    // lockout `$or` use their own support indexes.
+    const [total, verified, locked] = await Promise.all([
+      this.usersModel.countDocuments({}),
+      this.usersModel.countDocuments({ verified: true }),
+      this.usersModel.countDocuments({
+        $or: [
+          { lockoutUntil: { $gt: now } },
+          { mfaLockoutUntil: { $gt: now } },
+        ],
+      }),
+    ]);
+
+    return {
+      total,
+      verified,
+      // Two independent counts can race with a verification/delete; never
+      // expose an impossible negative bucket.
+      unverified: Math.max(total - verified, 0),
+      locked,
+    };
+  }
 
   async create(data: Partial<UserInterface>): Promise<UserInterface> {
     if (!data.email) {
@@ -212,6 +250,42 @@ export class UsersService implements UsersPort {
   }
 
   /**
+   * Batched profile projection for a known id set. The inclusion select never
+   * returns credentials, lockout counters or MFA material.
+   */
+  async findSummariesByIds(ids: string[]): Promise<UserSummary[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    for (const id of ids) {
+      this.assertValidId(id);
+    }
+
+    const users = await this.usersModel
+      .find({ _id: { $in: ids } })
+      .select(USER_SUMMARY_PROJECTION)
+      .lean<
+        Array<{
+          _id: { toString(): string };
+          email: string;
+          username?: string;
+          verified: boolean;
+          mfaEnabled?: boolean;
+          lastLoginAt?: Date | null;
+        }>
+      >();
+
+    return users.map((user) => ({
+      userId: user._id.toString(),
+      email: user.email,
+      ...(user.username === undefined ? {} : { username: user.username }),
+      verified: user.verified,
+      mfaEnabled: user.mfaEnabled ?? false,
+      lastLoginAt: user.lastLoginAt ?? null,
+    }));
+  }
+
+  /**
    * Paginated management listing. The indexes serve the ordering (including the
    * `_id` tie break); the case-insensitive `q` prefix search intentionally
    * scans the collection because MongoDB cannot use a b-tree index for a regex
@@ -311,9 +385,11 @@ export class UsersService implements UsersPort {
     event:
       | AuditEvent.USER_UNLOCKED
       | AuditEvent.USER_VERIFIED
+      | AuditEvent.SESSION_REVOKED_BY_ADMIN
       | AuditEvent.USER_MFA_RESET,
     targetUserId: string,
     context: UserSupportActionContext,
+    sessionId?: string,
   ): Promise<void> {
     if (!this.auditService) {
       return;
@@ -330,6 +406,7 @@ export class UsersService implements UsersPort {
       ...(context.userAgent === undefined
         ? {}
         : { userAgent: context.userAgent }),
+      ...(sessionId === undefined ? {} : { sessionId }),
     });
   }
 
@@ -349,8 +426,8 @@ export class UsersService implements UsersPort {
     this.sessionRevoker = revoker;
   }
 
-  setSessionLister(lister: UserSessionsPort): void {
-    this.sessionLister = lister;
+  setSessionManager(manager: UserSessionsPort): void {
+    this.sessionManager = manager;
   }
 
   /**
@@ -358,12 +435,130 @@ export class UsersService implements UsersPort {
    * missing, like an unknown id, so the support surface never exposes it.
    */
   async listSessions(id: string): Promise<UserSessionView[]> {
-    if (!id) {
-      throw new InvalidArgumentError('ID is required');
+    await this.assertSessionTarget(id);
+
+    return this.requireSessionPort().listSessions(id);
+  }
+
+  /** Revokes one session of the target and audits the session id. */
+  async revokeSession(
+    id: string,
+    sessionId: string,
+    context: UserSupportActionContext = {},
+  ): Promise<void> {
+    await this.assertSessionTarget(id);
+
+    const revoked = await this.requireSessionPort().revokeSession(
+      id,
+      sessionId,
+    );
+
+    if (revoked) {
+      await this.recordSupportEvent(
+        AuditEvent.SESSION_REVOKED_BY_ADMIN,
+        id,
+        context,
+        sessionId,
+      );
     }
-    if (!OBJECTID_REGEX.test(id)) {
-      throw new InvalidArgumentError('Invalid ID format');
+  }
+
+  /** Revokes every session of the target across audiences, auditing each one. */
+  async revokeAllSessions(
+    id: string,
+    context: UserSupportActionContext = {},
+  ): Promise<void> {
+    await this.assertSessionTarget(id);
+
+    // Audit exactly the sessions the revocation reported, not a pre-list
+    // snapshot that concurrent logins could make stale.
+    const { sessionIds, complete } =
+      await this.requireSessionPort().revokeAllSessions(id);
+
+    if (this.auditService) {
+      const events = [...new Set(sessionIds)].map((sessionId) => ({
+        event: AuditEvent.SESSION_REVOKED_BY_ADMIN,
+        result: AuditResult.SUCCESS,
+        targetUserId: id,
+        ...(context.actorId === undefined ? {} : { actorId: context.actorId }),
+        ...(context.ipAddress === undefined
+          ? {}
+          : { ipAddress: context.ipAddress }),
+        ...(context.userAgent === undefined
+          ? {}
+          : { userAgent: context.userAgent }),
+        sessionId,
+      }));
+
+      if (this.auditService.recordMany) {
+        await this.auditService.recordMany(events);
+      } else {
+        for (const event of events) {
+          await this.auditService.record(event);
+        }
+      }
     }
+
+    // Surface the incompleteness after auditing: a token that survived the
+    // bounded passes must not be reported as a successful revoke-all.
+    if (!complete) {
+      throw new Error('Session revocation incomplete');
+    }
+  }
+
+  /**
+   * Aggregate security state of a target. The owner and unknown ids are both
+   * reported as missing, and the projection only selects the public counters.
+   */
+  async getSecurityOverview(id: string): Promise<UserSecurityOverview> {
+    this.assertValidId(id);
+
+    const user = await this.usersModel
+      .findOne({ _id: id, role: { $ne: Roles.OWNER } })
+      .select(
+        'verified mfaEnabled loginAttempts lockoutUntil mfaFailedAttempts mfaLockoutUntil',
+      )
+      .lean<{
+        verified: boolean;
+        mfaEnabled?: boolean;
+        loginAttempts?: number;
+        lockoutUntil?: Date | null;
+        mfaFailedAttempts?: number;
+        mfaLockoutUntil?: Date | null;
+      }>();
+
+    if (!user) {
+      throw new EntityNotFoundError('User not found');
+    }
+
+    const sessions = await this.requireSessionPort().listSessions(id);
+    // The endpoint contract defines this as the latest activity of the active
+    // sessions, so it is null after a full logout even though `lastLoginAt`
+    // persists on the user document.
+    const lastLoginAt =
+      sessions.length === 0
+        ? null
+        : new Date(
+            Math.max(
+              ...sessions.map((session) => session.lastActivityAt.getTime()),
+            ),
+          );
+
+    return {
+      verified: user.verified,
+      mfaEnabled: user.mfaEnabled ?? false,
+      loginAttempts: user.loginAttempts ?? 0,
+      lockoutUntil: user.lockoutUntil ?? null,
+      mfaFailedAttempts: user.mfaFailedAttempts ?? 0,
+      mfaLockoutUntil: user.mfaLockoutUntil ?? null,
+      lastLoginAt,
+      activeSessions: sessions.length,
+    };
+  }
+
+  /** Validates the id and resolves the target, excluding the owner. */
+  private async assertSessionTarget(id: string): Promise<void> {
+    this.assertValidId(id);
 
     const user = await this.usersModel
       .findOne({ _id: id, role: { $ne: Roles.OWNER } })
@@ -372,12 +567,14 @@ export class UsersService implements UsersPort {
     if (!user) {
       throw new EntityNotFoundError('User not found');
     }
+  }
 
-    if (!this.sessionLister) {
-      throw new Error('Session lister is not configured');
+  private requireSessionPort(): UserSessionsPort {
+    if (!this.sessionManager) {
+      throw new Error('Session manager is not configured');
     }
 
-    return this.sessionLister.listSessions(id);
+    return this.sessionManager;
   }
 
   async updateOneById(

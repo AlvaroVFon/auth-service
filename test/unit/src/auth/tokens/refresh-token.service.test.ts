@@ -18,9 +18,11 @@ interface ModelCalls {
 const buildModel = (
   batchSizes: number[],
   calls: ModelCalls,
+  revokedPerPass?: number,
 ): Model<RefreshToken> => {
   let call = 0;
-  const find = () => ({
+  let lastBatchSize = 0;
+  const find = (filter: Record<string, unknown>) => ({
     select: () => ({
       limit: (limit: number) => {
         calls.limits.push(limit);
@@ -28,15 +30,24 @@ const buildModel = (
           lean: async () => {
             const size = batchSizes[Math.min(call, batchSizes.length - 1)] ?? 0;
             call += 1;
+            lastBatchSize = size;
             return Array.from({ length: size }, (_, index) => token(index));
           },
         };
+      },
+      lean: async () => {
+        if (filter.revocationBatchId === undefined) {
+          return [];
+        }
+        return Array.from(
+          { length: revokedPerPass ?? lastBatchSize },
+          (_, index) => token(index),
+        );
       },
     }),
   });
   const updateMany = async (filter: unknown) => {
     calls.filters.push(filter);
-
     return { modifiedCount: 0 };
   };
 
@@ -84,6 +95,16 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
     assert.strictEqual(result.sessions.length, 2_010);
   });
 
+  test('does not report tokens the write did not transition', async () => {
+    const calls = newCalls();
+    const service = new RefreshTokenService(buildModel([2, 0], calls, 0));
+
+    const result = await service.revokeAllByAudience('app-aud');
+
+    assert.strictEqual(result.sessions.length, 0);
+    assert.strictEqual(result.complete, true);
+  });
+
   test('reports completion when the last pass is below the batch size', async () => {
     const calls = newCalls();
     const service = new RefreshTokenService(buildModel([2, 0], calls));
@@ -98,5 +119,23 @@ describe('RefreshTokenService.revokeAllByAudience completion', () => {
       (calls.filters[0] as { _id: { $in: unknown[] } })._id.$in.length,
       2,
     );
+  });
+});
+
+describe('RefreshTokenService.countActiveSessions', () => {
+  test('should count only non-revoked, non-expired tokens', async () => {
+    const countDocuments = mock.fn(async () => 4);
+    const service = new RefreshTokenService({
+      countDocuments,
+    } as unknown as Model<RefreshToken>);
+
+    assert.strictEqual(await service.countActiveSessions(), 4);
+
+    const filter = countDocuments.mock.calls[0]?.arguments[0] as {
+      revokedAt: null;
+      expiresAt: { $gt: Date };
+    };
+    assert.strictEqual(filter.revokedAt, null);
+    assert.ok(filter.expiresAt.$gt instanceof Date);
   });
 });

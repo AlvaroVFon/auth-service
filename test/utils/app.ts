@@ -23,7 +23,7 @@ export const telegramMock = {
   sendMessage: mock.fn((_chatId: string, _text: string) => Promise.resolve()),
 };
 
-const createBaseTestOptions = (): ApplicationCompositionOptions => ({
+export const createBaseTestOptions = (): ApplicationCompositionOptions => ({
   logger: silentLogger,
   mailer,
   telegram: telegramMock,
@@ -61,6 +61,22 @@ const createBaseTestOptions = (): ApplicationCompositionOptions => ({
     mfaVerify: {
       windowMs: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_WINDOW_MS', 5000),
       max: getNumberEnvVariable('RATE_LIMIT_MFA_VERIFY_MAX', 20),
+    },
+    sessionRevoke: {
+      windowMs: getNumberEnvVariable(
+        'RATE_LIMIT_SESSION_REVOKE_WINDOW_MS',
+        5000,
+      ),
+      max: getNumberEnvVariable('RATE_LIMIT_SESSION_REVOKE_MAX', 20),
+    },
+  },
+  grantsRateLimit: {
+    membersWrite: {
+      windowMs: getNumberEnvVariable(
+        'RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS',
+        5000,
+      ),
+      max: getNumberEnvVariable('RATE_LIMIT_MEMBERS_WRITE_MAX', 20),
     },
   },
 });
