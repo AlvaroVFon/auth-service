@@ -39,7 +39,15 @@ export interface UpdateApplicationInput {
   active?: unknown;
 }
 
+/** Catalog counters used by the admin overview. */
+export interface ApplicationCounts {
+  total: number;
+  active: number;
+  inactive: number;
+}
+
 export interface ApplicationsPort {
+  countApplications(): Promise<ApplicationCounts>;
   create(input: CreateApplicationInput): Promise<Application>;
   update(
     id: string,

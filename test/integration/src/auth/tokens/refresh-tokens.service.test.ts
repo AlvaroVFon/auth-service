@@ -722,6 +722,32 @@ describe('RefreshTokenService revokeAllByAudience', () => {
   });
 });
 
+describe('RefreshTokenService.countActiveSessions', () => {
+  test('should count only non-revoked, non-expired tokens', async () => {
+    const userId = new Types.ObjectId();
+    await fixture.createMany<RefreshToken>(RefreshTokenModel.modelName, [
+      RefreshTokenFactory.generate({
+        userId,
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+      RefreshTokenFactory.generate({
+        userId,
+        expiresAt: new Date(Date.now() + 60_000),
+        revokedAt: new Date(),
+      }),
+      RefreshTokenFactory.generate({
+        userId,
+        expiresAt: new Date(Date.now() - 60_000),
+      }),
+    ]);
+
+    assert.strictEqual(
+      await new RefreshTokenService(RefreshTokenModel).countActiveSessions(),
+      1,
+    );
+  });
+});
+
 describe('RefreshTokenService.pruneActiveSessions by audience', () => {
   test('prunes only the requested audience and leaves other applications intact', async () => {
     const userId = new Types.ObjectId();

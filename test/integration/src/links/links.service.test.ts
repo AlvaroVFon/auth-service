@@ -479,3 +479,61 @@ describe('LinksService.revokeInvitation', () => {
     );
   });
 });
+
+describe('LinksService.countInvitations', () => {
+  test('should split pending and expired invitations and ignore used or revoked links', async () => {
+    const base = {
+      type: LinkType.INVITATION,
+      tokenHash: 'hash',
+    };
+    await fixture.createMany<OneTimeLink>(LinkModel.modelName, [
+      {
+        ...base,
+        tokenHash: 'pending',
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+      {
+        ...base,
+        tokenHash: 'expired',
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+      {
+        ...base,
+        tokenHash: 'used',
+        expiresAt: new Date(Date.now() + 60_000),
+        usedAt: new Date(),
+      },
+      {
+        ...base,
+        tokenHash: 'invalidated',
+        expiresAt: new Date(Date.now() + 60_000),
+        invalidatedAt: new Date(),
+      },
+      {
+        ...base,
+        tokenHash: 'reset',
+        type: LinkType.PASSWORD_RESET,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    ]);
+
+    assert.deepStrictEqual(
+      await new LinksService(LinkModel, 60_000, 30_000).countInvitations(),
+      { pending: 1, expired: 1 },
+    );
+  });
+
+  test('keeps an invalidated expired invitation in the expired bucket', async () => {
+    await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      tokenHash: 'invalidated-expired',
+      expiresAt: new Date(Date.now() - 60_000),
+      invalidatedAt: new Date(),
+    });
+
+    assert.deepStrictEqual(
+      await new LinksService(LinkModel, 60_000, 30_000).countInvitations(),
+      { pending: 0, expired: 1 },
+    );
+  });
+});
