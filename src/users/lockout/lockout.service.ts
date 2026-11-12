@@ -58,20 +58,26 @@ export class LockoutService implements LockoutPort {
       throw new Error('Failed to persist the lockout counter');
     }
 
-    if (
-      counter.failedAttempts >= this.maxAttempts &&
-      (counter.lockoutUntil === null || counter.lockoutUntil <= now)
-    ) {
-      counter =
-        (await this.lockoutModel.findByIdAndUpdate(
-          counter._id,
-          {
-            $set: {
-              lockoutUntil: new Date(now.getTime() + this.lockoutDurationMs),
-            },
+    if (counter.failedAttempts >= this.maxAttempts) {
+      // Lock conditionally on the counter still being over the threshold and
+      // unlocked. A concurrent reset (successful login) or another request's
+      // lock must win, so this write never applies a stale decision.
+      const locked = await this.lockoutModel.findOneAndUpdate(
+        {
+          _id: counter._id,
+          failedAttempts: { $gte: this.maxAttempts },
+          $or: [{ lockoutUntil: null }, { lockoutUntil: { $lte: now } }],
+        },
+        {
+          $set: {
+            lockoutUntil: new Date(now.getTime() + this.lockoutDurationMs),
           },
-          { returnDocument: 'after' },
-        )) ?? counter;
+        },
+        { returnDocument: 'after' },
+      );
+
+      counter =
+        locked ?? (await this.lockoutModel.findById(counter._id)) ?? counter;
     }
 
     return this.toStatus(counter);

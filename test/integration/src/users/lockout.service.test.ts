@@ -41,16 +41,18 @@ describe('LockoutService', () => {
   });
 
   test('AC-3: an expired lockout starts a fresh window', async () => {
-    await LockoutModel.updateOne(
-      { userId: new Types.ObjectId(USER_ID), scope: APP_A },
-      {
-        $set: {
-          failedAttempts: 3,
-          lockoutUntil: new Date(Date.now() - 60_000),
-        },
-      },
-      { upsert: true },
-    );
+    await LockoutModel.create({
+      userId: new Types.ObjectId(USER_ID),
+      scope: APP_A,
+      failedAttempts: 3,
+      lockoutUntil: new Date(Date.now() - 60_000),
+    });
+
+    const seeded = await LockoutModel.findOne({
+      userId: new Types.ObjectId(USER_ID),
+      scope: APP_A,
+    });
+    assert.strictEqual(seeded?.failedAttempts, 3);
 
     const status = await service.incrementFailure(USER_ID, APP_A);
 
@@ -60,16 +62,35 @@ describe('LockoutService', () => {
   });
 
   test('AC-4: reset clears only the requested scope', async () => {
-    await service.incrementFailure(USER_ID, APP_A);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await service.incrementFailure(USER_ID, APP_A);
+    }
     await service.incrementFailure(USER_ID, ACCOUNT_SCOPE);
     await service.incrementFailure(USER_ID, ACCOUNT_SCOPE);
+
+    assert.strictEqual((await service.getStatus(USER_ID, APP_A)).locked, true);
 
     await service.reset(USER_ID, APP_A);
 
-    assert.strictEqual((await service.getStatus(USER_ID, APP_A)).attempts, 0);
+    const app = await service.getStatus(USER_ID, APP_A);
+    assert.strictEqual(app.attempts, 0);
+    assert.strictEqual(app.locked, false);
+    assert.strictEqual(app.lockoutUntil, null);
     assert.strictEqual(
       (await service.getStatus(USER_ID, ACCOUNT_SCOPE)).attempts,
       2,
     );
+  });
+
+  test('does not lock a scope that was reset after its last failure', async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await service.incrementFailure(USER_ID, APP_A);
+    }
+    await service.reset(USER_ID, APP_A);
+
+    const status = await service.getStatus(USER_ID, APP_A);
+
+    assert.strictEqual(status.attempts, 0);
+    assert.strictEqual(status.locked, false);
   });
 });
