@@ -318,6 +318,26 @@ snapshot). `GET /applications/:applicationId/grants` is still unpaginated.
 | `GET`  | `/audit-events/events` | Owner  | Static catalog of audit events with a short description.                                              |
 | `GET`  | `/audit-events/export` | Owner  | CSV stream with the same filters, capped at `AUDIT_EXPORT_MAX_ROWS`; exceeding the cap returns `400`. |
 
+### Admin
+
+| Method | Route             | Access | Notes                                                                                        |
+| ------ | ----------------- | ------ | -------------------------------------------------------------------------------------------- |
+| `GET`  | `/admin/overview` | Owner  | Aggregated dashboard counters and `generatedAt`; an application-scoped token receives `403`. |
+
+```json
+{
+  "generatedAt": "2026-05-10T12:00:00.000Z",
+  "users": { "total": 12, "verified": 10, "unverified": 2, "locked": 1 },
+  "applications": { "total": 4, "active": 3, "inactive": 1 },
+  "sessions": { "active": 7 },
+  "logins": {
+    "last24Hours": { "succeeded": 5, "failed": 2 },
+    "last7Days": { "succeeded": 31, "failed": 9 }
+  },
+  "invitations": { "pending": 3, "expired": 1 }
+}
+```
+
 ## Deployment
 
 Link records are retained for 30 days after `expiresAt`, so the invitation history can report expired entries; password-reset links share that retention window and remain unusable after expiry.
