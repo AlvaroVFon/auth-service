@@ -2,6 +2,7 @@ import { Model, Types } from 'mongoose';
 
 import { EMAIL_REGEX } from '../common/constants/regex';
 import { normalizeEmail } from '../common/email';
+import { ForbiddenError } from '../common/exceptions/auth.exceptions';
 import {
   ConflictError,
   EntityNotFoundError,
@@ -38,6 +39,50 @@ export class LinksService implements LinksPort {
     private readonly invitationExpirationMs: number = 7 * 24 * 60 * 60 * 1000,
     private readonly passwordResetExpirationMs: number = 60 * 60 * 1000,
   ) {}
+
+  async resendInvitation(
+    applicationId: string,
+    invitationId: string,
+    allowAdminInvitation = false,
+    expiresInMs?: number,
+  ): Promise<CreatedLink> {
+    assertObjectId(applicationId, 'applicationId');
+    assertObjectId(invitationId, 'invitationId');
+
+    const existing = await this.linkModel.findOne({
+      _id: new Types.ObjectId(invitationId),
+      applicationId: new Types.ObjectId(applicationId),
+      type: LinkType.INVITATION,
+    });
+
+    if (!existing) {
+      throw new EntityNotFoundError('Invitation not found');
+    }
+    if (existing.usedAt !== null) {
+      throw new ConflictError('Invitation already used');
+    }
+    if (existing.invalidatedAt !== null) {
+      throw new ConflictError('Invitation already revoked');
+    }
+    if (!existing.email || !existing.role) {
+      throw new EntityNotFoundError('Invitation not found');
+    }
+    if (existing.role === GrantRoles.ADMIN && !allowAdminInvitation) {
+      throw new ForbiddenError('Only the owner can resend an admin invitation');
+    }
+
+    // createInvitation invalidates every active link of this email and
+    // application before inserting the replacement.
+    return this.createInvitation({
+      email: existing.email,
+      applicationId,
+      role: existing.role,
+      ...(existing.telegramChatId === undefined
+        ? {}
+        : { telegramChatId: existing.telegramChatId }),
+      ...(expiresInMs === undefined ? {} : { expiresInMs }),
+    });
+  }
 
   /**
    * Paginated invitation history of one application. The state is computed in

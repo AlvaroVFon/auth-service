@@ -59,6 +59,20 @@ export class LinksController {
   }
 
   @Catch()
+  async resendInvitation(req: Request, res: Response): Promise<void> {
+    const user = req.user;
+    const actorRole = resolveGlobalActorRole(user);
+    const result = await this.invitationsService.resend(
+      req.params.applicationId as string,
+      req.params.invitationId as string,
+      user?.id,
+      actorRole,
+    );
+
+    res.status(201).json(result);
+  }
+
+  @Catch()
   async createInvitation(req: Request, res: Response): Promise<void> {
     const { email, role, telegramChatId } = req.body as {
       email: string;

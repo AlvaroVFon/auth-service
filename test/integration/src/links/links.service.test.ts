@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 
+import { ForbiddenError } from '../../../../src/common/exceptions/auth.exceptions';
 import {
   ConflictError,
   EntityNotFoundError,
@@ -477,6 +478,146 @@ describe('LinksService.revokeInvitation', () => {
       ),
       new EntityNotFoundError('Invitation not found'),
     );
+  });
+});
+
+describe('LinksService.resendInvitation', () => {
+  const applicationId = new Types.ObjectId();
+  const otherApplicationId = new Types.ObjectId();
+
+  test('invalidates the previous link and returns a fresh token', async () => {
+    const rawToken = 'old-token';
+    const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId,
+      email: 'resend@example.com',
+      role: GrantRoles.VIEWER,
+      tokenHash: hashLinkToken(rawToken),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const service = new LinksService(LinkModel, 60_000, 30_000);
+
+    const created = await service.resendInvitation(
+      applicationId.toString(),
+      invitation._id.toString(),
+    );
+
+    const old = await fixture.findById<OneTimeLink>(
+      LinkModel.modelName,
+      invitation._id.toString(),
+    );
+    assert.ok(old?.invalidatedAt instanceof Date);
+    assert.ok(created.token);
+    assert.notStrictEqual(created.link.tokenHash, hashLinkToken(rawToken));
+
+    await assert.rejects(
+      service.consume(rawToken, LinkType.INVITATION),
+      InvalidLinkError,
+    );
+  });
+
+  test('rejects a used invitation with a conflict', async () => {
+    const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId,
+      email: 'used@example.com',
+      role: GrantRoles.VIEWER,
+      tokenHash: 'used-hash',
+      usedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await assert.rejects(
+      new LinksService(LinkModel).resendInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      ConflictError,
+    );
+  });
+
+  test('hides an invitation of another application', async () => {
+    const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId: otherApplicationId,
+      email: 'foreign@example.com',
+      role: GrantRoles.VIEWER,
+      tokenHash: 'foreign-hash',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await assert.rejects(
+      new LinksService(LinkModel).resendInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      EntityNotFoundError,
+    );
+  });
+
+  test('rejects an already revoked invitation', async () => {
+    const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId,
+      email: 'revoked-resend@example.com',
+      role: GrantRoles.VIEWER,
+      tokenHash: 'revoked-resend-hash',
+      invalidatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await assert.rejects(
+      new LinksService(LinkModel).resendInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      new ConflictError('Invitation already revoked'),
+    );
+  });
+
+  test('rejects an admin invitation unless the owner resends it', async () => {
+    const invitation = await fixture.create<OneTimeLink>(LinkModel.modelName, {
+      type: LinkType.INVITATION,
+      applicationId,
+      email: 'admin-resend@example.com',
+      role: GrantRoles.ADMIN,
+      tokenHash: 'admin-resend-hash',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const service = new LinksService(LinkModel);
+
+    await assert.rejects(
+      service.resendInvitation(
+        applicationId.toString(),
+        invitation._id.toString(),
+      ),
+      ForbiddenError,
+    );
+    assert.strictEqual(
+      await LinkModel.countDocuments({
+        email: 'admin-resend@example.com',
+        invalidatedAt: null,
+      }),
+      1,
+    );
+
+    const created = await service.resendInvitation(
+      applicationId.toString(),
+      invitation._id.toString(),
+      true,
+    );
+
+    assert.strictEqual(created.link.role, GrantRoles.ADMIN);
+    assert.notStrictEqual(
+      created.link._id.toString(),
+      invitation._id.toString(),
+    );
+    const active = await LinkModel.find({
+      email: 'admin-resend@example.com',
+      invalidatedAt: null,
+    });
+    assert.strictEqual(active.length, 1);
+    assert.strictEqual(active[0]?._id.toString(), created.link._id.toString());
   });
 });
 

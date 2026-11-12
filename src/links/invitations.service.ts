@@ -56,6 +56,12 @@ export interface CreatedInvitation {
   notification: LinkNotificationResult;
 }
 
+export interface ResentInvitation {
+  id: string;
+  link: string;
+  expiresAt: Date;
+}
+
 export interface AcceptInvitationInput {
   token: string;
   password: string;
@@ -130,6 +136,57 @@ export class InvitationsService {
       applicationId: application._id.toString(),
       ...(actorId === undefined ? {} : { actorId }),
     });
+  }
+
+  /**
+   * Reissues a pending invitation with the current TTL, invalidates the old
+   * link through the creation flow, notifies the new link and audits it.
+   */
+  async resend(
+    applicationId: string,
+    invitationId: string,
+    actorId?: string,
+    actorRole?: Roles,
+  ): Promise<ResentInvitation> {
+    // Resend follows the creation policy: archived applications are not
+    // redeemable, so they must not receive a new link.
+    const application = OBJECTID_REGEX.test(applicationId)
+      ? await this.applicationsService.findAssignableById(applicationId)
+      : null;
+
+    if (!application) {
+      throw new EntityNotFoundError('Application not found');
+    }
+
+    const policy = await this.resolvePolicy(application._id.toString());
+    const created = await this.linksService.resendInvitation(
+      application._id.toString(),
+      invitationId,
+      actorRole === Roles.OWNER,
+      policy.expiresInMs,
+    );
+    const link = buildInvitationLink(this.publicAppUrl, created.token);
+
+    await this.notifications.notifyInvitation({
+      linkId: created.link._id.toString(),
+      link,
+      ...(created.link.telegramChatId === undefined
+        ? {}
+        : { chatId: created.link.telegramChatId }),
+    });
+
+    await this.auditService?.record({
+      event: AuditEvent.INVITATION_RESENT,
+      result: AuditResult.SUCCESS,
+      applicationId: application._id.toString(),
+      ...(actorId === undefined ? {} : { actorId }),
+    });
+
+    return {
+      id: created.link._id.toString(),
+      link,
+      expiresAt: created.link.expiresAt,
+    };
   }
 
   async create(input: CreateInvitationInput): Promise<CreatedInvitation> {
