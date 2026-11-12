@@ -259,6 +259,13 @@ export const createApplicationComposition = (
     applicationsModule.service,
     new GlobalSettingsRepository(),
     applicationsModule.service,
+    undefined,
+    {
+      // The instance TTLs resolved from options rank with the environment, so
+      // application-scoped sessions never disagree with the token service.
+      accessTokenTtlSeconds: resolveAccessTokenTtl(options),
+      refreshTokenTtlSeconds: resolveRefreshTokenTtl(options),
+    },
   );
   const usersModule = new UsersModule(
     cryptoService,
