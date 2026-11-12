@@ -8,6 +8,22 @@ export type SettingSource =
   | 'environment'
   | 'default';
 
+/** Route family a rate-limit policy applies to. */
+export const RATE_LIMIT_ROUTES = [
+  'login',
+  'refresh',
+  'mfa',
+  'management',
+] as const;
+
+export type RateLimitRoute = (typeof RATE_LIMIT_ROUTES)[number];
+
+/** Effective rate-limit policy of one route for one application. */
+export interface RateLimitPolicy {
+  windowMs: number;
+  max: number;
+}
+
 export interface ResolvedSetting<T> {
   value: T;
   source: SettingSource;
@@ -51,6 +67,15 @@ export interface SettingsPort {
     applicationId: string,
   ): Promise<{ application: ResolvedSettings; global: ResolvedSettings }>;
   resolveGlobal(): Promise<ResolvedSettings>;
+  /**
+   * Resolves the rate-limit policy of one route for an application, honoring
+   * its override, the global layer, the environment and the code defaults.
+   * An absent application uses the global layer.
+   */
+  resolveRateLimitPolicy(
+    applicationId: string | undefined,
+    route: RateLimitRoute,
+  ): Promise<RateLimitPolicy>;
   updateApplicationSettings(
     applicationId: string,
     patch: Record<string, unknown>,

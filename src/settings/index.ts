@@ -15,6 +15,9 @@ export {
 export {
   type ApplicationSettingsWriterPort,
   type GlobalSettingsPort,
+  RATE_LIMIT_ROUTES,
+  type RateLimitPolicy,
+  type RateLimitRoute,
   type ResolvedSetting,
   type ResolvedSettings,
   type SettingSource,

@@ -21,6 +21,14 @@ const ENV_KEYS = [
   'MAX_SESSIONS_PER_USER',
   'INVITATION_LINK_EXPIRATION_MS',
   'APP_NAME',
+  'RATE_LIMIT_LOGIN_MAX',
+  'RATE_LIMIT_LOGIN_WINDOW_MS',
+  'RATE_LIMIT_REFRESH_MAX',
+  'RATE_LIMIT_REFRESH_WINDOW_MS',
+  'RATE_LIMIT_MFA_VERIFY_MAX',
+  'RATE_LIMIT_MFA_VERIFY_WINDOW_MS',
+  'RATE_LIMIT_MEMBERS_WRITE_MAX',
+  'RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS',
 ] as const;
 
 const APP_ID = new Types.ObjectId().toString();
@@ -265,6 +273,60 @@ describe('SettingsService', () => {
       value: 7200,
       source: 'environment',
     });
+  });
+});
+
+describe('SettingsService rate-limit policies', () => {
+  test('resolves the application override for the requested route', async () => {
+    const service = buildService({
+      application: buildApplication({
+        loginRateLimitMax: 2,
+        loginRateLimitWindowMs: 1_000,
+      }),
+    });
+
+    assert.deepStrictEqual(
+      await service.resolveRateLimitPolicy(APP_ID, 'login'),
+      { max: 2, windowMs: 1_000 },
+    );
+  });
+
+  test('inherits the environment value and the code default', async () => {
+    delete process.env.RATE_LIMIT_LOGIN_WINDOW_MS;
+    delete process.env.RATE_LIMIT_MFA_VERIFY_MAX;
+    delete process.env.RATE_LIMIT_MFA_VERIFY_WINDOW_MS;
+    process.env.RATE_LIMIT_LOGIN_MAX = '7';
+    const service = buildService({ application: buildApplication() });
+
+    assert.deepStrictEqual(
+      await service.resolveRateLimitPolicy(APP_ID, 'login'),
+      {
+        max: 7,
+        windowMs: SETTINGS_CODE_DEFAULTS.loginRateLimitWindowMs,
+      },
+    );
+    assert.deepStrictEqual(
+      await service.resolveRateLimitPolicy(APP_ID, 'mfa'),
+      {
+        max: SETTINGS_CODE_DEFAULTS.mfaRateLimitMax,
+        windowMs: SETTINGS_CODE_DEFAULTS.mfaRateLimitWindowMs,
+      },
+    );
+  });
+
+  test('falls back to the global layer when no application is resolved', async () => {
+    delete process.env.RATE_LIMIT_MEMBERS_WRITE_WINDOW_MS;
+    const service = buildService({
+      global: { managementRateLimitMax: 3 },
+    });
+
+    assert.deepStrictEqual(
+      await service.resolveRateLimitPolicy(undefined, 'management'),
+      {
+        max: 3,
+        windowMs: SETTINGS_CODE_DEFAULTS.managementRateLimitWindowMs,
+      },
+    );
   });
 });
 

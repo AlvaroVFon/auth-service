@@ -10,6 +10,8 @@ import type { ApplicationSettings } from './settings.interface';
 import type {
   ApplicationSettingsWriterPort,
   GlobalSettingsPort,
+  RateLimitPolicy,
+  RateLimitRoute,
   ResolvedSetting,
   ResolvedSettings,
   SettingsChanges,
@@ -24,6 +26,20 @@ import {
 } from './settings.validation';
 
 const GLOBAL_CACHE_KEY = 'global';
+
+/** Settings fields that back each route's rate-limit policy. */
+const RATE_LIMIT_FIELDS: Record<
+  RateLimitRoute,
+  { max: SettingsField; windowMs: SettingsField }
+> = {
+  login: { max: 'loginRateLimitMax', windowMs: 'loginRateLimitWindowMs' },
+  refresh: { max: 'refreshRateLimitMax', windowMs: 'refreshRateLimitWindowMs' },
+  mfa: { max: 'mfaRateLimitMax', windowMs: 'mfaRateLimitWindowMs' },
+  management: {
+    max: 'managementRateLimitMax',
+    windowMs: 'managementRateLimitWindowMs',
+  },
+};
 
 const applicationCacheKey = (applicationId: string): string =>
   `application:${applicationId.toLowerCase()}`;
@@ -118,6 +134,22 @@ export class SettingsService implements SettingsPort {
     }
 
     return snapshot.applicationResolved;
+  }
+
+  async resolveRateLimitPolicy(
+    applicationId: string | undefined,
+    route: RateLimitRoute,
+  ): Promise<RateLimitPolicy> {
+    const fields = RATE_LIMIT_FIELDS[route];
+    const resolved =
+      applicationId !== undefined && OBJECTID_REGEX.test(applicationId)
+        ? await this.resolveForApplication(applicationId)
+        : await this.resolveGlobal();
+
+    return {
+      max: resolved[fields.max].value as number,
+      windowMs: resolved[fields.windowMs].value as number,
+    };
   }
 
   async resolveApplicationWithGlobal(

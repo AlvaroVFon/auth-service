@@ -1,8 +1,7 @@
-import express, { Application } from 'express';
+import { Application } from 'express';
 import request from 'supertest';
 
 import type { Application as ApplicationInterface } from '../../../src/applications/applications.interface';
-import { createApplicationComposition } from '../../../src/config/application.composition';
 import { GrantRoles } from '../../../src/grants/grants.interface';
 import fixture from '../../fixtures';
 import {
@@ -14,7 +13,7 @@ import {
 import { ApplicationFactory } from '../../helpers/factories/application.factory';
 import { GrantFactory } from '../../helpers/factories/grant.factory';
 import { UserFactory } from '../../helpers/factories/user.factory';
-import { createBaseTestOptions, getTestAppInstance } from '../../utils/app';
+import { getTestAppInstance } from '../../utils/app';
 
 const bearer = (token: string) => `Bearer ${token}`;
 
@@ -25,10 +24,10 @@ describe('E2E application member creation', () => {
     app = await getTestAppInstance();
   });
 
-  const createApplication = () =>
+  const createApplication = (settings?: ApplicationInterface['settings']) =>
     fixture.create<ApplicationInterface>(
       'Application',
-      ApplicationFactory.generate(),
+      ApplicationFactory.generate(settings === undefined ? {} : { settings }),
     );
 
   const createUser = (overrides: Record<string, unknown> = {}) =>
@@ -168,14 +167,11 @@ describe('E2E application member creation', () => {
   });
 
   test('AC-5: rate limits only the member write route', async () => {
-    const limitedApp = express();
-    createApplicationComposition({
-      ...createBaseTestOptions(),
-      grantsRateLimit: {
-        membersWrite: { windowMs: 60_000, max: 1 },
-      },
-    }).initialize(limitedApp);
-    const application = await createApplication();
+    const application = await createApplication({
+      managementRateLimitMax: 1,
+      managementRateLimitWindowMs: 60_000,
+    });
+    const limitedApp = app;
     const path = `/applications/${application._id.toString()}/members`;
 
     await request(limitedApp)

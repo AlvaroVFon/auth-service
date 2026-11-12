@@ -1,10 +1,11 @@
 import type { Application } from 'express';
 
+import type { RateLimitPolicyResolver } from '../auth/auth.router';
 import { Roles } from '../common/enums/roles.enum';
 import type { ApplicationAuthorizationMiddleware } from '../common/middlewares/application-authorization.middleware';
 import type { AuthenticationMiddleware } from '../common/middlewares/authentication.middleware';
 import type { AuthorizationMiddleware } from '../common/middlewares/authorization.middleware';
-import { createRateLimiter } from '../common/middlewares/rate-limiter.middleware';
+import { createDynamicRateLimiter } from '../common/middlewares/rate-limiter.middleware';
 import type { SettingsController } from './settings.controller';
 
 /** Settings writes are rare and owner-only; the window is intentionally wide. */
@@ -17,6 +18,7 @@ export class SettingsRouter {
     private readonly authorizationMiddleware: AuthorizationMiddleware,
     private readonly applicationAuthorizationMiddleware: ApplicationAuthorizationMiddleware,
     private readonly controller: SettingsController,
+    private readonly rateLimitPolicy: RateLimitPolicyResolver,
     private readonly app: Application,
   ) {
     this.initializeRoutes();
@@ -27,10 +29,14 @@ export class SettingsRouter {
       this.authenticationMiddleware.authenticateAny,
       this.authorizationMiddleware.allowRoles(Roles.OWNER),
     ];
-    const writeRateLimiter = createRateLimiter(
-      SETTINGS_RATE_LIMIT_WINDOW_MS,
-      SETTINGS_RATE_LIMIT_MAX,
-    );
+    const writeRateLimiter = createDynamicRateLimiter({
+      resolveApplicationId: async () => undefined,
+      resolvePolicy: (applicationId) =>
+        this.rateLimitPolicy.resolveRateLimitPolicy(
+          applicationId,
+          'management',
+        ),
+    });
 
     this.app.get(
       '/settings',
