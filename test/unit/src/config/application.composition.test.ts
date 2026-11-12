@@ -91,6 +91,21 @@ describe('application composition wiring', () => {
   });
 });
 
+describe('application composition admin', () => {
+  test('exposes an initialized admin module', () => {
+    const composition = createApplicationComposition({
+      logger: silentLogger,
+      mailer: {
+        sendEmail: mock.fn(() => Promise.resolve()),
+        sendMailWithTemplate: mock.fn(() => Promise.resolve()),
+      } as unknown as MailerInterface,
+    });
+
+    assert.ok(composition.adminModule);
+    assert.strictEqual(typeof composition.adminModule.initialize, 'function');
+  });
+});
+
 describe('application composition settings', () => {
   test('exposes a ready settings service', () => {
     const composition = createApplicationComposition({

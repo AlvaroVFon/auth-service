@@ -32,6 +32,7 @@ export type {
   CreateInvitationLinkInput,
   CreatePasswordResetLinkInput,
   CreatedLink,
+  InvitationCounts,
   InvalidateLinksFilter,
   LinksPort,
 } from './links.port';

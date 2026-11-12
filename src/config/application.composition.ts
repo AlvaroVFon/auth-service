@@ -1,5 +1,6 @@
 import { Application } from 'express';
 
+import { AdminController, AdminModule, AdminService } from '../admin';
 import type { ApplicationsPort } from '../applications';
 import { ApplicationsModule } from '../applications/applications.module';
 import {
@@ -85,6 +86,7 @@ export interface ApplicationComposition {
   readonly authModule: AuthModule;
   readonly linksModule: LinksModule;
   readonly auditModule: AuditModule;
+  readonly adminModule: AdminModule;
   readonly ownerBootstrap: OwnerBootstrapService;
   readonly jwtKeyring: JwtKeyring;
   readonly applicationTokens: ApplicationTokenService;
@@ -418,6 +420,20 @@ export const createApplicationComposition = (
     Number.isInteger(configuredExportMax) && configuredExportMax > 0
       ? configuredExportMax
       : 10_000;
+  const adminModule = new AdminModule({
+    adminController: new AdminController(
+      new AdminService({
+        countUsers: () => usersModule.service.countUsers(),
+        countApplications: () => applicationsModule.service.countApplications(),
+        countActiveSessions: () => refreshTokenService.countActiveSessions(),
+        countInvitations: () => linksService.countInvitations(),
+        countLogins: (since) => auditService.countLogins(since),
+      }),
+    ),
+    authenticationMiddleware,
+    authorizationMiddleware,
+    logger,
+  });
   const auditModule = new AuditModule({
     auditController: new AuditController(
       auditService,
@@ -439,6 +455,7 @@ export const createApplicationComposition = (
     authModule,
     linksModule,
     auditModule,
+    adminModule,
     ownerBootstrap,
     jwtKeyring: jwtConfig.keyring,
     applicationTokens: applicationTokenService,
@@ -478,6 +495,7 @@ export const createApplicationComposition = (
       authModule.initialize(app);
       linksModule.initialize(app, applicationAuthorizationMiddleware);
       auditModule.initialize(app);
+      adminModule.initialize(app);
       settingsModule.initialize(app);
       HttpInterceptor.initialize(app, requestLogger);
     },

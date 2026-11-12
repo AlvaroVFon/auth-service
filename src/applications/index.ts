@@ -1,6 +1,7 @@
 export type { Application } from './applications.interface';
 export { ApplicationsModule } from './applications.module';
 export type {
+  ApplicationCounts,
   ApplicationsPort,
   CreateApplicationInput,
   UpdateApplicationInput,
