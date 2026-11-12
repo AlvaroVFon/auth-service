@@ -600,5 +600,23 @@ describe('LinksService.resendInvitation', () => {
       }),
       1,
     );
+
+    const created = await service.resendInvitation(
+      applicationId.toString(),
+      invitation._id.toString(),
+      true,
+    );
+
+    assert.strictEqual(created.link.role, GrantRoles.ADMIN);
+    assert.notStrictEqual(
+      created.link._id.toString(),
+      invitation._id.toString(),
+    );
+    const active = await LinkModel.find({
+      email: 'admin-resend@example.com',
+      invalidatedAt: null,
+    });
+    assert.strictEqual(active.length, 1);
+    assert.strictEqual(active[0]?._id.toString(), created.link._id.toString());
   });
 });

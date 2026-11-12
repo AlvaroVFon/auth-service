@@ -3,10 +3,11 @@ import { Types } from 'mongoose';
 import request from 'supertest';
 
 import type { Application as ApplicationInterface } from '../../../src/applications/applications.interface';
-import { GrantRoles } from '../../../src/grants/grants.interface';
+import { GrantRoles, type Grant } from '../../../src/grants/grants.interface';
 import { hashLinkToken } from '../../../src/links/link-token';
 import { LinkType, type OneTimeLink } from '../../../src/links/link.interface';
 import { LinkModel } from '../../../src/links/links.schema';
+import type { User as UserInterface } from '../../../src/users/users.interface';
 import fixture from '../../fixtures';
 import {
   DEFAULT_OWNER_ID,
@@ -15,6 +16,9 @@ import {
   generateRandomEmail,
 } from '../../fixtures/defaults';
 import { ApplicationFactory } from '../../helpers/factories/application.factory';
+import { GrantFactory } from '../../helpers/factories/grant.factory';
+import { UserFactory } from '../../helpers/factories/user.factory';
+import { signTestAccessToken } from '../../helpers/tokens';
 import { getTestAppInstance, telegramMock } from '../../utils/app';
 
 const bearer = (token: string) => `Bearer ${token}`;
@@ -133,6 +137,46 @@ describe('E2E invitation resend', () => {
       before,
     );
     assert.strictEqual(telegramMock.sendMessage.mock.callCount(), 0);
+  });
+
+  test('AC-4: an app admin cannot resend an admin invitation', async () => {
+    const application = await createApplication();
+    const appAdmin = await fixture.create<UserInterface>(
+      'User',
+      UserFactory.generate(),
+    );
+    const appAdminId = appAdmin._id.toString();
+    await fixture.create<Grant>(
+      'Grant',
+      GrantFactory.generate({
+        userId: appAdmin._id,
+        applicationId: application._id,
+        role: GrantRoles.ADMIN,
+      }),
+    );
+    const appAdminToken = signTestAccessToken(appAdminId);
+    const invitation = await seedInvitation(application._id, {
+      tokenHash: 'admin-resend',
+      role: GrantRoles.ADMIN,
+    });
+    telegramMock.sendMessage.mock.resetCalls();
+
+    await resend(
+      application._id.toString(),
+      invitation._id.toString(),
+      appAdminToken,
+    ).expect(403);
+
+    assert.strictEqual(telegramMock.sendMessage.mock.callCount(), 0);
+    const stored = await fixture.findById<OneTimeLink>(
+      LinkModel.modelName,
+      invitation._id.toString(),
+    );
+    assert.strictEqual(stored?.invalidatedAt, null);
+
+    await resend(application._id.toString(), invitation._id.toString()).expect(
+      201,
+    );
   });
 
   test('AC-3: rate limits repeated resends for the same invitation', async () => {
